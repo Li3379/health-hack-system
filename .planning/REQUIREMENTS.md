@@ -7,16 +7,16 @@
 
 ### Auth (认证)
 
-- [ ] **AUTH-01**: 用户可以注册新账户（邮箱/密码）
-- [ ] **AUTH-02**: 用户可以登录系统
-- [ ] **AUTH-03**: JWT 令牌自动续期和登出
+- [x] **AUTH-01**: 用户可以注册新账户（邮箱/密码）
+- [x] **AUTH-02**: 用户可以登录系统
+- [x] **AUTH-03**: JWT 令牌自动续期和登出
 
 ### User (用户)
 
-- [ ] **USER-01**: 用户可以查看个人资料
-- [ ] **USER-修改个人资料
-02**: 用户可以- [ ] **USER-03**: 用户可以修改密码
-- [ ] **USER-04**: 用户可以上传头像
+- [x] **USER-01**: 用户可以查看个人资料
+- [x] **USER-02**: 用户可以修改个人资料
+- [x] **USER-03**: 用户可以修改密码
+- [x] **USER-04**: 用户可以上传头像
 
 ### Health Metrics (健康指标)
 
@@ -98,7 +98,7 @@
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | AUTH-01 ~ AUTH-03 | Phase 1 | Pending |
-| USER-01 ~ USER-04 | Phase 1 | Pending |
+| USER-01 ~ USER-04 | Phase 1 | Complete |
 | METR-01 ~ METR-05 | Phase 2 | Pending |
 | ALERT-01 ~ ALERT-05 | Phase 2 | Pending |
 | THRESH-01 ~ THRESH-03 | Phase 2 | Pending |
