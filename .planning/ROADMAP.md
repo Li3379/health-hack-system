@@ -16,12 +16,14 @@
 
 **Goal:** Implement metric category classification system
 
+**Status:** COMPLETED (Plan 01 done)
+
 Requirements: MC-01, MC-02, MC-03
 
 Success Criteria:
-1. Metric category enum defined in backend
-2. Database migration adds category field
-3. Existing health metrics properly categorized
+1. Metric category enum defined in backend - DONE
+2. Database migration adds category field - DONE
+3. Existing health metrics properly categorized - DONE
 
 ## Phase 2: Backend Wellness API
 
