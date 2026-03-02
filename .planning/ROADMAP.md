@@ -29,12 +29,14 @@ Success Criteria:
 
 **Goal:** Create API endpoints for wellness data management
 
+**Status:** COMPLETED (2026-03-03)
+
 Requirements: WELL-01 through WELL-06, API-01
 
 Success Criteria:
-1. POST /api/wellness supports all wellness metric types
-2. GET /api/wellness returns user's wellness data
-3. Wellness data stored in separate or categorized table
+1. POST /api/wellness supports all wellness metric types - DONE
+2. GET /api/wellness returns user's wellness data - DONE
+3. Wellness data stored in separate or categorized table - DONE
 
 ## Phase 3: Wellness Dashboard UI
 
