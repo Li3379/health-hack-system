@@ -1,79 +1,69 @@
-# HHS Frontend Reconstruction
+# HHS (Health Hack System)
 
 ## What This Is
 
-基于现有 HHS 后端 API，完全重构前端页面和代码，使用 Vue 3 + Element Plus 技术栈，实现前后端无缝对接。忽略现有前端代码，从零开始构建。
+HHS is a health monitoring platform with Spring Boot backend and Vue 3 frontend. The system provides health metric tracking, real-time monitoring, alerts, AI-powered health scoring, and preventive health assessments.
 
 ## Core Value
 
-提供完美的用户体验，实现所有后端 API 功能，确保前后端联调零错误。
+Users can track their health data (medical metrics like blood pressure, glucose) and wellness data (lifestyle metrics like steps, sleep) in one unified platform with AI-powered insights and alerts.
 
 ## Requirements
 
 ### Validated
 
-<!-- 已完成并验证的需求 -->
-
-- [x] Phase 1: 认证与用户模块
-- [x] Phase 2: 健康数据模块
+- ✓ User authentication and profile management — v1.0
+- ✓ Medical health metrics recording (heart rate, BP, glucose, BMI, temperature, weight) — v1.0
+- ✓ Health alerts with threshold-based notifications — v1.0
+- ✓ AI health score calculation — v1.0
+- ✓ Risk assessment and prevention recommendations — v1.0
 
 ### Active
 
-<!-- 当前正在构建的范围 -->
-
-- [ ] Phase 3: AI 与评分模块
-- [ ] Phase 4: 预防与体检模块
-- [ ] Phase 5: 实时与集成测试
+- [ ] **WELL-01**: Separate wellness metrics from health metrics with distinct categories
+- [ ] **WELL-02**: Implement wellness metric types (sleep, steps, exercise, water intake)
+- [ ] **WELL-03**: Add wellness data recording functionality
+- [ ] **WELL-04**: Integrate wellness metrics into health score calculation
 
 ### Out of Scope
 
-- 现有前端代码修复
-- 后端 API 修改（除非本里程碑需要）
+- Wearable device integration — requires hardware partnerships
+- Social sharing of health data — privacy concerns for v1.x
 
 ## Context
 
-- 后端：Spring Boot 3.2 + MySQL + Redis + JWT
-- 前端技术栈：Vue 3.3.7 + Vite 4.5.0 + Element Plus 2.5.6 + Pinia
-- 现有后端 API 已完整实现，包含 10+ 控制器
-- 端口：后端 8082，前端 5173
-- v1.0 已完成：认证模块、健康数据模块（血糖、血压、心率）
-- 本次里程碑新增：保健指标（Wellness）数据管理
+**Current State:**
+- Backend: Spring Boot 3.2, Java 17, MySQL 8, Redis 7
+- Frontend: Vue 3.3, Element Plus 2.5, Vite 4.5
+- Current health metrics are stored in single `health_metric` table with generic key-value structure
+
+**The Problem:**
+Health metrics (医学指标) and wellness metrics (保健指标) are currently mixed. Medical metrics (BP, glucose, heart rate) have clinical significance and require alerting thresholds. Wellness metrics (sleep, steps, exercise) are lifestyle data without critical alerts but valuable for overall health insights.
+
+## Current Milestone: v1.1 健康指标与保健指标分离
+
+**Goal:** Separate health metrics (医学指标) from wellness metrics (保健指标), implement wellness tracking features, and integrate wellness data into health scoring.
+
+**Target features:**
+- Distinct category system for medical vs wellness metrics
+- Wellness metric types: sleep, steps, exercise minutes, water intake, mood/energy
+- Wellness data recording and display
+- Updated health score calculation including wellness data
+- Separate UI for wellness tracking
 
 ## Constraints
 
-- **Tech**: Vue 3 + Element Plus — 现代前端技术栈
-- **API**: 完全对接现有后端，不修改后端（本里程碑需要修改以支持 wellness）
-- **Quality**: 前后端联调零错误
+- **Tech Stack**: Spring Boot 3.2, Vue 3 — No changes needed
+- **Database Schema**: Need backward compatibility with existing health_metric table
+- **Data Migration**: Must preserve existing health data
 
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| 前端完全重构 | 现有前端代码质量问题多 | ✓ Good - 进度顺利 |
-| 先构建健康指标再构建保健指标 | 健康指标优先级更高 | ✓ Good - 已完成 |
-| 保健指标独立成表 | 与健康指标属性不同，需要分离 | — Pending - 本里程碑验证 |
+| Separate tables for wellness metrics | Different data patterns, easier management | — Pending |
+| Wellness metrics in health score | Encourages holistic health tracking | — Pending |
+| Metric category enum | Distinguish metric types programmatically | — Pending |
 
 ---
-
-## Current Milestone: v1.1 健康指标与保健指标分离
-
-**Goal:** 分离健康指标（health_metric）和保健指标（wellness_metric），创建独立的 wellness 数据管理功能
-
-**Target features:**
-- [ ] 创建 wellness_metric 表分离保健指标数据
-- [ ] 新增 /api/wellness REST API 端点
-- [ ] 前端分离健康指标和保健指标展示页面
-- [ ] 保健指标数据可视化（图表展示）
-- [ ] 保健指标阈值告警功能
-
----
-
-## Previous Milestone: v1.0
-
-**Completed phases:**
-- Phase 1: 认证与用户模块 ✓
-- Phase 2: 健康数据模块 ✓
-
----
-
 *Last updated: 2026-03-02 after v1.1 milestone started*
