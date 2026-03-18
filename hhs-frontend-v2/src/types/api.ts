@@ -341,6 +341,82 @@ export interface WellnessTrendVO {
   unit: string
 }
 
+// 健康报告
+export interface HealthReportVO {
+  reportId: string
+  generatedAt: string
+  userInfo: {
+    gender: string
+    age: number
+    heightCm: number
+    weightKg: number
+    bmi: number
+  }
+  overallScore: number
+  scoreLevel: string
+  dimensions: Array<{
+    name: string
+    score: number
+    status: string
+    description: string
+  }>
+  riskAlerts: Array<{
+    level: string
+    category: string
+    description: string
+    recommendation: string
+  }>
+  suggestions: Array<{
+    category: string
+    priority: string
+    suggestion: string
+    action: string
+  }>
+  summary: string
+}
+
+// 设备同步相关
+export interface DeviceConnectionVO {
+  platform: string
+  platformName: string
+  status: string
+  statusName: string
+  lastSyncAt?: string
+  syncEnabled?: boolean
+  platformUserId?: string
+}
+
+export interface SyncResultVO {
+  platform: string
+  platformName: string
+  status: string
+  statusName: string
+  metricsCount?: number
+  syncTime?: string
+  errorMessage?: string
+  durationMs?: number
+}
+
+export interface SyncHistoryVO {
+  id: number
+  platform: string
+  platformName: string
+  syncType: string
+  syncTypeName: string
+  metricsCount?: number
+  status: string
+  statusName: string
+  errorMessage?: string
+  syncTime: string
+  durationMs?: number
+}
+
+export interface PlatformInfo {
+  platform: string
+  displayName: string
+  configured: boolean
+}
+
 // 保健指标
 export interface WellnessMetricRequest {
   metricKey: string
@@ -387,4 +463,80 @@ export interface WellnessTrendVO {
   dates: string[]
   values: number[]
   unit: string
+}
+
+// 健康报告
+export interface HealthReportVO {
+  reportId: string
+  generatedAt: string
+  userInfo: {
+    gender: string
+    age: number
+    heightCm: number
+    weightKg: number
+    bmi: number
+  }
+  overallScore: number
+  scoreLevel: string
+  dimensions: Array<{
+    name: string
+    score: number
+    status: string
+    description: string
+  }>
+  riskAlerts: Array<{
+    level: string
+    category: string
+    description: string
+    recommendation: string
+  }>
+  suggestions: Array<{
+    category: string
+    priority: string
+    suggestion: string
+    action: string
+  }>
+  summary: string
+}
+
+// 设备同步相关
+export interface DeviceConnectionVO {
+  platform: string
+  platformName: string
+  status: string
+  statusName: string
+  lastSyncAt?: string
+  syncEnabled?: boolean
+  platformUserId?: string
+}
+
+export interface SyncResultVO {
+  platform: string
+  platformName: string
+  status: string
+  statusName: string
+  metricsCount?: number
+  syncTime?: string
+  errorMessage?: string
+  durationMs?: number
+}
+
+export interface SyncHistoryVO {
+  id: number
+  platform: string
+  platformName: string
+  syncType: string
+  syncTypeName: string
+  metricsCount?: number
+  status: string
+  statusName: string
+  errorMessage?: string
+  syncTime: string
+  durationMs?: number
+}
+
+export interface PlatformInfo {
+  platform: string
+  displayName: string
+  configured: boolean
 }
