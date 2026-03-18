@@ -15,6 +15,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -218,10 +219,22 @@ public class DeviceSyncController {
         Long userId = SecurityUtils.getCurrentUserId();
         log.info("用户 {} 手动同步设备: {}", userId, platform);
 
-        // TODO: Phase 4/5 - 实现实际的数据同步逻辑
-        // 目前返回占位结果
-        SyncResultVO result = SyncResultVO.success(platform, 0, 0);
-        result.setErrorMessage("设备同步功能将在Phase 4/5实现");
+        SyncResultVO result = switch (platform.toLowerCase()) {
+            case "huawei" -> huaweiHealthService.syncData(userId);
+            case "xiaomi" -> {
+                // TODO: Phase 4/5 - Implement Xiaomi sync
+                log.warn("Xiaomi sync not yet implemented");
+                yield SyncResultVO.failed("xiaomi", "Xiaomi sync not yet implemented", 0);
+            }
+            case "wechat", "apple" -> {
+                log.warn("Platform {} does not support direct sync", platform);
+                yield SyncResultVO.failed(platform, "This platform does not support direct data sync", 0);
+            }
+            default -> {
+                log.warn("Unknown platform: {}", platform);
+                yield SyncResultVO.failed(platform, "Unknown platform: " + platform, 0);
+            }
+        };
 
         return Result.success(result);
     }
@@ -235,8 +248,32 @@ public class DeviceSyncController {
         Long userId = SecurityUtils.getCurrentUserId();
         log.info("用户 {} 批量同步所有设备", userId);
 
-        // TODO: Phase 4/5 - 实现实际的批量同步逻辑
-        List<SyncResultVO> results = List.of();
+        List<SyncResultVO> results = new ArrayList<>();
+
+        // Get all connected devices
+        List<DeviceConnectionVO> connections = deviceConnectionService.getConnections(userId);
+
+        for (DeviceConnectionVO connection : connections) {
+            if (!Boolean.TRUE.equals(connection.getSyncEnabled())) {
+                continue;
+            }
+
+            String platform = connection.getPlatform();
+            try {
+                SyncResultVO result = switch (platform.toLowerCase()) {
+                    case "huawei" -> huaweiHealthService.syncData(userId);
+                    case "xiaomi" -> {
+                        // TODO: Phase 4/5 - Implement Xiaomi sync
+                        yield SyncResultVO.failed("xiaomi", "Xiaomi sync not yet implemented", 0);
+                    }
+                    default -> SyncResultVO.failed(platform, "Platform sync not supported", 0);
+                };
+                results.add(result);
+            } catch (Exception e) {
+                log.error("Error syncing device {} for user {}: {}", platform, userId, e.getMessage());
+                results.add(SyncResultVO.failed(platform, "Sync error: " + e.getMessage(), 0));
+            }
+        }
 
         return Result.success(results);
     }

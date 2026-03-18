@@ -1,5 +1,7 @@
 package com.hhs.service;
 
+import com.hhs.vo.SyncResultVO;
+
 /**
  * Huawei Health OAuth Service.
  * Handles OAuth 2.0 authorization flow for Huawei Health platform integration.
@@ -10,6 +12,7 @@ package com.hhs.service;
  *   <li>OAuth callback handling with token exchange</li>
  *   <li>Token refresh for expired access tokens</li>
  *   <li>Secure token storage with encryption</li>
+ *   <li>Health data synchronization from Huawei Health API</li>
  * </ul>
  */
 public interface HuaweiHealthService {
@@ -65,4 +68,23 @@ public interface HuaweiHealthService {
      * @return true if client ID and secret are configured
      */
     boolean isConfigured();
+
+    /**
+     * Synchronize health data from Huawei Health for a user.
+     *
+     * <p>This method:
+     * <ul>
+     *   <li>Checks device connection status</li>
+     *   <li>Refreshes access token if expired</li>
+     *   <li>Fetches health data from Huawei Health API (or mock data)</li>
+     *   <li>Maps data to internal HealthMetricRequest format</li>
+     *   <li>Saves metrics via HealthMetricService</li>
+     *   <li>Records sync history</li>
+     *   <li>Updates lastSyncAt timestamp</li>
+     * </ul>
+     *
+     * @param userId the user ID to sync data for
+     * @return SyncResultVO containing sync results
+     */
+    SyncResultVO syncData(Long userId);
 }
