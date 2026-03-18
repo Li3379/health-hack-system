@@ -1,0 +1,144 @@
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/hhs?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false
+    username: root
+    password: ${DB_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  data:
+    redis:
+      host: localhost
+      port: 16379
+      database: 0
+      password: ${REDIS_PASSWORD}
+  jackson:
+    timezone: Asia/Shanghai
+    date-format: yyyy-MM-dd HH:mm:ss
+    serialization:
+      write-dates-as-timestamps: false
+  # Spring Boot multipart file upload configuration
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+      file-size-threshold: 2MB
+      enabled: true
+  ai:
+    langchain4j:
+      openai:
+        chat-model:
+          api-key: ${DASH_SCOPE_API_KEY}
+          base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
+          model-name: qwen3.5-flash
+          temperature: 0.7
+          max-tokens: 2000
+          timeout: 60s
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+  # 邮件推送配置（可选，未配置时邮件推送通道不可用）
+  # 启用邮件推送需要配置以下环境变量或直接填写配置值
+  mail:
+    host: ${MAIL_HOST:}                    # SMTP服务器地址，如：smtp.qq.com
+    port: ${MAIL_PORT:465}                 # SMTP端口，SSL通常为465
+    username: ${MAIL_USERNAME:}            # 发件邮箱地址
+    password: ${MAIL_PASSWORD:}            # 邮箱授权码（非登录密码）
+    properties:
+      mail:
+        smtp:
+          auth: true
+          ssl:
+            enable: true
+          starttls:
+            enable: true
+            required: true
+    default-encoding: UTF-8
+
+mybatis-plus:
+  mapper-locations: classpath*:mapper/**/*Mapper.xml
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
+
+knife4j:
+  enable: true
+  production: false
+
+# 百度 OCR（可选，未配置时使用模拟结果）
+baidu:
+  ocr:
+    api-key: ${BAIDU_OCR_API_KEY:}
+    secret-key: ${BAIDU_OCR_SECRET_KEY:}
+
+# Environment Variables Required:
+# JWT_SECRET: 256-bit (32+ character) random string for JWT token validation
+#              Generate with: openssl rand -base64 32
+#              No default value - application will fail to start if not set
+
+security:
+  jwt:
+    # JWT_SECRET environment variable is REQUIRED - no default value
+    secret: ${JWT_SECRET}
+    expire-days: 7
+
+management:
+  endpoints:
+    web:
+      base-path: /actuator
+      exposure:
+        include: health,info,metrics,loggers,httptrace,env,configprops
+  endpoint:
+    health:
+      show-details: always
+    shutdown:
+      enabled: true
+    metrics:
+      enabled: true
+    loggers:
+      enabled: true
+    httptrace:
+      enabled: true# Logging configuration for development debugging
+logging:
+  level:
+    root: INFO
+    com.hhs: DEBUG
+    com.hhs.controller: DEBUG
+    com.hhs.service: DEBUG
+    com.hhs.mapper: DEBUG
+    com.hhs.security: DEBUG
+    com.hhs.websocket: DEBUG
+    org.springframework.web: DEBUG
+    org.springframework.security: DEBUG
+    org.springframework.web.socket: DEBUG
+    org.mybatis: DEBUG # CORS Configuration for Development
+app:
+  security:
+    allowed-origins: http://localhost:5173
+    verbose-errors: true
+
+# Device OAuth Configuration for health device integrations
+# Credentials should be set via environment variables
+device:
+  # Token encryption for secure OAuth token storage
+  # AES-256-GCM encryption key (256-bit = 32 bytes)
+  # Generate with: openssl rand -base64 32
+  encryption:
+    key: ${DEVICE_ENCRYPTION_KEY:}
+  oauth:
+    platforms:
+      huawei:
+        client-id: ${HUAWEI_CLIENT_ID:}
+        client-secret: ${HUAWEI_CLIENT_SECRET:}
+        auth-url: https://oauth-login.cloud.huawei.com/oauth2/v2/authorize
+        token-url: https://oauth-login.cloud.huawei.com/oauth2/v2/token
+        redirect-uri: ${BASE_URL:http://localhost:8082}/api/device/callback/huawei
+        scopes:
+          - https://www.huawei.com/healthkit/healthdata.read
+          - https://www.huawei.com/healthkit/healthdata.write
+      xiaomi:
+        client-id: ${XIAOMI_CLIENT_ID:}
+        client-secret: ${XIAOMI_CLIENT_SECRET:}
+        auth-url: https://account.xiaomi.com/oauth2/authorize
+        token-url: https://account.xiaomi.com/oauth2/token
+        redirect-uri: ${BASE_URL:http://localhost:8082}/api/device/callback/xiaomi
+        scopes:
+          - read
+          - write
