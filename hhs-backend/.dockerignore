@@ -1,0 +1,37 @@
+# Maven build output (rebuilt in container)
+target/
+!.mvn/wrapper/maven-wrapper.jar
+
+# IDE files
+*.iml
+.idea/
+
+# Version control
+.git/
+
+# Environment files (secrets should not be in image)
+.env
+.env.local
+.env.*.local
+
+# Application data volumes
+uploads/
+
+# Compiled class files
+*.class
+
+# Log files
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# JAR files (except the built application JAR)
+*.jar
+!target/hhs-backend-*.jar
+
+# Documentation (not needed in image)
+docs/
+*.md
+!README.md
