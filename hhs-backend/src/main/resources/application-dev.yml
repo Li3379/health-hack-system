@@ -84,17 +84,20 @@ management:
     web:
       base-path: /actuator
       exposure:
-        include: health,info,metrics,loggers,httptrace,env,configprops
+        # Restrict to essential endpoints only
+        # health, info: Basic health checks
+        # metrics: Performance monitoring
+        # loggers: Log level adjustment (useful for debugging)
+        # Removed: httptrace, env, configprops (sensitive data exposure)
+        include: health,info,metrics,loggers
   endpoint:
     health:
       show-details: always
     shutdown:
-      enabled: true
+      enabled: false  # Disable remote shutdown for security
     metrics:
       enabled: true
     loggers:
-      enabled: true
-    httptrace:
       enabled: true# Logging configuration for development debugging
 logging:
   level:
