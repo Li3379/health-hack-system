@@ -120,11 +120,17 @@ device:
   # Token encryption for secure OAuth token storage
   # AES-256-GCM encryption key (256-bit = 32 bytes)
   # Generate with: openssl rand -base64 32
+  # DEVICE_ENCRYPTION_KEY environment variable is REQUIRED for production
   encryption:
-    key: ${DEVICE_ENCRYPTION_KEY:}
+    key: ${DEVICE_ENCRYPTION_KEY}
+  # Mock data configuration
+  # Enable mock data for development/testing when real API is unavailable
+  mock:
+    enabled: true
   oauth:
     platforms:
       huawei:
+        # Huawei Health API requires registration at https://developer.huawei.com
         client-id: ${HUAWEI_CLIENT_ID:}
         client-secret: ${HUAWEI_CLIENT_SECRET:}
         auth-url: https://oauth-login.cloud.huawei.com/oauth2/v2/authorize
