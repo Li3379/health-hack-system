@@ -1,0 +1,11 @@
+node_modules/
+dist/
+coverage/
+*.local
+*.log*
+public/
+auto-imports.d.ts
+components.d.ts
+
+# Keep existing formatting
+package-lock.json
