@@ -73,6 +73,7 @@ export interface HealthMetricVO {
   id: number
   userId: number
   metricKey: string
+  metricName: string
   value: number
   unit?: string
   recordDate: string
@@ -306,6 +307,7 @@ export interface WellnessMetricVO {
   id: number
   userId: number
   metricKey: string
+  metricName: string
   value: number
   unit?: string
   recordDate: string
@@ -430,6 +432,7 @@ export interface WellnessMetricVO {
   id: number
   userId: number
   metricKey: string
+  metricName: string
   value: number
   unit?: string
   recordDate: string

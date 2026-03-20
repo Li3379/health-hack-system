@@ -10,16 +10,30 @@
     </div>
 
     <!-- 摘要卡片 -->
-    <el-row :gutter="20" class="summary-row" v-loading="wellnessStore.loading">
-      <el-col v-for="metric in summaryMetrics" :key="metric.metricKey" :xs="12" :sm="8" :md="4" :lg="3">
+    <el-row v-loading="wellnessStore.loading" :gutter="20" class="summary-row">
+      <el-col
+        v-for="metric in summaryMetrics"
+        :key="metric.metricKey"
+        :xs="12"
+        :sm="8"
+        :md="4"
+        :lg="3"
+      >
         <el-card class="metric-card" shadow="hover">
-          <div class="metric-icon" :style="{ background: metric.color + '20', color: metric.color }">
+          <div
+            class="metric-icon"
+            :style="{ background: metric.color + '20', color: metric.color }"
+          >
             <el-icon><component :is="metric.icon" /></el-icon>
           </div>
           <div class="metric-value">{{ formatValue(metric.latestValue) }}</div>
           <div class="metric-label">{{ metric.displayName }}</div>
           <div class="metric-unit">{{ metric.unit }}</div>
-          <div v-if="metric.trend !== null" class="metric-trend" :class="{ positive: metric.trend > 0, negative: metric.trend < 0 }">
+          <div
+            v-if="metric.trend !== null"
+            class="metric-trend"
+            :class="{ positive: metric.trend > 0, negative: metric.trend < 0 }"
+          >
             <el-icon><component :is="metric.trend > 0 ? 'Top' : 'Bottom'" /></el-icon>
             {{ Math.abs(metric.trend).toFixed(1) }}%
           </div>
@@ -35,11 +49,21 @@
             <div class="card-header">
               <span>睡眠趋势</span>
               <div class="header-controls">
-                <el-select v-model="sleepMetric" size="small" style="width: 120px" @change="fetchSleepTrend">
+                <el-select
+                  v-model="sleepMetric"
+                  size="small"
+                  style="width: 120px"
+                  @change="fetchSleepTrend"
+                >
                   <el-option label="睡眠时长" value="sleepDuration" />
                   <el-option label="睡眠质量" value="sleepQuality" />
                 </el-select>
-                <el-select v-model="dateRange" size="small" style="width: 100px" @change="fetchSleepTrend">
+                <el-select
+                  v-model="dateRange"
+                  size="small"
+                  style="width: 100px"
+                  @change="fetchSleepTrend"
+                >
                   <el-option label="7天" :value="7" />
                   <el-option label="14天" :value="14" />
                   <el-option label="30天" :value="30" />
@@ -47,7 +71,11 @@
               </div>
             </div>
           </template>
-          <div ref="sleepChartRef" class="chart-container" v-loading="wellnessStore.chartLoading"></div>
+          <div
+            ref="sleepChartRef"
+            v-loading="wellnessStore.chartLoading"
+            class="chart-container"
+          ></div>
         </el-card>
       </el-col>
       <el-col :xs="24" :lg="12">
@@ -56,11 +84,21 @@
             <div class="card-header">
               <span>活动趋势</span>
               <div class="header-controls">
-                <el-select v-model="activityMetric" size="small" style="width: 120px" @change="fetchActivityTrend">
+                <el-select
+                  v-model="activityMetric"
+                  size="small"
+                  style="width: 120px"
+                  @change="fetchActivityTrend"
+                >
                   <el-option label="步数" value="steps" />
                   <el-option label="运动时长" value="exerciseMinutes" />
                 </el-select>
-                <el-select v-model="dateRange" size="small" style="width: 100px" @change="fetchActivityTrend">
+                <el-select
+                  v-model="dateRange"
+                  size="small"
+                  style="width: 100px"
+                  @change="fetchActivityTrend"
+                >
                   <el-option label="7天" :value="7" />
                   <el-option label="14天" :value="14" />
                   <el-option label="30天" :value="30" />
@@ -68,24 +106,40 @@
               </div>
             </div>
           </template>
-          <div ref="activityChartRef" class="chart-container" v-loading="wellnessStore.chartLoading"></div>
+          <div
+            ref="activityChartRef"
+            v-loading="wellnessStore.chartLoading"
+            class="chart-container"
+          ></div>
         </el-card>
       </el-col>
     </el-row>
 
     <!-- 添加指标对话框 -->
     <el-dialog v-model="showAddDialog" title="添加保健指标" width="500px">
-      <el-form :model="addForm" :rules="addFormRules" ref="addFormRef" label-width="100px">
+      <el-form ref="addFormRef" :model="addForm" :rules="addFormRules" label-width="100px">
         <el-form-item label="指标类型" prop="metricKey">
           <el-select v-model="addForm.metricKey" placeholder="请选择指标类型" style="width: 100%">
-            <el-option v-for="(config, key) in WELLNESS_METRICS" :key="key" :label="config.label" :value="key" />
+            <el-option
+              v-for="(config, key) in WELLNESS_METRICS"
+              :key="key"
+              :label="config.label"
+              :value="key"
+            />
           </el-select>
         </el-form-item>
         <el-form-item label="数值" prop="value">
           <el-input-number v-model="addForm.value" :precision="1" :min="0" style="width: 100%" />
         </el-form-item>
         <el-form-item label="记录日期" prop="recordDate">
-          <el-date-picker v-model="addForm.recordDate" type="date" placeholder="选择日期" format="YYYY-MM-DD" value-format="YYYY-MM-DD" style="width: 100%" />
+          <el-date-picker
+            v-model="addForm.recordDate"
+            type="date"
+            placeholder="选择日期"
+            format="YYYY-MM-DD"
+            value-format="YYYY-MM-DD"
+            style="width: 100%"
+          />
         </el-form-item>
         <el-form-item label="备注">
           <el-input v-model="addForm.notes" type="textarea" :rows="2" placeholder="可选备注" />
@@ -93,7 +147,7 @@
       </el-form>
       <template #footer>
         <el-button @click="showAddDialog = false">取消</el-button>
-        <el-button type="primary" @click="handleAddMetric" :loading="adding">添加</el-button>
+        <el-button type="primary" :loading="adding" @click="handleAddMetric">添加</el-button>
       </template>
     </el-dialog>
   </div>
@@ -112,8 +166,8 @@ const wellnessStore = useWellnessStore()
 // Chart refs
 const sleepChartRef = ref<HTMLElement>()
 const activityChartRef = ref<HTMLElement>()
-let sleepChartInstance: echarts.ECharts | null = null
-let activityChartInstance: echarts.ECharts | null = null
+const sleepChartInstance: echarts.ECharts | null = null
+const activityChartInstance: echarts.ECharts | null = null
 
 // Selection state
 const sleepMetric = ref('sleepDuration')
@@ -164,16 +218,31 @@ const getDateRange = (days: number) => {
 const fetchSleepTrend = async () => {
   const { startDate, endDate } = getDateRange(dateRange.value)
   await wellnessStore.fetchTrend(sleepMetric.value, startDate, endDate)
-  renderChart(sleepChartInstance, sleepChartRef.value, wellnessStore.trendData, getWellnessMetricColor(sleepMetric.value))
+  renderChart(
+    sleepChartInstance,
+    sleepChartRef.value,
+    wellnessStore.trendData,
+    getWellnessMetricColor(sleepMetric.value)
+  )
 }
 
 const fetchActivityTrend = async () => {
   const { startDate, endDate } = getDateRange(dateRange.value)
   await wellnessStore.fetchTrend(activityMetric.value, startDate, endDate)
-  renderChart(activityChartInstance, activityChartRef.value, wellnessStore.trendData, getWellnessMetricColor(activityMetric.value))
+  renderChart(
+    activityChartInstance,
+    activityChartRef.value,
+    wellnessStore.trendData,
+    getWellnessMetricColor(activityMetric.value)
+  )
 }
 
-const renderChart = (chartInstance: echarts.ECharts | null, chartRef: HTMLElement | undefined, data: any, color: string) => {
+const renderChart = (
+  chartInstance: echarts.ECharts | null,
+  chartRef: HTMLElement | undefined,
+  data: any,
+  color: string
+) => {
   if (!chartRef || !data) return
 
   if (!chartInstance) {
@@ -196,24 +265,26 @@ const renderChart = (chartInstance: echarts.ECharts | null, chartRef: HTMLElemen
       type: 'value',
       name: data.unit || ''
     },
-    series: [{
-      data: data.values || [],
-      type: 'line',
-      smooth: true,
-      areaStyle: {
-        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-          { offset: 0, color: color + '4D' },
-          { offset: 1, color: color + '0D' }
-        ])
-      },
-      lineStyle: {
-        color: color,
-        width: 2
-      },
-      itemStyle: {
-        color: color
+    series: [
+      {
+        data: data.values || [],
+        type: 'line',
+        smooth: true,
+        areaStyle: {
+          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+            { offset: 0, color: color + '4D' },
+            { offset: 1, color: color + '0D' }
+          ])
+        },
+        lineStyle: {
+          color: color,
+          width: 2
+        },
+        itemStyle: {
+          color: color
+        }
       }
-    }],
+    ],
     grid: {
       left: '3%',
       right: '4%',
@@ -228,7 +299,7 @@ const renderChart = (chartInstance: echarts.ECharts | null, chartRef: HTMLElemen
 const handleAddMetric = async () => {
   if (!addFormRef.value) return
 
-  await addFormRef.value.validate(async (valid) => {
+  await addFormRef.value.validate(async valid => {
     if (!valid) return
 
     adding.value = true

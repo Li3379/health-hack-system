@@ -4,6 +4,7 @@ import * as parserVue from 'vue-eslint-parser'
 import configPrettier from 'eslint-config-prettier'
 import * as parserTypeScript from '@typescript-eslint/parser'
 import pluginTypeScript from '@typescript-eslint/eslint-plugin'
+import globals from 'globals'
 
 export default [
   {
@@ -45,23 +46,9 @@ export default [
         }
       },
       globals: {
-        // Browser globals
-        window: 'readonly',
-        document: 'readonly',
-        navigator: 'readonly',
-        console: 'readonly',
-        localStorage: 'readonly',
-        sessionStorage: 'readonly',
-        fetch: 'readonly',
-        setTimeout: 'readonly',
-        clearTimeout: 'readonly',
-        setInterval: 'readonly',
-        clearInterval: 'readonly',
-        // Node.js globals
-        process: 'readonly',
-        module: 'readonly',
-        require: 'readonly',
-        __dirname: 'readonly',
+        ...globals.browser,
+        ...globals.node,
+        ...globals.es2021,
         // Vite
         importMeta: 'readonly'
       }
@@ -85,11 +72,31 @@ export default [
       'vue/component-name-in-template-casing': ['error', 'PascalCase'],
 
       // General rules
-      'no-console': process.env.NODE_ENV === 'production' ? 'warn' : 'off',
-      'no-debugger': process.env.NODE_ENV === 'production' ? 'warn' : 'off',
+      'no-console': 'warn',
+      'no-debugger': 'warn',
       'no-unused-vars': 'off', // Use TypeScript's version
       'prefer-const': 'warn',
       'no-var': 'error'
+    }
+  },
+
+  // Test files with vitest globals
+  {
+    files: ['**/__tests__/**/*.ts', '**/*.spec.ts', '**/*.test.ts', '**/vitest.config.ts', '**/playwright.config.ts', 'e2e/**/*.ts'],
+    languageOptions: {
+      globals: {
+        ...globals.node,
+        // Vitest globals
+        vi: 'readonly',
+        describe: 'readonly',
+        it: 'readonly',
+        test: 'readonly',
+        expect: 'readonly',
+        beforeEach: 'readonly',
+        afterEach: 'readonly',
+        beforeAll: 'readonly',
+        afterAll: 'readonly'
+      }
     }
   },
 

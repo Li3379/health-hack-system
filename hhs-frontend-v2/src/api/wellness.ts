@@ -1,5 +1,11 @@
 import { request } from '@/utils/request'
-import type { WellnessMetricRequest, WellnessMetricVO, WellnessSummaryVO, WellnessTrendVO, PageResult } from '@/types/api'
+import type {
+  WellnessMetricRequest,
+  WellnessMetricVO,
+  WellnessSummaryVO,
+  WellnessTrendVO,
+  PageResult
+} from '@/types/api'
 
 export const wellnessApi = {
   // 获取保健指标列表
@@ -10,6 +16,16 @@ export const wellnessApi = {
   // 创建保健指标
   createMetric(data: WellnessMetricRequest) {
     return request.post<WellnessMetricVO>('/api/wellness', data)
+  },
+
+  // 更新保健指标
+  updateMetric(id: number, data: WellnessMetricRequest) {
+    return request.put<WellnessMetricVO>(`/api/wellness/${id}`, data)
+  },
+
+  // 删除保健指标
+  deleteMetric(id: number) {
+    return request.delete<void>(`/api/wellness/${id}`)
   },
 
   // 获取趋势数据

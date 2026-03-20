@@ -15,6 +15,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: false }
   },
   {
+    path: '/oauth/callback/:platform',
+    name: 'OAuthCallback',
+    component: () => import('@/views/oauth/OAuthCallback.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
     path: '/',
     redirect: '/dashboard',
     component: () => import('@/components/layout/MainLayout.vue'),
@@ -44,6 +50,11 @@ const routes: RouteRecordRaw[] = [
         path: 'health/score',
         name: 'HealthScore',
         component: () => import('@/views/health/Score.vue')
+      },
+      {
+        path: 'data-input',
+        name: 'DataInput',
+        component: () => import('@/views/data-input/Index.vue')
       },
       {
         path: 'ai/chat',
@@ -89,6 +100,17 @@ const routes: RouteRecordRaw[] = [
         path: 'user/profile',
         name: 'UserProfile',
         component: () => import('@/views/user/Profile.vue')
+      },
+      {
+        path: 'user/push-settings',
+        name: 'PushSettings',
+        component: () => import('@/views/user/PushSettings.vue')
+      },
+      {
+        path: 'settings/device-platform',
+        name: 'DevicePlatformConfig',
+        component: () => import('@/views/settings/DevicePlatformConfig.vue'),
+        meta: { requiresAdmin: true }
       }
     ]
   }
@@ -100,9 +122,9 @@ const router = createRouter({
 })
 
 // 路由守卫
-router.beforeEach((to, from, next) => {
+router.beforeEach((to, _from, next) => {
   const authStore = useAuthStore()
-  
+
   if (to.meta.requiresAuth && !authStore.isAuthenticated) {
     next('/login')
   } else if (to.path === '/login' && authStore.isAuthenticated) {

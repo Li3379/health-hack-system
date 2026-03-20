@@ -48,7 +48,13 @@ export const useWellnessStore = defineStore('wellness', () => {
     }
   }
 
-  const addMetric = async (data: { metricKey: string; value: number; recordDate: string; unit?: string; notes?: string }) => {
+  const addMetric = async (data: {
+    metricKey: string
+    value: number
+    recordDate: string
+    unit?: string
+    notes?: string
+  }) => {
     try {
       await wellnessApi.createMetric(data)
       ElMessage.success('添加成功')
