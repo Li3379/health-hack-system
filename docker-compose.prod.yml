@@ -1,0 +1,87 @@
+# =============================================================================
+# HHS Docker Compose Production Overrides
+# =============================================================================
+# Production-specific configuration for Docker Compose
+# Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# This file overrides base configuration for production:
+#   - Automatic restart policy (restart on failure and system reboot)
+#   - Resource limits (prevent runaway resource usage)
+#   - Log rotation (prevent disk exhaustion)
+#   - Production Spring profile for backend
+#   - No exposed database/cache ports (security)
+# =============================================================================
+
+services:
+  # ===========================================================================
+  # FRONTEND SERVICE - Production Configuration
+  # ===========================================================================
+  frontend:
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 64M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  # ===========================================================================
+  # BACKEND SERVICE - Production Configuration
+  # ===========================================================================
+  backend:
+    restart: always
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "10"
+
+  # ===========================================================================
+  # MYSQL SERVICE - Production Configuration
+  # ===========================================================================
+  # Note: No port override - database NOT exposed to host (security)
+  mysql:
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  # ===========================================================================
+  # REDIS SERVICE - Production Configuration
+  # ===========================================================================
+  # Note: No port override - cache NOT exposed to host (security)
+  redis:
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 64M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
