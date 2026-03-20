@@ -20,7 +20,7 @@ export const formatRelativeTime = (date: string | Date): string => {
   const now = dayjs()
   const target = dayjs(date)
   const diff = now.diff(target, 'second')
-  
+
   if (diff < 60) return '刚刚'
   if (diff < 3600) return `${Math.floor(diff / 60)}分钟前`
   if (diff < 86400) return `${Math.floor(diff / 3600)}小时前`
@@ -45,13 +45,22 @@ export const formatFileSize = (bytes: number): string => {
 // 获取指标显示名称
 export const getMetricDisplayName = (metricKey: string): string => {
   const map: Record<string, string> = {
+    // 小驼峰格式 (camelCase) - 用于 Metrics.vue, Monitor.vue 等
     heartRate: '心率',
     systolicBP: '收缩压',
     diastolicBP: '舒张压',
     glucose: '血糖',
     weight: '体重',
     bmi: 'BMI',
-    temperature: '体温'
+    temperature: '体温',
+    bloodOxygen: '血氧',
+
+    // 大写下划线格式 (SCREAMING_SNAKE_CASE) - 用于 Thresholds.vue 等
+    HEART_RATE: '心率',
+    BLOOD_PRESSURE: '血压',
+    BLOOD_GLUCOSE: '血糖',
+    BODY_TEMPERATURE: '体温',
+    BLOOD_OXYGEN: '血氧'
   }
   return map[metricKey] || metricKey
 }
@@ -62,13 +71,22 @@ export const getMetricLabel = getMetricDisplayName
 // 获取指标单位
 export const getMetricUnit = (metricKey: string): string => {
   const map: Record<string, string> = {
+    // 小驼峰格式
     heartRate: '次/分',
     systolicBP: 'mmHg',
     diastolicBP: 'mmHg',
     glucose: 'mmol/L',
     weight: 'kg',
     bmi: '',
-    temperature: '°C'
+    temperature: '°C',
+    bloodOxygen: '%',
+
+    // 大写下划线格式
+    HEART_RATE: '次/分',
+    BLOOD_PRESSURE: 'mmHg',
+    BLOOD_GLUCOSE: 'mmol/L',
+    BODY_TEMPERATURE: '°C',
+    BLOOD_OXYGEN: '%'
   }
   return map[metricKey] || ''
 }
@@ -119,7 +137,10 @@ export const getRiskLevelColor = (level: string): string => {
 }
 
 // 保健指标配置
-export const WELLNESS_METRICS: Record<string, { label: string; unit: string; icon: string; color: string }> = {
+export const WELLNESS_METRICS: Record<
+  string,
+  { label: string; unit: string; icon: string; color: string }
+> = {
   sleepDuration: { label: '睡眠时长', unit: '小时', icon: 'Moon', color: '#9b59b6' },
   sleepQuality: { label: '睡眠质量', unit: '分', icon: 'Star', color: '#8e44ad' },
   steps: { label: '步数', unit: '步', icon: 'Aim', color: '#3498db' },
@@ -129,7 +150,18 @@ export const WELLNESS_METRICS: Record<string, { label: string; unit: string; ico
   energy: { label: '精力', unit: '分', icon: 'Lightning', color: '#e74c3c' }
 }
 
+// 心情等级描述
+export const MOOD_LEVELS = ['很差', '较差', '一般', '较好', '很好']
+
+// 获取心情描述
+export const getMoodDescription = (value: number): string => {
+  const idx = Math.max(0, Math.min(4, Math.round(value) - 1))
+  return MOOD_LEVELS[idx]
+}
+
 export const getWellnessMetricLabel = (key: string): string => WELLNESS_METRICS[key]?.label || key
 export const getWellnessMetricUnit = (key: string): string => WELLNESS_METRICS[key]?.unit || ''
-export const getWellnessMetricIcon = (key: string): string => WELLNESS_METRICS[key]?.icon || 'DataLine'
-export const getWellnessMetricColor = (key: string): string => WELLNESS_METRICS[key]?.color || '#409eff'
+export const getWellnessMetricIcon = (key: string): string =>
+  WELLNESS_METRICS[key]?.icon || 'DataLine'
+export const getWellnessMetricColor = (key: string): string =>
+  WELLNESS_METRICS[key]?.color || '#409eff'
