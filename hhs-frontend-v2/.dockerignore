@@ -1,0 +1,58 @@
+# Dependencies (rebuilt with npm ci in container)
+node_modules/
+
+# Build output (rebuilt with npm run build in container)
+dist/
+
+# Logs
+*.log
+npm-debug.log*
+
+# IDE and editor files
+*.iml
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Version control
+.git/
+.gitignore
+
+# Environment files (secrets should not be in image)
+.env
+.env.local
+.env.development.local
+.env.production.local
+.env.*.local
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Test outputs
+coverage/
+.nyc_output/
+e2e/results/
+playwright-report/
+test-results/
+
+# Docker files (not needed in build context)
+Dockerfile*
+docker-compose*
+.docker/
+
+# Documentation
+*.md
+!README.md
+docs/
+
+# Config files not needed for build
+.editorconfig
+.prettierrc
+.prettierignore
+eslint.config.js
+tsconfig.json
+tsconfig.node.json
+vitest.config.ts
+playwright.config.ts
