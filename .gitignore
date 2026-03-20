@@ -1,0 +1,120 @@
+# ====================
+# Environment & Secrets
+# ====================
+.env
+.env.*
+!.env.example
+!.env.development.example
+!.env.production.example
+
+# Sensitive data directories
+uploads/
+logs/
+
+# ====================
+# Java / Spring Boot / Maven
+# ====================
+target/
+*.class
+*.jar
+*.war
+*.ear
+*.nar
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+.mvn/timing.properties
+.mvn/wrapper/maven-wrapper.jar
+.flattened-pom.xml
+
+# Spring Boot
+.springBeans/
+
+# ====================
+# Node.js / Vue / Vite
+# ====================
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# Vite auto-generated
+auto-imports.d.ts
+components.d.ts
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ====================
+# IDE & Editor
+# ====================
+# IntelliJ IDEA
+.idea/
+*.iml
+*.ipr
+*.iws
+out/
+
+# VS Code
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# Eclipse
+.settings/
+.classpath
+.project
+.metadata/
+
+# ====================
+# OS Generated
+# ====================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# ====================
+# Test & Coverage
+# ====================
+coverage/
+*.lcov
+.nyc_output/
+test-results/
+playwright-report/
+
+# ====================
+# Build & Cache
+# ====================
+*.swp
+*.swo
+*~
+.cache/
+.temp/
+.tmp/
+
+# ====================
+# Project Specific
+# ====================
+# Backend logs and uploads
+hhs-backend/logs/
+hhs-backend/uploads/
+
+# Frontend build output
+hhs-frontend-v2/dist/
+
+# IDE output directory
+out/
+nul
