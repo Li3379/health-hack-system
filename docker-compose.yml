@@ -1,0 +1,138 @@
+# =============================================================================
+# HHS Docker Compose Configuration
+# =============================================================================
+# Base configuration for all environments
+# Development: docker compose up (automatically applies docker-compose.override.yml)
+# Production: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# Services:
+#   - frontend: Vue.js SPA served by nginx (port 80)
+#   - backend: Spring Boot API server (port 8082)
+#   - mysql: MySQL 8.0 database (port 3306, exposed in dev)
+#   - redis: Redis 7 cache (port 6379, exposed in dev)
+#
+# Prerequisites:
+#   - Create .env file with required secrets (see .env.example)
+#   - Run: docker compose up -d
+# =============================================================================
+
+version: '3.8'
+
+services:
+  # ===========================================================================
+  # FRONTEND SERVICE
+  # ===========================================================================
+  # Vue.js SPA served by nginx with reverse proxy to backend
+  frontend:
+    build:
+      context: ./hhs-frontend-v2
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - hhs-network
+    restart: unless-stopped
+
+  # ===========================================================================
+  # BACKEND SERVICE
+  # ===========================================================================
+  # Spring Boot API server with MySQL and Redis dependencies
+  backend:
+    build:
+      context: ./hhs-backend
+      dockerfile: Dockerfile
+    ports:
+      - "8082:8082"
+    environment:
+      # Spring profile (dev/prod) - can be overridden in compose override
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+      # Database configuration
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USERNAME: root
+      DB_PASSWORD: ${DB_PASSWORD}
+      # Redis configuration
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      # Security configuration
+      JWT_SECRET: ${JWT_SECRET}
+      # AI services
+      DASH_SCOPE_API_KEY: ${DASH_SCOPE_API_KEY}
+      # Device integration
+      DEVICE_ENCRYPTION_KEY: ${DEVICE_ENCRYPTION_KEY}
+      # CORS configuration
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - uploads_data:/app/uploads
+    networks:
+      - hhs-network
+    restart: unless-stopped
+
+  # ===========================================================================
+  # MYSQL SERVICE
+  # ===========================================================================
+  # MySQL 8.0 database with health check
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      MYSQL_DATABASE: hhs
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - hhs-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+
+  # ===========================================================================
+  # REDIS SERVICE
+  # ===========================================================================
+  # Redis 7 cache with password authentication and health check
+  redis:
+    image: redis:7-alpine
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    networks:
+      - hhs-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+# =============================================================================
+# NAMED VOLUMES
+# =============================================================================
+# Persistent storage for data across container restarts
+volumes:
+  mysql_data:
+    driver: local
+  redis_data:
+    driver: local
+  uploads_data:
+    driver: local
+
+# =============================================================================
+# NETWORKS
+# =============================================================================
+# Bridge network for inter-service communication
+networks:
+  hhs-network:
+    driver: bridge
