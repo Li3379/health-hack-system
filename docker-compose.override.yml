@@ -1,0 +1,44 @@
+# =============================================================================
+# Docker Compose Override - Development Environment
+# =============================================================================
+# This file is automatically loaded by Docker Compose when running:
+#   docker compose up
+#
+# It merges with docker-compose.yml to provide development-specific settings.
+#
+# For production, use:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# =============================================================================
+
+services:
+  # ===========================================================================
+  # BACKEND SERVICE OVERRIDES
+  # ===========================================================================
+  backend:
+    environment:
+      # Force development profile for local development
+      SPRING_PROFILES_ACTIVE: dev
+      # CORS allowed origins for local development
+      ALLOWED_ORIGINS: http://localhost
+    # Development logging with rotation
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ===========================================================================
+  # MYSQL SERVICE OVERRIDES
+  # ===========================================================================
+  # Expose MySQL port for local development tools (DBeaver, MySQL Workbench, etc.)
+  mysql:
+    ports:
+      - "3306:3306"
+
+  # ===========================================================================
+  # REDIS SERVICE OVERRIDES
+  # ===========================================================================
+  # Expose Redis port for local development tools (Redis Insight, redis-cli, etc.)
+  redis:
+    ports:
+      - "6379:6379"
