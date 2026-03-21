@@ -31,14 +31,16 @@ services:
   # MYSQL SERVICE OVERRIDES
   # ===========================================================================
   # Expose MySQL port for local development tools (DBeaver, MySQL Workbench, etc.)
+  # Using port 3307 to avoid conflict with local MySQL on 3306
   mysql:
     ports:
-      - "3306:3306"
+      - "3307:3306"
 
   # ===========================================================================
   # REDIS SERVICE OVERRIDES
   # ===========================================================================
   # Expose Redis port for local development tools (Redis Insight, redis-cli, etc.)
+  # Using port 6380 to avoid conflict with local Redis on 6379
   redis:
     ports:
-      - "6379:6379"
+      - "6380:6379"
