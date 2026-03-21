@@ -16,7 +16,12 @@ services:
   # ===========================================================================
   # FRONTEND SERVICE - Production Configuration
   # ===========================================================================
+  # Image: Pull from GHCR instead of building locally
+  # The image tag uses environment variables for flexibility:
+  #   - OWNER: GitHub repository owner (default: your-github-username)
+  #   - IMAGE_TAG: Image version tag (default: latest)
   frontend:
+    image: ghcr.io/${OWNER:-your-github-username}/hhs-frontend:${IMAGE_TAG:-latest}
     restart: always
     deploy:
       resources:
@@ -33,7 +38,12 @@ services:
   # ===========================================================================
   # BACKEND SERVICE - Production Configuration
   # ===========================================================================
+  # Image: Pull from GHCR instead of building locally
+  # The image tag uses environment variables for flexibility:
+  #   - OWNER: GitHub repository owner (default: your-github-username)
+  #   - IMAGE_TAG: Image version tag (default: latest)
   backend:
+    image: ghcr.io/${OWNER:-your-github-username}/hhs-backend:${IMAGE_TAG:-latest}
     restart: always
     environment:
       SPRING_PROFILES_ACTIVE: prod
