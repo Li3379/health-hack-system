@@ -27,7 +27,7 @@ COPY --from=build /app/dist /usr/share/nginx/html
 
 # Health check for container orchestration
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost/ || exit 1
+    CMD wget --no-verbose --tries=1 --spider http://127.0.0.1/ || exit 1
 
 # Expose port 80
 EXPOSE 80
