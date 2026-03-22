@@ -2,9 +2,12 @@ package com.hhs.controller;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.hhs.common.Result;
+import com.hhs.common.constant.ErrorCode;
+import com.hhs.component.DeviceSyncRateLimiter;
+import com.hhs.exception.BusinessException;
 import com.hhs.security.SecurityUtils;
 import com.hhs.service.DeviceConnectionService;
-import com.hhs.service.HuaweiHealthService;
+import com.hhs.service.DeviceSyncOrchestrationService;
 import com.hhs.service.SyncHistoryService;
 import com.hhs.vo.DeviceConnectionVO;
 import com.hhs.vo.SyncHistoryVO;
@@ -15,7 +18,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -30,7 +32,8 @@ public class DeviceSyncController {
 
     private final DeviceConnectionService deviceConnectionService;
     private final SyncHistoryService syncHistoryService;
-    private final HuaweiHealthService huaweiHealthService;
+    private final DeviceSyncOrchestrationService orchestrationService;
+    private final DeviceSyncRateLimiter rateLimiter;
 
     /**
      * 获取已连接设备列表
@@ -45,6 +48,43 @@ public class DeviceSyncController {
     }
 
     /**
+     * 获取支持的平台列表
+     */
+    @GetMapping("/platforms")
+    @Operation(summary = "获取支持的平台", description = "获取所有已注册的设备平台列表")
+    public Result<List<PlatformInfo>> getPlatforms() {
+        List<String> platforms = orchestrationService.getRegisteredPlatforms();
+
+        List<PlatformInfo> platformInfos = platforms.stream()
+                .map(platform -> new PlatformInfo(
+                        platform,
+                        getPlatformDisplayName(platform),
+                        orchestrationService.isPlatformConfigured(platform)
+                ))
+                .toList();
+
+        return Result.success(platformInfos);
+    }
+
+    /**
+     * 获取平台显示名称
+     */
+    private String getPlatformDisplayName(String platform) {
+        return switch (platform.toLowerCase()) {
+            case "huawei" -> "华为运动健康";
+            case "xiaomi" -> "小米运动";
+            case "wechat" -> "微信运动";
+            case "apple" -> "Apple Health";
+            default -> platform;
+        };
+    }
+
+    /**
+     * 平台信息VO
+     */
+    public record PlatformInfo(String platform, String displayName, boolean configured) {}
+
+    /**
      * 连接设备（获取OAuth授权URL）
      */
     @PostMapping("/connect/{platform}")
@@ -53,28 +93,20 @@ public class DeviceSyncController {
         Long userId = SecurityUtils.getCurrentUserId();
         log.info("用户 {} 请求连接设备: {}", userId, platform);
 
-        String authUrl = switch (platform.toLowerCase()) {
-            case "huawei" -> {
-                String url = huaweiHealthService.getAuthorizationUrl(userId);
-                if (url == null) {
-                    yield null;  // OAuth not configured
-                }
-                yield url;
-            }
-            case "xiaomi" -> {
-                // TODO: Phase 4/5 - Implement Xiaomi OAuth
-                log.warn("Xiaomi OAuth not yet implemented");
-                yield null;
-            }
-            case "wechat", "apple" -> {
-                log.warn("Platform {} does not support OAuth connection", platform);
-                yield null;
-            }
-            default -> {
-                log.warn("Unknown platform: {}", platform);
-                yield null;
-            }
-        };
+        // Check if platform is registered
+        if (!orchestrationService.isPlatformRegistered(platform)) {
+            log.warn("Unknown platform: {}", platform);
+            return Result.failure(400, "未知平台: " + platform);
+        }
+
+        // Check if platform is configured
+        if (!orchestrationService.isPlatformConfigured(platform)) {
+            log.warn("Platform {} is not configured", platform);
+            return Result.failure(400, platform + " 平台未配置");
+        }
+
+        // Get authorization URL via orchestration service
+        String authUrl = orchestrationService.getAuthorizationUrl(userId, platform);
 
         if (authUrl == null) {
             return Result.failure(400, platform + " 平台暂不支持或未配置");
@@ -115,23 +147,19 @@ public class DeviceSyncController {
             return buildErrorPage("invalid_request", "Missing state parameter");
         }
 
+        // Check if platform is registered
+        if (!orchestrationService.isPlatformRegistered(platform)) {
+            log.warn("Unknown platform in callback: {}", platform);
+            return buildErrorPage("invalid_platform", "Unknown platform: " + platform);
+        }
+
         try {
-            // Process callback based on platform
-            switch (platform.toLowerCase()) {
-                case "huawei" -> {
-                    huaweiHealthService.handleCallback(code, state);
-                    return buildSuccessPage();
-                }
-                case "xiaomi" -> {
-                    // TODO: Phase 4/5 - Implement Xiaomi OAuth callback
-                    log.warn("Xiaomi OAuth callback not yet implemented");
-                    return buildErrorPage("not_implemented", "Xiaomi integration coming soon");
-                }
-                default -> {
-                    log.warn("Unknown platform in callback: {}", platform);
-                    return buildErrorPage("invalid_platform", "Unknown platform: " + platform);
-                }
-            }
+            // Process callback via orchestration service
+            orchestrationService.handleCallback(platform, code, state);
+            return buildSuccessPage();
+        } catch (IllegalArgumentException e) {
+            log.error("Invalid platform in callback: {}", platform);
+            return buildErrorPage("invalid_platform", e.getMessage());
         } catch (Exception e) {
             log.error("Error processing OAuth callback for {}: {}", platform, e.getMessage(), e);
             return buildErrorPage("server_error", e.getMessage());
@@ -214,27 +242,27 @@ public class DeviceSyncController {
      * 手动同步指定设备
      */
     @PostMapping("/sync/{platform}")
-    @Operation(summary = "同步设备数据", description = "手动触发指定设备的数据同步")
+    @Operation(summary = "同步设备数据", description = "手动触发指定设备的数据同步（每分钟限10次）")
     public Result<SyncResultVO> syncNow(@PathVariable String platform) {
         Long userId = SecurityUtils.getCurrentUserId();
         log.info("用户 {} 手动同步设备: {}", userId, platform);
 
-        SyncResultVO result = switch (platform.toLowerCase()) {
-            case "huawei" -> huaweiHealthService.syncData(userId);
-            case "xiaomi" -> {
-                // TODO: Phase 4/5 - Implement Xiaomi sync
-                log.warn("Xiaomi sync not yet implemented");
-                yield SyncResultVO.failed("xiaomi", "Xiaomi sync not yet implemented", 0);
-            }
-            case "wechat", "apple" -> {
-                log.warn("Platform {} does not support direct sync", platform);
-                yield SyncResultVO.failed(platform, "This platform does not support direct data sync", 0);
-            }
-            default -> {
-                log.warn("Unknown platform: {}", platform);
-                yield SyncResultVO.failed(platform, "Unknown platform: " + platform, 0);
-            }
-        };
+        // Check rate limit
+        if (!rateLimiter.checkLimit(userId)) {
+            int remaining = rateLimiter.getRemainingCount(userId);
+            log.warn("设备同步请求超过限制: userId={}, remaining={}", userId, remaining);
+            throw new BusinessException(ErrorCode.DEVICE_RATE_LIMIT_EXCEEDED,
+                    "同步请求过于频繁，请 " + rateLimiter.getWindowSeconds() + " 秒后再试");
+        }
+
+        // Check if platform is registered
+        if (!orchestrationService.isPlatformRegistered(platform)) {
+            log.warn("Unknown platform: {}", platform);
+            return Result.failure(400, "未知平台: " + platform);
+        }
+
+        // Sync via orchestration service
+        SyncResultVO result = orchestrationService.syncPlatform(userId, platform);
 
         return Result.success(result);
     }
@@ -243,37 +271,21 @@ public class DeviceSyncController {
      * 批量同步所有设备
      */
     @PostMapping("/sync/all")
-    @Operation(summary = "同步所有设备", description = "手动触发所有已连接设备的数据同步")
+    @Operation(summary = "同步所有设备", description = "手动触发所有已连接设备的数据同步（每分钟限10次）")
     public Result<List<SyncResultVO>> syncAll() {
         Long userId = SecurityUtils.getCurrentUserId();
         log.info("用户 {} 批量同步所有设备", userId);
 
-        List<SyncResultVO> results = new ArrayList<>();
-
-        // Get all connected devices
-        List<DeviceConnectionVO> connections = deviceConnectionService.getConnections(userId);
-
-        for (DeviceConnectionVO connection : connections) {
-            if (!Boolean.TRUE.equals(connection.getSyncEnabled())) {
-                continue;
-            }
-
-            String platform = connection.getPlatform();
-            try {
-                SyncResultVO result = switch (platform.toLowerCase()) {
-                    case "huawei" -> huaweiHealthService.syncData(userId);
-                    case "xiaomi" -> {
-                        // TODO: Phase 4/5 - Implement Xiaomi sync
-                        yield SyncResultVO.failed("xiaomi", "Xiaomi sync not yet implemented", 0);
-                    }
-                    default -> SyncResultVO.failed(platform, "Platform sync not supported", 0);
-                };
-                results.add(result);
-            } catch (Exception e) {
-                log.error("Error syncing device {} for user {}: {}", platform, userId, e.getMessage());
-                results.add(SyncResultVO.failed(platform, "Sync error: " + e.getMessage(), 0));
-            }
+        // Check rate limit
+        if (!rateLimiter.checkLimit(userId)) {
+            int remaining = rateLimiter.getRemainingCount(userId);
+            log.warn("设备同步请求超过限制: userId={}, remaining={}", userId, remaining);
+            throw new BusinessException(ErrorCode.DEVICE_RATE_LIMIT_EXCEEDED,
+                    "同步请求过于频繁，请 " + rateLimiter.getWindowSeconds() + " 秒后再试");
         }
+
+        // Sync all platforms via orchestration service
+        List<SyncResultVO> results = orchestrationService.syncAllPlatforms(userId);
 
         return Result.success(results);
     }
@@ -292,4 +304,23 @@ public class DeviceSyncController {
 
         return Result.success(history);
     }
+
+    /**
+     * 获取同步速率限制状态
+     */
+    @GetMapping("/sync/rate-limit")
+    @Operation(summary = "获取同步速率限制", description = "获取当前用户的同步速率限制状态")
+    public Result<RateLimitStatus> getRateLimitStatus() {
+        Long userId = SecurityUtils.getCurrentUserId();
+        int remaining = rateLimiter.getRemainingCount(userId);
+        int limit = rateLimiter.getLimit();
+        int current = rateLimiter.getCurrentCount(userId);
+
+        return Result.success(new RateLimitStatus(limit, remaining, current, rateLimiter.getWindowSeconds()));
+    }
+
+    /**
+     * 速率限制状态VO
+     */
+    public record RateLimitStatus(int limit, int remaining, int current, int windowSeconds) {}
 }

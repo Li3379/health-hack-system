@@ -197,6 +197,7 @@ public class HealthMetricServiceImpl implements HealthMetricService {
     private HealthMetricVO toVO(HealthMetric e) {
         return new HealthMetricVO(
                 e.getId(), e.getUserId(), e.getProfileId(), e.getMetricKey(),
+                metricDisplayFormatter.getDisplayName(e.getMetricKey()),
                 e.getValue(), e.getUnit(), e.getRecordDate(), e.getTrend(),
                 e.getCategory(), e.getCreateTime()
         );
@@ -222,6 +223,8 @@ public class HealthMetricServiceImpl implements HealthMetricService {
         if (userId != null) {
             wrapper.eq(HealthMetric::getUserId, userId);
         }
+        // 只查询 HEALTH 类型的指标（排除 WELLNESS 保健指标）
+        wrapper.eq(HealthMetric::getCategory, com.hhs.common.enums.MetricCategory.HEALTH);
         wrapper.orderByDesc(HealthMetric::getCreateTime);
 
         Page<HealthMetric> result = healthMetricMapper.selectPage(pageParam, wrapper);

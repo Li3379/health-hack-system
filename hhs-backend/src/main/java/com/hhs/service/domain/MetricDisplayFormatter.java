@@ -19,15 +19,27 @@ public class MetricDisplayFormatter {
      */
     public String getDisplayName(String metricKey) {
         return switch (metricKey) {
-            // Health metrics
+            // Health metrics - 健康指标
             case "heartRate" -> "心率";
             case "systolicBP" -> "收缩压";
             case "diastolicBP" -> "舒张压";
             case "glucose" -> "血糖";
+            case "fastingGlucose" -> "空腹血糖";
+            case "postprandialGlucose" -> "餐后血糖";
             case "bmi" -> "BMI";
             case "temperature" -> "体温";
             case "weight" -> "体重";
-            // Wellness metrics
+            case "bloodOxygen" -> "血氧";
+            case "totalCholesterol" -> "总胆固醇";
+            case "hdlCholesterol" -> "高密度脂蛋白";
+            case "ldlCholesterol" -> "低密度脂蛋白";
+            case "creatinine" -> "肌酐";
+            case "uricAcid" -> "尿酸";
+            case "hemoglobin" -> "血红蛋白";
+            case "wbc" -> "白细胞";
+            case "rbc" -> "红细胞";
+            case "platelet" -> "血小板";
+            // Wellness metrics - 保健指标
             case "sleepDuration" -> "睡眠时长";
             case "sleepQuality" -> "睡眠质量";
             case "steps" -> "步数";
@@ -47,19 +59,26 @@ public class MetricDisplayFormatter {
      */
     public String getUnit(String metricKey) {
         return switch (metricKey) {
-            // Health metrics
+            // Health metrics - 健康指标
             case "heartRate" -> "次/分";
             case "systolicBP", "diastolicBP" -> "mmHg";
-            case "glucose" -> "mmol/L";
+            case "glucose", "fastingGlucose", "postprandialGlucose" -> "mmol/L";
             case "temperature" -> "°C";
             case "weight" -> "kg";
             case "bmi" -> "";
-            // Wellness metrics
+            case "bloodOxygen" -> "%";
+            case "totalCholesterol", "hdlCholesterol", "ldlCholesterol" -> "mmol/L";
+            case "creatinine", "uricAcid" -> "μmol/L";
+            case "hemoglobin" -> "g/L";
+            case "wbc" -> "10^9/L";
+            case "rbc" -> "10^12/L";
+            case "platelet" -> "10^9/L";
+            // Wellness metrics - 保健指标
             case "sleepDuration" -> "小时";
             case "sleepQuality" -> "级";
             case "steps" -> "步";
             case "exerciseMinutes" -> "分钟";
-            case "waterIntake" -> "杯";
+            case "waterIntake" -> "ml";
             case "mood" -> "级";
             case "energy" -> "级";
             default -> "";

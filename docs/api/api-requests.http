@@ -1,0 +1,368 @@
+### HHS API 测试请求
+### 使用说明：
+### 1. 首先运行登录请求获取 JWT token
+### 2. 将返回的 token 复制到下方的 {{jwtToken}} 变量中
+### 3. 运行其他需要认证的请求
+
+@baseUrl = http://localhost:8082/api
+@jwtToken = YOUR_JWT_TOKEN_HERE
+
+### ============================================================
+### 认证接口 (无需认证)
+### ============================================================
+
+### 用户登录
+# @name login
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "123456"
+}
+
+### 用户注册
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "username": "testuser",
+  "password": "test123456",
+  "nickname": "测试用户",
+  "email": "test@example.com"
+}
+
+### ============================================================
+### 用户接口 (需要认证)
+### ============================================================
+
+### 获取用户信息
+GET {{baseUrl}}/user/profile
+Authorization: Bearer {{jwtToken}}
+
+### 更新用户信息
+PUT {{baseUrl}}/user/profile
+Authorization: Bearer {{jwtToken}}
+Content-Type: application/json
+
+{
+  "nickname": "健康达人",
+  "email": "user@example.com",
+  "phone": "13800138000"
+}
+
+### 修改密码
+PUT {{baseUrl}}/user/password
+Authorization: Bearer {{jwtToken}}
+Content-Type: application/json
+
+{
+  "oldPassword": "123456",
+  "newPassword": "newpass123"
+}
+
+### ============================================================
+### 健康指标接口 (需要认证)
+### ============================================================
+
+### 获取健康指标列表
+GET {{baseUrl}}/metrics?page=1&size=10
+Authorization: Bearer {{jwtToken}}
+
+### 创建健康指标
+POST {{baseUrl}}/metrics
+Authorization: Bearer {{jwtToken}}
+Content-Type: application/json
+
+{
+  "metricKey": "glucose",
+  "value": 5.6,
+  "unit": "mmol/L",
+  "recordDate": "2026-03-18"
+}
+
+### ============================================================
+### 健康评分接口 (需要认证)
+### ============================================================
+
+### 获取健康评分
+GET {{baseUrl}}/health/score
+Authorization: Bearer {{jwtToken}}
+
+### 重新计算健康评分
+POST {{baseUrl}}/health/score/recalculate
+Authorization: Bearer {{jwtToken}}
+
+### 获取评分详情
+GET {{baseUrl}}/health/score/breakdown
+Authorization: Bearer {{jwtToken}}
+
+### 获取评分历史
+GET {{baseUrl}}/health/score/history?days=30
+Authorization: Bearer {{jwtToken}}
+
+### ============================================================
+### 健康报告接口 (需要认证)
+### ============================================================
+
+### 获取健康报告
+GET {{baseUrl}}/health/report
+Authorization: Bearer {{jwtToken}}
+
+### 生成健康报告
+POST {{baseUrl}}/health/report/generate
+Authorization: Bearer {{jwtToken}}
+
+### 获取报告历史
+GET {{baseUrl}}/health/report/history?limit=10
+Authorization: Bearer {{jwtToken}}
+
+### ============================================================
+### 预警接口 (需要认证)
+### ============================================================
+
+### 获取预警列表
+GET {{baseUrl}}/alerts?page=1&size=10
+Authorization: Bearer {{jwtToken}}
+
+### 获取未读预警数量
+GET {{baseUrl}}/alerts/unread-count
+Authorization: Bearer {{jwtToken}}
+
+### 获取最近预警
+GET {{baseUrl}}/alerts/recent?limit=5
+Authorization: Bearer {{jwtToken}}
+
+### 全部标记已读
+PUT {{baseUrl}}/alerts/read-all
+Authorization: Bearer {{jwtToken}}
+
+### 获取预警统计
+GET {{baseUrl}}/alerts/statistics
+Authorization: Bearer {{jwtToken}}
+
+### ============================================================
+### OCR 识别接口 (需要认证)
+### ============================================================
+
+### 通用健康图片识别
+POST {{baseUrl}}/ocr/health-image?ocrType=report
+Authorization: Bearer {{jwtToken}}
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary
+
+------WebKitFormBoundary
+Content-Disposition: form-data; name="file"; filename="report.jpg"
+Content-Type: image/jpeg
+
+< ./test-image.jpg
+------WebKitFormBoundary--
+
+### 体检报告识别
+POST {{baseUrl}}/ocr/report
+Authorization: Bearer {{jwtToken}}
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary
+
+------WebKitFormBoundary
+Content-Disposition: form-data; name="file"; filename="report.jpg"
+Content-Type: image/jpeg
+
+< ./test-image.jpg
+------WebKitFormBoundary--
+
+### 药品标签识别
+POST {{baseUrl}}/ocr/medicine
+Authorization: Bearer {{jwtToken}}
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary
+
+------WebKitFormBoundary
+Content-Disposition: form-data; name="file"; filename="medicine.jpg"
+Content-Type: image/jpeg
+
+< ./test-image.jpg
+------WebKitFormBoundary--
+
+### 营养标签识别
+POST {{baseUrl}}/ocr/nutrition
+Authorization: Bearer {{jwtToken}}
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary
+
+------WebKitFormBoundary
+Content-Disposition: form-data; name="file"; filename="nutrition.jpg"
+Content-Type: image/jpeg
+
+< ./test-image.jpg
+------WebKitFormBoundary--
+
+### 确认OCR识别结果
+POST {{baseUrl}}/ocr/confirm
+Authorization: Bearer {{jwtToken}}
+Content-Type: application/json
+
+{
+  "ocrRecordId": 1,
+  "metrics": [
+    {
+      "metricKey": "glucose",
+      "name": "血糖",
+      "value": 5.6,
+      "unit": "mmol/L",
+      "category": "HEALTH",
+      "selected": true,
+      "recordDate": "2026-03-18"
+    }
+  ]
+}
+
+### 获取OCR历史
+GET {{baseUrl}}/ocr/history?page=1&size=10
+Authorization: Bearer {{jwtToken}}
+
+### 获取OCR记录详情
+GET {{baseUrl}}/ocr/history/1
+Authorization: Bearer {{jwtToken}}
+
+### 删除OCR记录
+DELETE {{baseUrl}}/ocr/history/1
+Authorization: Bearer {{jwtToken}}
+
+### ============================================================
+### AI 解析接口 (需要认证)
+### ============================================================
+
+### AI解析健康指标
+POST {{baseUrl}}/ai/parse-metrics
+Authorization: Bearer {{jwtToken}}
+Content-Type: application/json
+
+{
+  "input": "今天血糖5.6，心率72，血压120/80",
+  "inputType": "text"
+}
+
+### 确认AI解析结果
+POST {{baseUrl}}/ai/confirm-metrics
+Authorization: Bearer {{jwtToken}}
+Content-Type: application/json
+
+{
+  "parseHistoryId": 1,
+  "metrics": [
+    {
+      "metricKey": "glucose",
+      "metricName": "血糖",
+      "value": 5.6,
+      "unit": "mmol/L",
+      "category": "HEALTH",
+      "selected": true,
+      "recordDate": "2026-03-18"
+    }
+  ]
+}
+
+### 获取剩余解析次数
+GET {{baseUrl}}/ai/parse-metrics/remaining
+Authorization: Bearer {{jwtToken}}
+
+### 获取AI解析历史
+GET {{baseUrl}}/ai/history?page=1&size=10
+Authorization: Bearer {{jwtToken}}
+
+### 获取AI解析详情
+GET {{baseUrl}}/ai/history/1
+Authorization: Bearer {{jwtToken}}
+
+### 删除AI解析记录
+DELETE {{baseUrl}}/ai/history/1
+Authorization: Bearer {{jwtToken}}
+
+### ============================================================
+### AI 功能接口 (需要认证)
+### ============================================================
+
+### AI内容分类
+POST {{baseUrl}}/ai/classify
+Authorization: Bearer {{jwtToken}}
+Content-Type: application/json
+
+{
+  "title": "健康饮食建议",
+  "content": "今天吃了蔬菜沙拉和水果，感觉很健康"
+}
+
+### AI健康咨询
+POST {{baseUrl}}/ai/chat
+Authorization: Bearer {{jwtToken}}
+Content-Type: application/json
+
+{
+  "sessionId": "session-123",
+  "question": "如何保持健康的饮食习惯？"
+}
+
+### 获取聊天会话列表
+GET {{baseUrl}}/ai/chat/sessions
+Authorization: Bearer {{jwtToken}}
+
+### 获取聊天历史
+GET {{baseUrl}}/ai/chat/history?sessionId=session-123
+Authorization: Bearer {{jwtToken}}
+
+### 删除聊天会话
+DELETE {{baseUrl}}/ai/chat/sessions/session-123
+Authorization: Bearer {{jwtToken}}
+
+### ============================================================
+### 设备同步接口 (需要认证)
+### ============================================================
+
+### 获取设备连接列表
+GET {{baseUrl}}/device/connections
+Authorization: Bearer {{jwtToken}}
+
+### 获取支持的平台
+GET {{baseUrl}}/device/platforms
+Authorization: Bearer {{jwtToken}}
+
+### 连接设备 (获取OAuth URL)
+POST {{baseUrl}}/device/connect/huawei
+Authorization: Bearer {{jwtToken}}
+
+### 同步单个设备
+POST {{baseUrl}}/device/sync/huawei
+Authorization: Bearer {{jwtToken}}
+
+### 同步所有设备
+POST {{baseUrl}}/device/sync/all
+Authorization: Bearer {{jwtToken}}
+
+### 断开设备连接
+DELETE {{baseUrl}}/device/disconnect/huawei
+Authorization: Bearer {{jwtToken}}
+
+### 获取同步历史
+GET {{baseUrl}}/device/sync/history?page=1&size=10
+Authorization: Bearer {{jwtToken}}
+
+### ============================================================
+### 统计接口 (需要认证)
+### ============================================================
+
+### 获取今日统计
+GET {{baseUrl}}/stats/today
+Authorization: Bearer {{jwtToken}}
+
+### ============================================================
+### 文件上传接口 (需要认证)
+### ============================================================
+
+### 上传头像
+POST {{baseUrl}}/upload/avatar
+Authorization: Bearer {{jwtToken}}
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary
+
+------WebKitFormBoundary
+Content-Disposition: form-data; name="file"; filename="avatar.jpg"
+Content-Type: image/jpeg
+
+< ./avatar.jpg
+------WebKitFormBoundary--

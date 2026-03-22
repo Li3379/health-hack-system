@@ -1,6 +1,7 @@
 package com.hhs.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.hhs.config.DeviceMockProperties;
 import com.hhs.config.DeviceOAuthProperties;
 import com.hhs.config.DeviceOAuthProperties.PlatformConfig;
 import com.hhs.dto.HealthMetricRequest;
@@ -20,6 +21,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.http.HttpStatus;
@@ -42,11 +45,15 @@ import static org.mockito.Mockito.*;
  * for Huawei Health platform integration.
  */
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 @DisplayName("华为健康服务测试")
 class HuaweiHealthServiceTest {
 
     @Mock
     private DeviceOAuthProperties oAuthProperties;
+
+    @Mock
+    private DeviceMockProperties mockProperties;
 
     @Mock
     private TokenEncryptionService encryptionService;
@@ -82,6 +89,9 @@ class HuaweiHealthServiceTest {
     @BeforeEach
     void setUp() {
         testUserId = 1L;
+
+        // Setup mock properties - enable mock data by default for tests
+        when(mockProperties.isEnabled()).thenReturn(true);
 
         // Setup test platform config
         testConfig = new PlatformConfig();

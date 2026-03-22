@@ -1,0 +1,5 @@
+{
+    "kiroAgent.configureMCP": "Enabled",
+    "git.ignoreLimitWarning": true,
+    "java.compile.nullAnalysis.mode": "automatic"
+}

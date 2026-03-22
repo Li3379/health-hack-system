@@ -3,6 +3,7 @@ package com.hhs.service.impl;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hhs.common.constant.ErrorCode;
+import com.hhs.config.DeviceMockProperties;
 import com.hhs.config.DeviceOAuthProperties;
 import com.hhs.config.DeviceOAuthProperties.PlatformConfig;
 import com.hhs.dto.HealthDataPoint;
@@ -13,6 +14,7 @@ import com.hhs.entity.DeviceConnection;
 import com.hhs.exception.BusinessException;
 import com.hhs.exception.SystemException;
 import com.hhs.service.DeviceConnectionService;
+import com.hhs.service.DevicePlatformService;
 import com.hhs.service.HealthMetricService;
 import com.hhs.service.HuaweiHealthService;
 import com.hhs.service.SyncHistoryService;
@@ -55,10 +57,13 @@ import java.util.concurrent.TimeUnit;
  *   <li>AES-256-GCM token encryption</li>
  *   <li>Secure token exchange over HTTPS</li>
  * </ul>
+ *
+ * <p>Implements {@link DevicePlatformService} for integration with the
+ * device sync orchestration layer.
  */
 @Slf4j
 @Service
-public class HuaweiHealthServiceImpl implements HuaweiHealthService {
+public class HuaweiHealthServiceImpl implements HuaweiHealthService, DevicePlatformService {
 
     private static final String PLATFORM = "huawei";
     private static final String STATE_KEY_PREFIX = "oauth:state:huawei:";
@@ -68,6 +73,7 @@ public class HuaweiHealthServiceImpl implements HuaweiHealthService {
     private static final String HUAWEI_HEALTH_API_URL = "https://health-api.cloud.huawei.com/healthkit/v1";
 
     private final DeviceOAuthProperties oAuthProperties;
+    private final DeviceMockProperties mockProperties;
     private final TokenEncryptionService encryptionService;
     private final DeviceConnectionService connectionService;
     private final HealthMetricService healthMetricService;
@@ -79,6 +85,7 @@ public class HuaweiHealthServiceImpl implements HuaweiHealthService {
 
     public HuaweiHealthServiceImpl(
             DeviceOAuthProperties oAuthProperties,
+            DeviceMockProperties mockProperties,
             TokenEncryptionService encryptionService,
             DeviceConnectionService connectionService,
             HealthMetricService healthMetricService,
@@ -86,6 +93,7 @@ public class HuaweiHealthServiceImpl implements HuaweiHealthService {
             RedisTemplate<String, Object> redisTemplate,
             RestTemplate restTemplate) {
         this.oAuthProperties = oAuthProperties;
+        this.mockProperties = mockProperties;
         this.encryptionService = encryptionService;
         this.connectionService = connectionService;
         this.healthMetricService = healthMetricService;
@@ -208,6 +216,13 @@ public class HuaweiHealthServiceImpl implements HuaweiHealthService {
     public boolean isConfigured() {
         return oAuthProperties.hasValidCredentials(PLATFORM)
                 && encryptionService.isConfigured();
+    }
+
+    // ========== DevicePlatformService Implementation ==========
+
+    @Override
+    public String getPlatform() {
+        return PLATFORM;
     }
 
     @Override
@@ -350,11 +365,12 @@ public class HuaweiHealthServiceImpl implements HuaweiHealthService {
 
     /**
      * Fetch health data from Huawei Health API.
-     * Falls back to mock data if API is unavailable or not configured.
+     * Falls back to mock data if API is unavailable or not configured AND mock is enabled.
      *
      * @param accessToken the access token
      * @param userId the user ID (for logging)
      * @return list of health data points
+     * @throws SystemException if API fails and mock is disabled
      */
     private List<HealthDataPoint> fetchHealthData(String accessToken, Long userId) {
         // Try to fetch real data if OAuth is configured
@@ -364,14 +380,22 @@ public class HuaweiHealthServiceImpl implements HuaweiHealthService {
                 if (!realData.isEmpty()) {
                     return realData;
                 }
-                log.info("No data returned from Huawei API, using mock data");
+                log.info("No data returned from Huawei API");
             } catch (Exception e) {
-                log.warn("Failed to fetch real health data, falling back to mock: {}", e.getMessage());
+                log.warn("Failed to fetch real health data: {}", e.getMessage());
             }
         }
 
-        // Return mock data for testing/demo purposes
-        return generateMockHealthData();
+        // Check if mock data is enabled
+        if (mockProperties.isEnabled()) {
+            log.info("Using mock data for testing/demo purposes");
+            return generateMockHealthData();
+        }
+
+        // Mock is disabled, throw error
+        log.error("Huawei API unavailable and mock data is disabled");
+        throw new SystemException(ErrorCode.DEVICE_SYNC_FAILED,
+                "无法获取华为健康数据。API不可用且模拟数据已禁用，请检查API配置或联系管理员。");
     }
 
     /**

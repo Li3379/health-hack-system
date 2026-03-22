@@ -69,7 +69,7 @@ public class WellnessServiceImpl implements WellnessService {
 
         // Validate metric key is a known wellness metric
         if (!metricCategoryService.isWellnessMetric(request.getMetricKey())) {
-            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "无效的保健指标类型: " + request.getMetricKey());
+            throw new BusinessException(ErrorCode.VALIDATION_INVALID_PARAMETER, "无效的保健指标类型: " + request.getMetricKey());
         }
 
         // Validate value range for the specific metric
@@ -120,7 +120,7 @@ public class WellnessServiceImpl implements WellnessService {
 
         // Validate metric key is a known wellness metric
         if (!metricCategoryService.isWellnessMetric(request.getMetricKey())) {
-            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "无效的保健指标类型: " + request.getMetricKey());
+            throw new BusinessException(ErrorCode.VALIDATION_INVALID_PARAMETER, "无效的保健指标类型: " + request.getMetricKey());
         }
 
         // Validate value range
@@ -308,7 +308,7 @@ public class WellnessServiceImpl implements WellnessService {
         BigDecimal[] range = ranges.get(metricKey);
         if (range != null) {
             if (value.compareTo(range[0]) < 0 || value.compareTo(range[1]) > 0) {
-                throw new BusinessException(ErrorCode.VALIDATION_ERROR,
+                throw new BusinessException(ErrorCode.VALIDATION_INVALID_PARAMETER,
                         String.format("%s数值必须在 %.0f 到 %.0f 之间",
                                 metricDisplayFormatter.getDisplayName(metricKey),
                                 range[0], range[1]));
@@ -330,6 +330,7 @@ public class WellnessServiceImpl implements WellnessService {
     private HealthMetricVO toVO(HealthMetric e) {
         return new HealthMetricVO(
                 e.getId(), e.getUserId(), e.getProfileId(), e.getMetricKey(),
+                metricDisplayFormatter.getDisplayName(e.getMetricKey()),
                 e.getValue(), e.getUnit(), e.getRecordDate(), e.getTrend(),
                 e.getCategory(), e.getCreateTime()
         );

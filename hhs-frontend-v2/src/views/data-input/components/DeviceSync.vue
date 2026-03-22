@@ -322,7 +322,7 @@ import { Connection, QuestionFilled } from '@element-plus/icons-vue'
 import { deviceApi } from '@/api/device'
 import type { DeviceConnectionVO, SyncHistoryVO } from '@/types/api'
 import type { PlatformMetadata } from '@/types/platform'
-import { PLATFORM_ICONS, PLATFORM_COLORS, PLATFORM_NAMES } from '@/types/platform'
+import { PLATFORM_ICONS, PLATFORM_COLORS } from '@/types/platform'
 import DeviceConfigWizard from './DeviceConfigWizard.vue'
 import PlatformStatusTag from '@/components/device/PlatformStatusTag.vue'
 

@@ -65,10 +65,10 @@ describe('PlatformStatusTag.vue', () => {
         }
       })
 
-      await wrapper.find('.status-tag').trigger('click')
+      await wrapper.find('.status-badge').trigger('click')
 
-      // Dialog should be visible
-      expect(wrapper.vm.showDialog).toBe(true)
+      // Dialog should be visible (check for dialog element in DOM)
+      expect(wrapper.find('.el-dialog').exists()).toBe(true)
     })
   })
 })

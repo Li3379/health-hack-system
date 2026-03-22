@@ -166,8 +166,8 @@ const wellnessStore = useWellnessStore()
 // Chart refs
 const sleepChartRef = ref<HTMLElement>()
 const activityChartRef = ref<HTMLElement>()
-const sleepChartInstance: echarts.ECharts | null = null
-const activityChartInstance: echarts.ECharts | null = null
+let sleepChartInstance: echarts.ECharts | null = null
+let activityChartInstance: echarts.ECharts | null = null
 
 // Selection state
 const sleepMetric = ref('sleepDuration')
@@ -218,7 +218,7 @@ const getDateRange = (days: number) => {
 const fetchSleepTrend = async () => {
   const { startDate, endDate } = getDateRange(dateRange.value)
   await wellnessStore.fetchTrend(sleepMetric.value, startDate, endDate)
-  renderChart(
+  sleepChartInstance = renderChart(
     sleepChartInstance,
     sleepChartRef.value,
     wellnessStore.trendData,
@@ -229,7 +229,7 @@ const fetchSleepTrend = async () => {
 const fetchActivityTrend = async () => {
   const { startDate, endDate } = getDateRange(dateRange.value)
   await wellnessStore.fetchTrend(activityMetric.value, startDate, endDate)
-  renderChart(
+  activityChartInstance = renderChart(
     activityChartInstance,
     activityChartRef.value,
     wellnessStore.trendData,
@@ -242,8 +242,8 @@ const renderChart = (
   chartRef: HTMLElement | undefined,
   data: any,
   color: string
-) => {
-  if (!chartRef || !data) return
+): echarts.ECharts | null => {
+  if (!chartRef || !data) return chartInstance
 
   if (!chartInstance) {
     chartInstance = echarts.init(chartRef)
@@ -294,6 +294,7 @@ const renderChart = (
   }
 
   chartInstance.setOption(option)
+  return chartInstance
 }
 
 const handleAddMetric = async () => {

@@ -1,3 +1,4 @@
+/// <reference types="vitest/globals" />
 import { config } from '@vue/test-utils'
 
 // Mock Element Plus globally
