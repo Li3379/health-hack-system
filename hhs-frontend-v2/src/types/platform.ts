@@ -33,6 +33,7 @@ export interface PlatformMetadata {
   unavailableReason?: string
   guideUrl?: string
   icon?: string
+  isConnectable?: boolean
 }
 
 /**

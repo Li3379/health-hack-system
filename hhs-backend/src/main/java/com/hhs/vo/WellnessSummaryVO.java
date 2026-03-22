@@ -19,15 +19,3 @@ public record WellnessSummaryVO(
     Integer avgEnergy,
     List<WellnessMetricSummary> metrics
 ) {}
-
-/**
- * Individual wellness metric summary for the dashboard
- */
-public record WellnessMetricSummary(
-    String metricKey,
-    String displayName,
-    BigDecimal latestValue,
-    String unit,
-    BigDecimal avgValue,
-    BigDecimal trend
-) {}

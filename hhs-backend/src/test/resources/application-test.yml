@@ -1,0 +1,65 @@
+# Test Configuration (activated by @ActiveProfiles("test") annotation)
+# This configuration works with Testcontainers for isolated testing
+
+spring:
+  # DataSource configuration for tests - URLs will be set by Testcontainers
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: ${TEST_DB_URL:jdbc:mysql://localhost:3306/hhs_test?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true}
+    username: ${TEST_DB_USER:root}
+    password: ${TEST_DB_PASSWORD:test}
+    hikari:
+      maximum-pool-size: 5
+      minimum-idle: 2
+      connection-timeout: 30000
+
+  # JPA configuration
+  jpa:
+    hibernate:
+      ddl-auto: none
+    show-sql: false
+
+  # Redis configuration for tests - will be set by Testcontainers
+  data:
+    redis:
+      host: ${TEST_REDIS_HOST:localhost}
+      port: ${TEST_REDIS_PORT:6379}
+      password: ${TEST_REDIS_PASSWORD:}
+      database: 1  # Use different database for tests
+      timeout: 3000
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
+
+  # Servlet configuration for file upload
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 10MB
+      max-request-size: 10MB
+
+# JWT configuration for tests
+security:
+  jwt:
+    secret: "hhs-test-secret-key-must-be-at-least-256-bits-long-for-hs256-algorithm"
+    expire-days: 7
+
+# File upload configuration for tests
+file:
+  upload:
+    path: ${java.io.tmpdir}/hhs-test-uploads
+
+# MyBatis Plus configuration
+mybatis-plus:
+  configuration:
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  mapper-locations: classpath:mapper/**/*.xml
+
+# Logging configuration for tests
+logging:
+  level:
+    com.hhs: DEBUG
+    org.springframework.test: INFO
+    org.springframework.web: INFO

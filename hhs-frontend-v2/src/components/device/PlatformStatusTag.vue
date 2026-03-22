@@ -72,7 +72,7 @@
         </div>
 
         <!-- Supported Data Types -->
-        <div v-if="supportedDataTypes.length > 0" class="data-types-section">
+        <div v-if="(supportedDataTypes?.length ?? 0) > 0" class="data-types-section">
           <el-divider />
           <p class="data-types-hint">支持的数据类型：</p>
           <div class="data-types-tags">

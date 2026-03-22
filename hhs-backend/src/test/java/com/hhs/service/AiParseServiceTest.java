@@ -393,14 +393,14 @@ class AiParseServiceTest {
 
         // Mock 健康指标保存
         HealthMetricVO healthMetricVO = new HealthMetricVO(
-            1L, testUserId, null, "glucose", new BigDecimal("5.6"),
+            1L, testUserId, null, "glucose", "血糖", new BigDecimal("5.6"),
             "mmol/L", LocalDate.now(), null, null, LocalDateTime.now()
         );
         when(healthMetricService.add(eq(testUserId), any(HealthMetricRequest.class))).thenReturn(healthMetricVO);
 
         // Mock 保健指标保存
         HealthMetricVO wellnessMetricVO = new HealthMetricVO(
-            2L, testUserId, null, "steps", new BigDecimal("8000"),
+            2L, testUserId, null, "steps", "步数", new BigDecimal("8000"),
             "步", LocalDate.now(), null, null, LocalDateTime.now()
         );
         when(wellnessService.createWellnessMetric(eq(testUserId), any(WellnessMetricRequest.class))).thenReturn(wellnessMetricVO);
@@ -431,7 +431,7 @@ class AiParseServiceTest {
         when(aiParseHistoryMapper.selectById(100L)).thenReturn(history);
 
         HealthMetricVO healthMetricVO = new HealthMetricVO(
-            1L, testUserId, null, "glucose", new BigDecimal("5.6"),
+            1L, testUserId, null, "glucose", "血糖", new BigDecimal("5.6"),
             "mmol/L", LocalDate.now(), null, null, LocalDateTime.now()
         );
         when(healthMetricService.add(eq(testUserId), any(HealthMetricRequest.class))).thenReturn(healthMetricVO);

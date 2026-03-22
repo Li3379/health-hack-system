@@ -1,5 +1,7 @@
 package com.hhs.common.enums;
 
+import com.baomidou.mybatisplus.annotation.EnumValue;
+import com.fasterxml.jackson.annotation.JsonValue;
 import lombok.Getter;
 
 /**
@@ -27,10 +29,18 @@ public enum MetricCategory {
      */
     WELLNESS("保健指标", "Wellness Metric");
 
+    /**
+     * Value stored in database - uses enum name for MySQL ENUM compatibility
+     */
+    @EnumValue
+    @JsonValue
+    private final String dbValue;
+
     private final String displayNameZh;
     private final String displayNameEn;
 
     MetricCategory(String displayNameZh, String displayNameEn) {
+        this.dbValue = this.name();
         this.displayNameZh = displayNameZh;
         this.displayNameEn = displayNameEn;
     }

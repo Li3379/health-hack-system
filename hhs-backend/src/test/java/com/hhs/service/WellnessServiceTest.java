@@ -31,6 +31,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -250,7 +251,7 @@ class WellnessServiceTest {
         });
 
         assertTrue(exception.getMessage().contains("无权"));
-        verify(healthMetricMapper, never()).deleteById(any());
+        verify(healthMetricMapper, never()).deleteById(any(Long.class));
     }
 
     @Test
@@ -297,7 +298,7 @@ class WellnessServiceTest {
         stepsMetric.setCategory(MetricCategory.WELLNESS);
 
         when(healthMetricMapper.selectList(any(LambdaQueryWrapper.class))).thenReturn(Arrays.asList(testMetric, stepsMetric));
-        when(metricCategoryService.getWellnessMetrics()).thenReturn(Arrays.asList("sleepDuration", "steps"));
+        when(metricCategoryService.getWellnessMetrics()).thenReturn(Set.of("sleepDuration", "steps"));
         when(metricDisplayFormatter.getDisplayName(any())).thenReturn("显示名称");
 
         // When
@@ -312,7 +313,7 @@ class WellnessServiceTest {
     @DisplayName("测试7.1：获取最新指标 - 成功场景")
     void testGetLatestMetrics_Success() {
         // Given
-        when(metricCategoryService.getWellnessMetrics()).thenReturn(Arrays.asList("sleepDuration", "steps"));
+        when(metricCategoryService.getWellnessMetrics()).thenReturn(Set.of("sleepDuration", "steps"));
         when(healthMetricMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(testMetric);
 
         // When
@@ -327,7 +328,7 @@ class WellnessServiceTest {
     @DisplayName("测试7.2：获取最新指标 - 无数据")
     void testGetLatestMetrics_NoData() {
         // Given
-        when(metricCategoryService.getWellnessMetrics()).thenReturn(Arrays.asList("sleepDuration", "steps"));
+        when(metricCategoryService.getWellnessMetrics()).thenReturn(Set.of("sleepDuration", "steps"));
         when(healthMetricMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(null);
 
         // When
@@ -344,7 +345,6 @@ class WellnessServiceTest {
         // Given
         when(metricCategoryService.isWellnessMetric("sleepDuration")).thenReturn(true);
         when(metricDisplayFormatter.getDisplayName("sleepDuration")).thenReturn("睡眠时长");
-        when(metricDisplayFormatter.getUnit("sleepDuration")).thenReturn("小时");
         testRequest.setValue(new BigDecimal("25")); // Invalid: > 24
 
         // When & Then
@@ -359,7 +359,6 @@ class WellnessServiceTest {
         // Given
         when(metricCategoryService.isWellnessMetric("steps")).thenReturn(true);
         when(metricDisplayFormatter.getDisplayName("steps")).thenReturn("步数");
-        when(metricDisplayFormatter.getUnit("steps")).thenReturn("步");
         testRequest.setMetricKey("steps");
         testRequest.setValue(new BigDecimal("150000")); // Invalid: > 100000
 
@@ -375,7 +374,6 @@ class WellnessServiceTest {
         // Given
         when(metricCategoryService.isWellnessMetric("mood")).thenReturn(true);
         when(metricDisplayFormatter.getDisplayName("mood")).thenReturn("心情");
-        when(metricDisplayFormatter.getUnit("mood")).thenReturn("级");
         testRequest.setMetricKey("mood");
         testRequest.setValue(new BigDecimal("6")); // Invalid: > 5
 

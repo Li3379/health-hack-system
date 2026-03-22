@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -228,11 +229,41 @@ public class ConflictResolutionServiceImpl implements ConflictResolutionService 
     }
 
     /**
-     * Resolve conflict by keeping the newest record (based on recordDate).
-     * If recordDates are equal, compare createTime if available.
+     * Resolve conflict by keeping the newest record (based on recordTime).
+     * If recordTimes are available, compares them directly.
+     * If recordTimes are null but recordDates differ, compares recordDates.
+     * If both have same recordDate and no recordTime, incoming is considered newer.
      */
     private HealthMetricRequest resolveByNewest(HealthMetricRequest existing, HealthMetricRequest incoming) {
-        // For same recordDate, incoming is considered newer
+        LocalDateTime existingTime = existing.getRecordTime();
+        LocalDateTime incomingTime = incoming.getRecordTime();
+
+        // If both have recordTime, compare directly
+        if (existingTime != null && incomingTime != null) {
+            return incomingTime.isAfter(existingTime) ? incoming : existing;
+        }
+
+        // If only one has recordTime, that one is considered more precise/newer
+        if (incomingTime != null) {
+            return incoming;
+        }
+        if (existingTime != null) {
+            return existing;
+        }
+
+        // Neither has recordTime - compare recordDates
+        LocalDate existingDate = existing.getRecordDate();
+        LocalDate incomingDate = incoming.getRecordDate();
+
+        if (existingDate != null && incomingDate != null) {
+            if (incomingDate.isAfter(existingDate)) {
+                return incoming;
+            } else if (existingDate.isAfter(incomingDate)) {
+                return existing;
+            }
+        }
+
+        // Same date or no date info - incoming is considered newer (default behavior)
         return incoming;
     }
 
@@ -271,6 +302,7 @@ public class ConflictResolutionServiceImpl implements ConflictResolutionService 
         request.setMetricKey(metric.getMetricKey());
         request.setValue(metric.getValue());
         request.setRecordDate(metric.getRecordDate());
+        request.setRecordTime(metric.getRecordTime());
         request.setUnit(metric.getUnit());
         request.setTrend(metric.getTrend());
         return request;

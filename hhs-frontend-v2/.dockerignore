@@ -52,7 +52,5 @@ docs/
 .prettierrc
 .prettierignore
 eslint.config.js
-tsconfig.json
-tsconfig.node.json
 vitest.config.ts
 playwright.config.ts

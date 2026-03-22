@@ -117,7 +117,7 @@ const max = computed(() => {
 })
 
 // 指标范围验证器
-const validateRange = (rule: any, value: number, callback: any) => {
+const validateRange = (_rule: any, value: number, callback: any) => {
   if (value === undefined || value === null) {
     callback(new Error('请输入数值'))
     return

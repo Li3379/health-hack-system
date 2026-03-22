@@ -147,7 +147,7 @@ interface OcrRecognizeResult {
   rawText: string
   summary: string
   errorMessage?: string
-  ocrRecordId: number
+  ocrRecordId?: number
 }
 
 /**

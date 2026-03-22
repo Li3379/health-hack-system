@@ -27,6 +27,13 @@ public class HealthMetric {
     private BigDecimal value;
     private String unit;
     private LocalDate recordDate;
+
+    /**
+     * Precise timestamp for the measurement.
+     * Used for conflict resolution when multiple records have the same recordDate.
+     */
+    private LocalDateTime recordTime;
+
     private String trend;
     private LocalDateTime createTime;
 

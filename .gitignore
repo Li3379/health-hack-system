@@ -118,3 +118,11 @@ hhs-frontend-v2/dist/
 # IDE output directory
 out/
 nul
+
+# ====================
+# Claude Code
+# ====================
+.claude/
+# Development planning files
+.planning/
+CLAUDE.md

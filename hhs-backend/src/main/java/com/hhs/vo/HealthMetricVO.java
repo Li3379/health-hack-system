@@ -11,6 +11,7 @@ public record HealthMetricVO(
         Long userId,
         Long profileId,
         String metricKey,
+        String metricName,
         BigDecimal value,
         String unit,
         LocalDate recordDate,
