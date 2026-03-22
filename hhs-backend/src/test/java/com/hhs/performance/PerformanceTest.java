@@ -52,6 +52,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Import(TestSecurityConfig.class)
 @TestMethodOrder(OrderAnnotation.class)
 @DisplayName("Performance Test Suite")
+@Tag("integration")
+@Tag("performance")
 class PerformanceTest {
 
     // Performance targets (in milliseconds)
