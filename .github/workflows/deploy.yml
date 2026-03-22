@@ -1,0 +1,57 @@
+# =============================================================================
+# HHS Deployment Workflow
+# =============================================================================
+# Deploys the HHS application to Alibaba Cloud ECS with environment protection.
+#
+# Trigger: Manual (workflow_dispatch) - no automatic triggers
+# Environment: production (requires approval from configured reviewers)
+#
+# Prerequisites:
+#   - GitHub Secrets configured (ECS_HOST, ECS_USER, ECS_SSH_KEY, ECS_DEPLOY_PATH)
+#   - Production environment created with required reviewers
+#   - ECS server prepared with docker-compose files
+#   - GHCR images published (run docker-publish workflow first)
+#
+# Usage:
+#   1. Go to Actions > Deploy > Run workflow
+#   2. Reviewers approve in the production environment
+#   3. Deployment proceeds automatically
+# =============================================================================
+
+name: Deploy
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Deploy to ECS
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.ECS_HOST }}
+          username: ${{ secrets.ECS_USER }}
+          key: ${{ secrets.ECS_SSH_KEY }}
+          script: |
+            cd ${{ secrets.ECS_DEPLOY_PATH }}
+            docker compose pull
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+            docker image prune -f
+
+      - name: Health check
+        run: |
+          echo "Waiting for services to start..."
+          sleep 60
+          echo "Checking backend health..."
+          curl -f http://${{ secrets.ECS_HOST }}/api/actuator/health || exit 1
+          echo "Deployment successful - backend is healthy"
