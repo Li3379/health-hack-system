@@ -22,6 +22,8 @@ on:
       - 'hhs-backend/**'
       - 'hhs-frontend-v2/**'
       - 'docker-compose*.yml'
+      - '.github/workflows/docker-publish.yml'
+  workflow_dispatch:
 
 permissions:
   packages: write
