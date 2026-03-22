@@ -1,6 +1,8 @@
 package com.hhs.config;
 
 import com.hhs.entity.User;
+import com.hhs.security.JwtProperties;
+import com.hhs.security.JwtUtil;
 import com.hhs.security.LoginUser;
 import jakarta.servlet.Filter;
 import jakarta.servlet.FilterChain;
@@ -9,6 +11,7 @@ import jakarta.servlet.ServletRequest;
 import jakarta.servlet.ServletResponse;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -40,6 +43,29 @@ public class TestSecurityConfig {
         testUser.setId(1L);
         testUser.setUsername("testuser");
         return new LoginUser(testUser);
+    }
+
+    /**
+     * Mock JwtProperties for tests.
+     * Provides a valid test secret that meets the 256-bit requirement.
+     */
+    @Bean
+    @Primary
+    public JwtProperties testJwtProperties() {
+        JwtProperties properties = new JwtProperties();
+        properties.setSecret("hhs-test-secret-key-must-be-at-least-256-bits-long-for-hs256-algorithm");
+        properties.setExpireDays(7);
+        return properties;
+    }
+
+    /**
+     * Mock JwtUtil for tests.
+     * Uses test JwtProperties to create valid tokens.
+     */
+    @Bean
+    @Primary
+    public JwtUtil testJwtUtil(JwtProperties jwtProperties) {
+        return new JwtUtil(jwtProperties);
     }
 
     @Bean

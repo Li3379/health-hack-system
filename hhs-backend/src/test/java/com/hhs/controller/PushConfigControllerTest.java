@@ -1,9 +1,11 @@
 package com.hhs.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.hhs.config.TestSecurityConfig;
 import com.hhs.dto.PushConfigRequest;
 import com.hhs.entity.UserPushConfig;
 import com.hhs.mapper.UserPushConfigMapper;
+import com.hhs.security.JwtUtil;
 import com.hhs.security.SecurityUtils;
 import com.hhs.service.PushHistoryService;
 import com.hhs.service.push.ChannelType;
@@ -18,6 +20,7 @@ import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
@@ -36,6 +39,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * Unit tests for PushConfigController
  */
 @WebMvcTest(PushConfigController.class)
+@Import(TestSecurityConfig.class)
 class PushConfigControllerTest {
 
     @Autowired
@@ -52,6 +56,11 @@ class PushConfigControllerTest {
 
     @MockBean
     private PushHistoryService pushHistoryService;
+
+    // JwtUtil is provided by TestSecurityConfig, but we need to declare it
+    // to prevent @WebMvcTest from trying to create a real one
+    @MockBean
+    private JwtUtil jwtUtil;
 
     private MockedStatic<SecurityUtils> mockedSecurityUtils;
     private UserPushConfig testConfig;
