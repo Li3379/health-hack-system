@@ -1,5 +1,6 @@
 package com.hhs.integration;
 
+import org.junit.jupiter.api.Tag;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -18,6 +19,7 @@ import org.testcontainers.utility.DockerImageName;
 @SpringBootTest
 @ActiveProfiles("test")
 @Testcontainers
+@Tag("integration")
 public abstract class AbstractIntegrationTest {
 
     private static final Logger log = LoggerFactory.getLogger(AbstractIntegrationTest.class);
@@ -75,42 +77,80 @@ public abstract class AbstractIntegrationTest {
 
     /**
      * Check if Docker environment is available for Testcontainers
+     * Detects Docker in various CI environments (GitHub Actions, GitLab CI, etc.)
      */
     private static boolean checkDockerAvailable() {
         try {
-            // Try to detect Docker by checking for docker command or environment variables
+            // Check for CI environment indicators that have Docker available
+            String ci = System.getenv("CI");
+            if ("true".equals(ci)) {
+                // Most CI environments with Docker set CI=true
+                // GitHub Actions, GitLab CI, CircleCI, etc.
+                String githubActions = System.getenv("GITHUB_ACTIONS");
+                if ("true".equals(githubActions)) {
+                    log.info("GitHub Actions environment detected - Docker available");
+                    return true;
+                }
+
+                String gitlabCi = System.getenv("GITLAB_CI");
+                if ("true".equals(gitlabCi)) {
+                    log.info("GitLab CI environment detected - Docker available");
+                    return true;
+                }
+
+                String circleCi = System.getenv("CIRCLECI");
+                if ("true".equals(circleCi)) {
+                    log.info("CircleCI environment detected - Docker available");
+                    return true;
+                }
+            }
+
+            // Check DOCKER_HOST environment variable (Docker Desktop, remote Docker)
             String dockerHost = System.getenv("DOCKER_HOST");
             if (dockerHost != null && !dockerHost.isEmpty()) {
+                log.info("DOCKER_HOST environment variable detected: {}", dockerHost);
+                return true;
+            }
+
+            // Check Testcontainers-specific environment variable
+            String tcEnabled = System.getenv("TESTCONTAINERS_ENABLED");
+            if ("true".equalsIgnoreCase(tcEnabled)) {
+                log.info("TESTCONTAINERS_ENABLED=true - Docker explicitly enabled");
+                return true;
+            }
+
+            // On Linux, check for docker socket
+            if (new java.io.File("/var/run/docker.sock").exists()) {
+                log.info("Docker socket found at /var/run/docker.sock");
                 return true;
             }
 
             // On Windows, check if Docker Desktop is running
             String os = System.getProperty("os.name", "").toLowerCase();
             if (os.contains("win")) {
-                // Check for common Docker Desktop indicators
-                String dockerPath = System.getenv("PATH");
-                if (dockerPath != null && dockerPath.toLowerCase().contains("docker")) {
-                    // Try to execute docker command
-                    try {
-                        ProcessBuilder pb = new ProcessBuilder("docker", "version");
-                        Process process = pb.start();
-                        boolean success = process.waitFor() == 0;
-                        if (success) {
-                            log.info("Docker Desktop detected on Windows");
-                        }
-                        return success;
-                    } catch (Exception e) {
-                        log.debug("Could not execute docker command: {}", e.getMessage());
-                        return false;
+                // Try to execute docker command to verify Docker is running
+                try {
+                    ProcessBuilder pb = new ProcessBuilder("docker", "version");
+                    pb.redirectErrorStream(true);
+                    Process process = pb.start();
+                    boolean success = process.waitFor() == 0;
+                    if (success) {
+                        log.info("Docker Desktop detected on Windows");
                     }
+                    return success;
+                } catch (Exception e) {
+                    log.debug("Could not execute docker command: {}", e.getMessage());
                 }
             }
 
-            // On Linux/Mac, check for docker socket
-            if (new java.io.File("/var/run/docker.sock").exists()) {
+            // On macOS, check for Docker Desktop socket
+            String userHome = System.getProperty("user.home");
+            if (new java.io.File(userHome + "/.docker/run/docker.sock").exists()) {
+                log.info("Docker Desktop socket found on macOS");
                 return true;
             }
 
+            log.info("Docker not detected - integration tests will use fallback configuration");
             return false;
         } catch (Exception e) {
             log.debug("Error checking Docker availability: {}", e.getMessage());
