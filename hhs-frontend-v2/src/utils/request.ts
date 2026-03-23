@@ -51,11 +51,12 @@ service.interceptors.response.use(
       const { status, data } = error.response
 
       switch (status) {
-        case 401:
+        case 401: {
           ElMessage.error('未授权，请重新登录')
           const authStore = useAuthStore()
           authStore.logout()
           break
+        }
         case 403:
           ElMessage.error('拒绝访问')
           break
