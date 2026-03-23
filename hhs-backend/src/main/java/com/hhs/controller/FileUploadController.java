@@ -27,9 +27,6 @@ public class FileUploadController {
     @Value("${file.upload.path:./uploads}")
     private String uploadPath;
 
-    @Value("${file.upload.base-url:http://localhost:8082}")
-    private String baseUrl;
-
     /**
      * 规范化上传路径，确保使用绝对路径
      */
@@ -91,8 +88,9 @@ public class FileUploadController {
             Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
             log.info("文件保存成功：{}", filePath.toAbsolutePath());
 
-            // 返回访问URL（使用完整的baseUrl）
-            String fileUrl = baseUrl + "/uploads/avatars/" + filename;
+            // 返回相对路径URL，让浏览器自动使用当前域名
+            // 这样无论在开发环境还是生产环境都能正确加载
+            String fileUrl = "/uploads/avatars/" + filename;
             com.hhs.vo.UploadResponseVO response = com.hhs.vo.UploadResponseVO.builder()
                     .url(fileUrl)
                     .filename(filename)
