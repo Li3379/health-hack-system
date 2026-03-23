@@ -53,5 +53,5 @@ jobs:
           echo "Waiting for services to start..."
           sleep 60
           echo "Checking backend health..."
-          curl -f http://${{ secrets.ECS_HOST }}/api/actuator/health || exit 1
+          curl -f http://${{ secrets.ECS_HOST }}/actuator/health || exit 1
           echo "Deployment successful - backend is healthy"
