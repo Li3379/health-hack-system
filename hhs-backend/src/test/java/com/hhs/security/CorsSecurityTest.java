@@ -1,10 +1,12 @@
 package com.hhs.security;
 
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
@@ -14,10 +16,17 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 /**
  * CORS Security Tests - SEC-004
  * Verifies that CORS configuration properly restricts cross-origin requests.
+ *
+ * Tagged as integration test because it requires full Spring context with database.
+ * Runs in CI's integration-test job with Testcontainers.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
-@ActiveProfiles("dev")
+@ActiveProfiles("test")
+@TestPropertySource(properties = {
+    "security.jwt.secret=hhs-test-secret-key-must-be-at-least-256-bits-long-for-hs256-algorithm"
+})
+@Tag("integration")
 public class CorsSecurityTest {
 
     @Autowired
