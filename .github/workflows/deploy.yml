@@ -45,6 +45,8 @@ jobs:
           key: ${{ secrets.ECS_SSH_KEY }}
           script: |
             cd ${{ secrets.ECS_DEPLOY_PATH }}
+            # Update docker-compose files from repository
+            git pull origin master
             # Login to GHCR for pulling images
             echo ${{ secrets.GHCR_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             docker compose pull
