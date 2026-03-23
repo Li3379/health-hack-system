@@ -8,6 +8,7 @@
 #
 # Prerequisites:
 #   - GitHub Secrets configured (ECS_HOST, ECS_USER, ECS_SSH_KEY, ECS_DEPLOY_PATH)
+#   - GHCR_TOKEN: GitHub Personal Access Token with read:packages permission
 #   - Production environment created with required reviewers
 #   - ECS server prepared with docker-compose files
 #   - GHCR images published (run docker-publish workflow first)
@@ -44,6 +45,8 @@ jobs:
           key: ${{ secrets.ECS_SSH_KEY }}
           script: |
             cd ${{ secrets.ECS_DEPLOY_PATH }}
+            # Login to GHCR for pulling images
+            echo ${{ secrets.GHCR_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             docker compose pull
             docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
             docker image prune -f
