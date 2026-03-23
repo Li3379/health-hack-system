@@ -49,12 +49,18 @@ services:
     environment:
       # Spring profile (dev/prod) - can be overridden in compose override
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
-      # Database configuration
+      # Database configuration - override application.yml localhost
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/hhs?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
       DB_HOST: mysql
       DB_PORT: 3306
       DB_USERNAME: root
       DB_PASSWORD: ${DB_PASSWORD}
-      # Redis configuration
+      # Redis configuration - override application.yml localhost
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD}
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_PASSWORD}
