@@ -34,7 +34,7 @@ import java.util.List;
 @EnableMethodSecurity
 public class SecurityConfig {
 
-    @Value("${app.security.allowed-origins:http://localhost:5173}")
+    @Value("${app.security.allowed-origins:}")
     private String allowedOrigins;
 
     @Bean
@@ -90,17 +90,15 @@ public class SecurityConfig {
     }
 
     /**
-     * Default CORS configuration - provides fallback for all profiles.
-     * This ensures the bean is always available for dependency injection.
-     * Active when no specific profile is active (dev is default).
+     * Development CORS configuration - allows common development origins.
+     * Active when profile is "dev" or no profile is specified.
      */
     @Bean(name = "corsConfigurationSource")
-    @ConditionalOnMissingBean(name = "corsConfigurationSource")
-    @Profile("!prod & !test")
+    @Profile({"default", "dev"})
     public CorsConfigurationSource devCorsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowCredentials(true);
-        // Default to development configuration
+        // Allow common development origins
         configuration.setAllowedOriginPatterns(List.of(
             "http://localhost:*",
             "http://127.0.0.1:*",
@@ -137,6 +135,7 @@ public class SecurityConfig {
      * Production CORS configuration - requires explicit origin whitelist.
      * The ALLOWED_ORIGINS environment variable must be configured.
      * Example: export ALLOWED_ORIGINS="https://yourdomain.com"
+     * For IP-based deployment: export ALLOWED_ORIGINS="http://47.112.6.180"
      * Multiple origins can be comma-separated: https://app1.com,https://app2.com
      *
      * @throws IllegalStateException if ALLOWED_ORIGINS is not configured
@@ -155,11 +154,21 @@ public class SecurityConfig {
                     .map(String::trim)
                     .filter(s -> !s.isEmpty())
                     .toList();
+            
+            if (origins.isEmpty()) {
+                throw new IllegalStateException(
+                        "ALLOWED_ORIGINS must be configured for production profile. " +
+                        "Example: export ALLOWED_ORIGINS=\"http://47.112.6.180\" " +
+                        "or for domain: export ALLOWED_ORIGINS=\"https://yourdomain.com\""
+                );
+            }
+            
             configuration.setAllowedOriginPatterns(origins);
         } else {
             throw new IllegalStateException(
                     "ALLOWED_ORIGINS must be configured for production profile. " +
-                    "Example: export ALLOWED_ORIGINS=\"https://yourdomain.com\""
+                    "Example: export ALLOWED_ORIGINS=\"http://47.112.6.180\" " +
+                    "or for domain: export ALLOWED_ORIGINS=\"https://yourdomain.com\""
             );
         }
 
@@ -195,21 +204,12 @@ public class SecurityConfig {
 
     /**
      * Fallback CORS configuration - ensures bean is always available.
-     * This is created only if no other corsConfigurationSource bean exists.
+     * This provides a secure default that matches the development configuration.
      */
     @Bean(name = "corsConfigurationSource")
     @ConditionalOnMissingBean(name = "corsConfigurationSource")
     public CorsConfigurationSource fallbackCorsConfigurationSource() {
-        CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowCredentials(true);
-        configuration.setAllowedOriginPatterns(List.of("http://localhost:*", "http://127.0.0.1:*"));
-        configuration.setAllowedHeaders(List.of("*"));
-        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
-        configuration.setExposedHeaders(List.of("Authorization", "Content-Type"));
-        configuration.setMaxAge(3600L);
-
-        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", configuration);
-        return source;
+        // Reuse development configuration as fallback
+        return devCorsConfigurationSource();
     }
 }

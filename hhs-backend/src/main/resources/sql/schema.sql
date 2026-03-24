@@ -719,3 +719,30 @@ CREATE TABLE IF NOT EXISTS `device_platform_config` (
 -- =====================================================
 -- END OF SCHEMA
 -- =====================================================
+
+-- =====================================================
+-- MIGRATION SCRIPTS
+-- =====================================================
+
+-- -----------------------------------------------------
+-- Migration v3.6.0: Fix avatar URLs (2026-03-24)
+-- -----------------------------------------------------
+-- Fix avatar URLs that were stored with localhost:8082 prefix
+-- This migration converts absolute localhost URLs to relative paths
+-- so they work correctly in any deployment environment
+--
+-- Before: http://localhost:8082/uploads/avatars/xxx.jpg
+-- After:  /uploads/avatars/xxx.jpg
+--
+-- External URLs (like DiceBear) are preserved unchanged
+-- -----------------------------------------------------
+
+-- Update avatar URLs from absolute localhost to relative path
+UPDATE `sys_user`
+SET `avatar` = REPLACE(`avatar`, 'http://localhost:8082', '')
+WHERE `avatar` LIKE 'http://localhost:8082/uploads/%';
+
+-- Also handle https variant (just in case)
+UPDATE `sys_user`
+SET `avatar` = REPLACE(`avatar`, 'https://localhost:8082', '')
+WHERE `avatar` LIKE 'https://localhost:8082/uploads/%';
