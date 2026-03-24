@@ -11,6 +11,18 @@
 # Prerequisites:
 #   - Repository must have GITHUB_TOKEN with packages: write permission
 #   - Dockerfiles must exist in hhs-backend/ and hhs-frontend-v2/
+#
+# GitHub Secrets Configuration:
+#   - VITE_API_BASE_URL: Backend API URL (WITHOUT /api suffix!)
+#     * For Docker deployment with nginx: leave empty (recommended)
+#     * For IP deployment: http://47.112.6.180
+#     * For domain deployment: https://yourdomain.com
+#     * WRONG: http://47.112.6.180/api (causes /api/api/... error)
+#
+#   - VITE_WS_BASE_URL: WebSocket URL (WITHOUT /ws suffix!)
+#     * For Docker deployment: leave empty (auto-detected from browser)
+#     * For IP deployment: ws://47.112.6.180
+#     * For domain deployment: wss://yourdomain.com
 # =============================================================================
 
 name: Docker Publish
@@ -108,6 +120,9 @@ jobs:
           tags: |
             ghcr.io/${{ steps.meta.outputs.owner_lc }}/hhs-frontend:latest
             ghcr.io/${{ steps.meta.outputs.owner_lc }}/hhs-frontend:sha-${{ github.sha }}
+          # Build arguments for frontend
+          # IMPORTANT: Do NOT include /api or /ws suffix in these URLs!
+          # See documentation at top of file for correct configuration
           build-args: |
             VITE_API_BASE_URL=${{ secrets.VITE_API_BASE_URL }}
             VITE_WS_BASE_URL=${{ secrets.VITE_WS_BASE_URL }}

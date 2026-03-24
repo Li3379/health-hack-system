@@ -9,17 +9,22 @@ import io.swagger.v3.oas.models.info.License;
 import io.swagger.v3.oas.models.security.SecurityRequirement;
 import io.swagger.v3.oas.models.security.SecurityScheme;
 import io.swagger.v3.oas.models.servers.Server;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
  * Knife4j (Swagger) API文档配置
- * 访问地址: http://localhost:8082/doc.html
+ * 访问地址: /doc.html
  */
 @Configuration
 public class Knife4jConfig {
+
+    @Value("${app.api.base-url:}")
+    private String apiBaseUrl;
 
     @Bean
     public OpenAPI hhsOpenApi() {
@@ -67,17 +72,9 @@ public class Knife4jConfig {
                         .license(new License()
                                 .name("MIT License")
                                 .url("https://opensource.org/licenses/MIT")))
-                .servers(List.of(
-                        new Server()
-                                .url("http://localhost:8082")
-                                .description("本地开发环境")
-                        // 生产环境配置示例（请根据实际情况修改）：
-                        // new Server()
-                        //     .url("https://api.yourcompany.com")
-                        //     .description("生产环境")
-                ))
+                .servers(buildServers())
                 .externalDocs(new ExternalDocumentation()
-                        .description("📚 项目文档 & GitHub 仓库")
+                        .description("项目文档 & GitHub 仓库")
                         .url("https://github.com/Li3379/HHS"))
                 .components(new Components()
                         .addSecuritySchemes("Bearer Authentication", new SecurityScheme()
@@ -87,5 +84,26 @@ public class Knife4jConfig {
                                 .description("请输入 JWT Token，格式：Bearer {token}")))
                 .addSecurityItem(new SecurityRequirement()
                         .addList("Bearer Authentication"));
+    }
+
+    /**
+     * 构建服务器列表，支持环境变量配置
+     */
+    private List<Server> buildServers() {
+        List<Server> servers = new ArrayList<>();
+        
+        // 如果配置了生产环境 URL，添加生产服务器
+        if (apiBaseUrl != null && !apiBaseUrl.isBlank()) {
+            servers.add(new Server()
+                    .url(apiBaseUrl)
+                    .description("生产环境"));
+        }
+        
+        // 始终添加相对路径服务器（适用于任何部署环境）
+        servers.add(new Server()
+                .url("/")
+                .description("当前服务器"));
+        
+        return servers;
     }
 }

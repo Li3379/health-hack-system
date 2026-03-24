@@ -2,6 +2,23 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { RealtimeMetricVO } from '@/types/api'
 
+/**
+ * 构建 WebSocket 基础 URL
+ * 优先使用环境变量，否则根据当前页面地址自动构建
+ */
+function buildWebSocketBaseUrl(): string {
+  // 优先使用环境变量配置
+  const envWsUrl = import.meta.env.VITE_WS_BASE_URL
+  if (envWsUrl) {
+    return envWsUrl
+  }
+  
+  // 根据当前页面地址自动构建 WebSocket URL
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  const host = window.location.host
+  return `${protocol}//${host}`
+}
+
 export const useRealtimeStore = defineStore('realtime', () => {
   const ws = ref<WebSocket | null>(null)
   const connected = ref(false)
@@ -20,14 +37,8 @@ export const useRealtimeStore = defineStore('realtime', () => {
     // 清理之前的连接
     disconnect()
 
-    // 检查环境变量
-    const wsBaseUrl = import.meta.env.VITE_WS_BASE_URL
-    if (!wsBaseUrl) {
-      console.error('VITE_WS_BASE_URL is not configured')
-      errorMessage.value = 'WebSocket 地址未配置'
-      return
-    }
-
+    // 构建 WebSocket URL
+    const wsBaseUrl = buildWebSocketBaseUrl()
     const wsUrl = `${wsBaseUrl}/ws/realtime?token=${token}`
     console.log('Connecting to WebSocket:', wsUrl)
     

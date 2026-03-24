@@ -57,20 +57,34 @@ management:
     shutdown:
       enabled: false
 
-# CORS Configuration for Production
-# IMPORTANT: ALLOWED_ORIGINS environment variable MUST be configured for production
-# Example: export ALLOWED_ORIGINS="https://yourdomain.com"
-# For multiple domains, use comma-separated: https://app1.com,https://app2.com
+# Application Configuration for Production
+# IMPORTANT: Environment variables MUST be configured for production deployment
 app:
+  # API base URL for Swagger/OpenAPI documentation (used by Knife4jConfig)
+  # Example: http://47.112.6.180 or https://api.yourdomain.com
+  api:
+    base-url: ${BASE_URL:}
+  # CORS Configuration for Production
+  # IMPORTANT: ALLOWED_ORIGINS environment variable MUST be configured
+  # Example: export ALLOWED_ORIGINS="http://47.112.6.180"
+  # For multiple domains: https://app1.com,https://app2.com
   security:
     allowed-origins: ${ALLOWED_ORIGINS:}
     verbose-errors: false
   websocket:
     allowed-origins: ${ALLOWED_ORIGINS:}
 
-# Device Mock Configuration
-# IMPORTANT: Mock data MUST be disabled in production for data integrity
-# Set to false to ensure sync operations fail when real API is unavailable
+# Device OAuth Configuration for Production
+# BASE_URL should be set to your server address (e.g., http://47.112.6.180)
 device:
   mock:
     enabled: false
+  oauth:
+    huawei:
+      client-id: ${HUAWEI_CLIENT_ID:}
+      client-secret: ${HUAWEI_CLIENT_SECRET:}
+      redirect-uri: ${BASE_URL}/api/device/callback/huawei
+    xiaomi:
+      client-id: ${XIAOMI_CLIENT_ID:}
+      client-secret: ${XIAOMI_CLIENT_SECRET:}
+      redirect-uri: ${BASE_URL}/api/device/callback/xiaomi
