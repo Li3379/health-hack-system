@@ -65,6 +65,8 @@ app:
   security:
     allowed-origins: ${ALLOWED_ORIGINS:}
     verbose-errors: false
+  websocket:
+    allowed-origins: ${ALLOWED_ORIGINS:}
 
 # Device Mock Configuration
 # IMPORTANT: Mock data MUST be disabled in production for data integrity
