@@ -151,9 +151,12 @@ jobs:
             # Login to GHCR for pulling images
             echo ${{ secrets.GHCR_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             
-            # Pull and restart services
-            docker compose pull
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+            # Force pull latest images (ignore local cache)
+            docker compose pull --ignore-buildable
+            
+            # Stop and remove old containers to ensure new images are used
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml down
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --force-recreate
             
             # Cleanup old images
             docker image prune -f
