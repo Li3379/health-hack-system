@@ -4,15 +4,40 @@
     <el-card class="status-card">
       <div class="connection-status">
         <div class="status-indicator">
-          <el-icon :size="24" :color="realtimeStore.connected ? '#67c23a' : '#f56c6c'">
+          <el-icon :size="24" :color="statusColor">
             <Connection />
           </el-icon>
-          <span :class="{ connected: realtimeStore.connected }">
-            {{ realtimeStore.connected ? '已连接' : '未连接' }}
+          <span :class="{ connected: realtimeStore.connected, connecting: realtimeStore.connecting }">
+            {{ statusText }}
           </span>
         </div>
-        <el-button v-if="!realtimeStore.connected" type="primary" @click="connect">连接</el-button>
-        <el-button v-else type="danger" @click="disconnect">断开</el-button>
+        <div class="button-group">
+          <el-button 
+            v-if="!realtimeStore.connected && !realtimeStore.connecting" 
+            type="primary" 
+            @click="connect"
+          >
+            连接
+          </el-button>
+          <el-button 
+            v-if="realtimeStore.connecting" 
+            type="info" 
+            loading
+            disabled
+          >
+            连接中...
+          </el-button>
+          <el-button 
+            v-if="realtimeStore.connected" 
+            type="danger" 
+            @click="disconnect"
+          >
+            断开
+          </el-button>
+        </div>
+      </div>
+      <div v-if="realtimeStore.errorMessage" class="error-message">
+        <el-alert :title="realtimeStore.errorMessage" type="error" :closable="false" show-icon />
       </div>
     </el-card>
 
@@ -113,7 +138,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, nextTick, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import * as echarts from 'echarts'
 import { useAuthStore } from '@/stores/auth'
@@ -129,6 +154,20 @@ const selectedMetric = ref('heartRate')
 const latestMetrics = ref<RealtimeMetricVO[]>([])
 const chartRef = ref<HTMLElement>()
 let chartInstance: echarts.ECharts | null = null
+let pingInterval: ReturnType<typeof setInterval> | null = null
+
+// 计算状态显示
+const statusColor = computed(() => {
+  if (realtimeStore.connected) return '#67c23a'
+  if (realtimeStore.connecting) return '#e6a23c'
+  return '#f56c6c'
+})
+
+const statusText = computed(() => {
+  if (realtimeStore.connected) return '已连接'
+  if (realtimeStore.connecting) return '连接中...'
+  return '未连接'
+})
 
 const form = reactive({
   metricKey: '',
@@ -139,7 +178,9 @@ const form = reactive({
 const connect = () => {
   if (authStore.token) {
     realtimeStore.connect(authStore.token)
-    ElMessage.success('正在连接...')
+    ElMessage.info('正在连接...')
+  } else {
+    ElMessage.warning('请先登录')
   }
 }
 
@@ -248,8 +289,19 @@ const handleAdd = async () => {
   }
 }
 
+// 启动心跳
+const startPing = () => {
+  if (pingInterval) clearInterval(pingInterval)
+  pingInterval = setInterval(() => {
+    if (realtimeStore.connected) {
+      realtimeStore.sendPing()
+    }
+  }, 30000) // 每30秒发送心跳
+}
+
 onMounted(async () => {
-  if (authStore.token && !realtimeStore.connected) {
+  // 页面加载时自动连接
+  if (authStore.token && !realtimeStore.connected && !realtimeStore.connecting) {
     realtimeStore.connect(authStore.token)
   }
 
@@ -257,19 +309,24 @@ onMounted(async () => {
   await nextTick()
   await fetchTrend()
 
+  // 监听窗口大小变化
   window.addEventListener('resize', () => {
     chartInstance?.resize()
   })
 
-  // 定时刷新
-  const interval = setInterval(() => {
-    if (realtimeStore.connected) {
-      fetchLatestMetrics()
-    }
+  // 启动心跳
+  startPing()
+
+  // 定时刷新数据
+  const refreshInterval = setInterval(() => {
+    fetchLatestMetrics()
   }, 10000)
 
+  // 清理函数
   onUnmounted(() => {
-    clearInterval(interval)
+    clearInterval(refreshInterval)
+    if (pingInterval) clearInterval(pingInterval)
+    chartInstance?.dispose()
   })
 })
 </script>
@@ -299,6 +356,19 @@ onMounted(async () => {
 
 .status-indicator .connected {
   color: #67c23a;
+}
+
+.status-indicator .connecting {
+  color: #e6a23c;
+}
+
+.button-group {
+  display: flex;
+  gap: 8px;
+}
+
+.error-message {
+  margin-top: 12px;
 }
 
 .metrics-row {

@@ -7,7 +7,7 @@ spring:
   data:
     redis:
       host: ${REDIS_HOST:localhost}
-      port: ${REDIS_PORT:6379}
+      port: ${REDIS_PORT:16379}
       database: 0
       password: ${REDIS_PASSWORD}
   jackson:
@@ -115,11 +115,15 @@ logging:
     org.springframework.web: DEBUG
     org.springframework.security: DEBUG
     org.springframework.web.socket: DEBUG
-    org.mybatis: DEBUG # CORS Configuration for Development
+    org.mybatis: DEBUG
+
+# CORS Configuration for Development
 app:
   security:
     allowed-origins: http://localhost:5173
     verbose-errors: true
+  websocket:
+    allowed-origins: http://localhost:5173,http://localhost:5174,http://localhost:3000,http://192.168.236.1:5173,http://192.168.236.1:5174,http://192.168.236.1:3000
 
 # Device OAuth Configuration for health device integrations
 # Credentials should be set via environment variables
