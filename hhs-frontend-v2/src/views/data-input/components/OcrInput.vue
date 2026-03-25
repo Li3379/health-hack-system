@@ -60,6 +60,16 @@
         </el-tag>
       </div>
 
+      <!-- 模拟数据警告 -->
+      <el-alert
+        v-if="recognizeResult.usedMockData"
+        type="warning"
+        :title="recognizeResult.warning || 'OCR服务未配置，当前显示的是模拟数据'"
+        show-icon
+        :closable="false"
+        class="mock-data-warning"
+      />
+
       <el-table
         v-if="recognizeResult.metrics?.length"
         :data="recognizeResult.metrics"
@@ -148,6 +158,8 @@ interface OcrRecognizeResult {
   summary: string
   errorMessage?: string
   ocrRecordId?: number
+  usedMockData?: boolean
+  warning?: string
 }
 
 /**
@@ -403,6 +415,10 @@ onUnmounted(() => {
 
 .result-summary {
   margin-top: 8px;
+}
+
+.mock-data-warning {
+  margin-bottom: 12px;
 }
 
 .raw-text-collapse {

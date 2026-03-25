@@ -235,7 +235,12 @@ public class OcrServiceImpl implements OcrService {
         try {
             byte[] bytes = readReportFile(report.getFileUrl());
             Optional<String> ocrText = baiduOcrClient.recognize(bytes);
+            boolean usedMockData = ocrText.isEmpty();
             rawText = ocrText.orElse(MOCK_REPORT_TEXT);
+
+            if (usedMockData) {
+                log.warn("OCR service not configured, using mock data for report: reportId={}", reportId);
+            }
 
             List<ReportTextParser.LabResultItem> items = ReportTextParser.parse(rawText);
             int durationMs = (int) (System.currentTimeMillis() - start);
@@ -273,7 +278,7 @@ public class OcrServiceImpl implements OcrService {
             report.setAbnormalSummary(abnormalSummaryText);
             examinationReportMapper.updateById(report);
 
-            log.info("OCR processing completed for report {} in {}ms", reportId, durationMs);
+            log.info("OCR processing completed for report {} in {}ms, usedMockData={}", reportId, durationMs, usedMockData);
 
         } catch (Exception e) {
             log.error("OCR processing failed for report {}", reportId, e);
@@ -315,6 +320,7 @@ public class OcrServiceImpl implements OcrService {
 
             // Call OCR
             Optional<String> ocrText = baiduOcrClient.recognize(bytes);
+            boolean usedMockData = ocrText.isEmpty();
             String rawText = ocrText.orElse(getMockText(ocrType));
 
             // Parse metrics based on type
@@ -336,11 +342,18 @@ public class OcrServiceImpl implements OcrService {
             record.setCreateTime(LocalDateTime.now());
             ocrHealthRecordMapper.insert(record);
 
-            OcrHealthResultVO result = OcrHealthResultVO.success(ocrType, metrics, rawText);
+            // Use appropriate result method based on whether mock data was used
+            OcrHealthResultVO result = usedMockData
+                    ? OcrHealthResultVO.successWithMockData(ocrType, metrics, rawText)
+                    : OcrHealthResultVO.success(ocrType, metrics, rawText);
             result.setOcrRecordId(record.getId());
 
-            log.info("OCR recognition completed: userId={}, ocrType={}, metricsCount={}, duration={}ms",
-                    userId, ocrType, metrics.size(), durationMs);
+            if (usedMockData) {
+                log.warn("OCR service not configured, using mock data: userId={}, ocrType={}", userId, ocrType);
+            }
+
+            log.info("OCR recognition completed: userId={}, ocrType={}, metricsCount={}, duration={}ms, usedMockData={}",
+                    userId, ocrType, metrics.size(), durationMs, usedMockData);
 
             return result;
 
