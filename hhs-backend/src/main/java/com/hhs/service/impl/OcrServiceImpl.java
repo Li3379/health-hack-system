@@ -225,8 +225,10 @@ public class OcrServiceImpl implements OcrService {
         log.info("Processing OCR for report {}", reportId);
         ExaminationReport report = examinationReportMapper.selectById(reportId);
         if (report == null) {
-            log.warn("Cannot process OCR - report {} not found", reportId);
-            return;
+            // Throw exception instead of silent return - this makes debugging easier
+            // and allows proper error handling in the event listener
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND,
+                    "报告不存在: ID=" + reportId + "。可能原因：事务尚未提交或报告已被删除");
         }
 
         long start = System.currentTimeMillis();

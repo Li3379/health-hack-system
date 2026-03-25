@@ -1,6 +1,7 @@
 package com.hhs.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.hhs.domain.event.OcrProcessingEvent;
 import com.hhs.entity.ExaminationReport;
 import com.hhs.entity.LabResult;
 import com.hhs.exception.BusinessException;
@@ -16,6 +17,7 @@ import com.hhs.vo.LabResultVO;
 import com.hhs.vo.OcrStatusVO;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -28,7 +30,6 @@ import java.nio.file.StandardCopyOption;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 
 @Slf4j
 @Service
@@ -44,12 +45,18 @@ public class ScreeningServiceImpl implements ScreeningService {
     private final LabResultMapper labResultMapper;
     private final OcrService ocrService;
     private final ReportStatusService reportStatusService;
+    private final ApplicationEventPublisher eventPublisher;
 
-    public ScreeningServiceImpl(ExaminationReportMapper examinationReportMapper, LabResultMapper labResultMapper, OcrService ocrService, ReportStatusService reportStatusService) {
+    public ScreeningServiceImpl(ExaminationReportMapper examinationReportMapper, 
+                                LabResultMapper labResultMapper, 
+                                OcrService ocrService, 
+                                ReportStatusService reportStatusService,
+                                ApplicationEventPublisher eventPublisher) {
         this.examinationReportMapper = examinationReportMapper;
         this.labResultMapper = labResultMapper;
         this.ocrService = ocrService;
         this.reportStatusService = reportStatusService;
+        this.eventPublisher = eventPublisher;
     }
 
     /**
@@ -123,31 +130,22 @@ public class ScreeningServiceImpl implements ScreeningService {
         report.setOcrStatus("PENDING");
         examinationReportMapper.insert(report);
 
-        // Auto-trigger OCR processing asynchronously to avoid blocking HTTP response
+        // Auto-trigger OCR processing after transaction commits
+        // Using @TransactionalEventListener ensures the async task sees committed data
         final Long reportId = report.getId();
         try {
             // Update status to PROCESSING (in current transaction)
             reportStatusService.updateOcrStatus(reportId, "PROCESSING", null);
 
-            // Trigger OCR asynchronously (non-blocking)
-            CompletableFuture.runAsync(() -> {
-                log.info(">>> DIAGNOSTIC: Async OCR task STARTED for report {}", reportId);
-                try {
-                    log.info(">>> DIAGNOSTIC: About to call ocrService.processReport({})", reportId);
-                    ocrService.processReport(reportId);
-                    log.info(">>> DIAGNOSTIC: ocrService.processReport({}) COMPLETED successfully", reportId);
-                } catch (Exception e) {
-                    log.error(">>> DIAGNOSTIC: OCR processing FAILED for report {}: {}", reportId, e.getMessage(), e);
-                    // Use dedicated update method with proper transaction
-                    reportStatusService.updateOcrStatus(reportId, "FAILED", "异步处理失败: " + e.getMessage());
-                }
-            });
+            // Publish event that will trigger OCR AFTER transaction commits
+            // This fixes the race condition where async tasks couldn't see uncommitted data
+            eventPublisher.publishEvent(new OcrProcessingEvent(reportId));
 
-            log.info("Auto-triggered async OCR processing for report {}", reportId);
+            log.info("Scheduled OCR processing for report {} (will run after transaction commit)", reportId);
         } catch (Exception e) {
-            // If async trigger fails, update status to FAILED
-            log.error("Failed to trigger async OCR for report {}", reportId, e);
-            reportStatusService.updateOcrStatus(reportId, "FAILED", "触发异步处理失败: " + e.getMessage());
+            // If event publishing fails, update status to FAILED
+            log.error("Failed to schedule OCR for report {}", reportId, e);
+            reportStatusService.updateOcrStatus(reportId, "FAILED", "调度OCR处理失败: " + e.getMessage());
         }
 
         return toReportVO(report); // Returns immediately without waiting for OCR
