@@ -68,6 +68,9 @@ services:
       DASH_SCOPE_API_KEY: ${DASH_SCOPE_API_KEY}
       # Device integration
       DEVICE_ENCRYPTION_KEY: ${DEVICE_ENCRYPTION_KEY}
+      # OCR Service
+      BAIDU_OCR_API_KEY: ${BAIDU_OCR_API_KEY}
+      BAIDU_OCR_SECRET_KEY: ${BAIDU_OCR_SECRET_KEY}
       # CORS configuration
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost}
     depends_on:
