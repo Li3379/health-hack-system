@@ -53,6 +53,8 @@ export interface OcrRecordDetail {
   summary: string
   errorMessage?: string
   ocrRecordId: number
+  usedMockData?: boolean
+  warning?: string
 }
 
 export const ocrApi = {

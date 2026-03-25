@@ -65,6 +65,18 @@ public class OcrHealthResultVO {
     private Long ocrRecordId;
 
     /**
+     * 是否使用了模拟数据（OCR服务未配置时为true）
+     */
+    @Schema(description = "是否使用了模拟数据", example = "false")
+    private Boolean usedMockData;
+
+    /**
+     * 警告信息（如OCR服务未配置等）
+     */
+    @Schema(description = "警告信息")
+    private String warning;
+
+    /**
      * 识别出的单个指标
      */
     @Data
@@ -146,6 +158,21 @@ public class OcrHealthResultVO {
                 .metrics(metrics)
                 .rawText(rawText)
                 .summary(String.format("成功识别出%d个健康指标", metrics.size()))
+                .build();
+    }
+
+    /**
+     * 创建成功结果（带模拟数据标识）
+     */
+    public static OcrHealthResultVO successWithMockData(String ocrType, List<RecognizedMetric> metrics, String rawText) {
+        return OcrHealthResultVO.builder()
+                .status("success")
+                .ocrType(ocrType)
+                .metrics(metrics)
+                .rawText(rawText)
+                .summary(String.format("成功识别出%d个健康指标", metrics.size()))
+                .usedMockData(true)
+                .warning("OCR服务未配置，当前显示的是模拟数据。请联系管理员配置百度OCR服务以使用真实识别功能。")
                 .build();
     }
 
