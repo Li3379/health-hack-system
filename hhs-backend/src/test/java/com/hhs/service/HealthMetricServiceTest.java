@@ -307,7 +307,7 @@ class HealthMetricServiceTest {
         when(healthMetricMapper.selectPage(any(Page.class), any(LambdaQueryWrapper.class))).thenReturn(pageParam);
 
         // When: List with pagination
-        Page<HealthMetricVO> result = healthMetricService.list(1, 10, testUserId);
+        Page<HealthMetricVO> result = healthMetricService.list(1, 10, testUserId, null, null, null);
 
         // Then: Verify pagination
         assertNotNull(result);

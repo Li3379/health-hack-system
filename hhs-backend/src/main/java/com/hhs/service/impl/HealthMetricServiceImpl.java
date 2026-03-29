@@ -23,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -37,6 +38,8 @@ public class HealthMetricServiceImpl implements HealthMetricService {
     private final ApplicationEventPublisher eventPublisher;
     private final com.hhs.service.domain.MetricDisplayFormatter metricDisplayFormatter;
     private final com.hhs.service.domain.MetricCategoryService metricCategoryService;
+
+    private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
     /**
      * Add a new health metric record for a user
@@ -208,21 +211,41 @@ public class HealthMetricServiceImpl implements HealthMetricService {
     // ========================================
 
     /**
-     * List health metrics with pagination using direct Mapper injection
+     * List health metrics with pagination and filters
      *
      * @param page Page number
      * @param size Page size
-     * @param userId Optional user ID filter
+     * @param userId User ID (required, from JWT)
+     * @param metricKey Optional metric key filter
+     * @param startDateStr Optional start date filter (yyyy-MM-dd)
+     * @param endDateStr Optional end date filter (yyyy-MM-dd)
      * @return Paginated health metrics
      */
     @Override
     @Transactional(timeout = 30, readOnly = true)
-    public Page<HealthMetricVO> list(Integer page, Integer size, Long userId) {
+    public Page<HealthMetricVO> list(Integer page, Integer size, Long userId,
+                                      String metricKey, String startDateStr, String endDateStr) {
         Page<HealthMetric> pageParam = new Page<>(page, size);
         LambdaQueryWrapper<HealthMetric> wrapper = new LambdaQueryWrapper<>();
-        if (userId != null) {
-            wrapper.eq(HealthMetric::getUserId, userId);
+
+        // Filter by user ID (always required from JWT)
+        wrapper.eq(HealthMetric::getUserId, userId);
+
+        // Filter by metric key if provided
+        if (metricKey != null && !metricKey.isBlank()) {
+            wrapper.eq(HealthMetric::getMetricKey, metricKey);
         }
+
+        // Filter by date range if provided
+        if (startDateStr != null && !startDateStr.isBlank()) {
+            LocalDate startDate = LocalDate.parse(startDateStr, DATE_FORMATTER);
+            wrapper.ge(HealthMetric::getRecordDate, startDate);
+        }
+        if (endDateStr != null && !endDateStr.isBlank()) {
+            LocalDate endDate = LocalDate.parse(endDateStr, DATE_FORMATTER);
+            wrapper.le(HealthMetric::getRecordDate, endDate);
+        }
+
         // 只查询 HEALTH 类型的指标（排除 WELLNESS 保健指标）
         wrapper.eq(HealthMetric::getCategory, com.hhs.common.enums.MetricCategory.HEALTH);
         wrapper.orderByDesc(HealthMetric::getCreateTime);

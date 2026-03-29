@@ -29,10 +29,15 @@ public class HealthMetricController {
     public Result<Page<com.hhs.vo.HealthMetricVO>> list(
         @RequestParam(defaultValue = "1") Integer page,
         @RequestParam(defaultValue = "10") Integer size,
-        @RequestParam(required = false) Long userId
+        @RequestParam(required = false) String metricKey,
+        @RequestParam(required = false) String startDate,
+        @RequestParam(required = false) String endDate
     ) {
-        log.debug("Fetching metrics for user: {}", userId);
-        Page<com.hhs.vo.HealthMetricVO> result = healthMetricService.list(page, size, userId);
+        Long userId = com.hhs.security.SecurityUtils.getCurrentUserId();
+        log.debug("Fetching metrics for user: {}, metricKey: {}, startDate: {}, endDate: {}",
+                userId, metricKey, startDate, endDate);
+        Page<com.hhs.vo.HealthMetricVO> result = healthMetricService.list(
+                page, size, userId, metricKey, startDate, endDate);
         return Result.success(result);
     }
 
