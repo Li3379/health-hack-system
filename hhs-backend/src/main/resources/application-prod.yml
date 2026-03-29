@@ -25,6 +25,23 @@ spring:
           timeout: 30s
   lifecycle:
     timeout-per-shutdown-phase: 30s
+  # 邮件推送配置（可选，未配置时邮件推送通道不可用）
+  # 启用邮件推送需要配置 MAIL_* 环境变量
+  mail:
+    host: ${MAIL_HOST:}
+    port: ${MAIL_PORT:465}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          ssl:
+            enable: true
+          starttls:
+            enable: true
+            required: true
+    default-encoding: UTF-8
 
 mybatis-plus:
   mapper-locations: classpath*:mapper/**/*Mapper.xml
@@ -56,6 +73,9 @@ management:
   endpoint:
     shutdown:
       enabled: false
+  health:
+    mail:
+      enabled: false  # Disable mail health check when mail is not configured
 
 # Application Configuration for Production
 # IMPORTANT: Environment variables MUST be configured for production deployment

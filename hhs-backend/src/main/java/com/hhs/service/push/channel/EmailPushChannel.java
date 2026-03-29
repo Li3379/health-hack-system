@@ -11,7 +11,7 @@ import com.hhs.service.push.PushResult;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Component;
@@ -26,7 +26,7 @@ import jakarta.mail.internet.MimeMessage;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-@ConditionalOnProperty(name = "spring.mail.host")
+@ConditionalOnExpression("!'${spring.mail.host:}'.isEmpty()")
 public class EmailPushChannel implements PushChannel {
 
     private final JavaMailSender mailSender;

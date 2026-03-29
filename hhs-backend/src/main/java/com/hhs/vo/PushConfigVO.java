@@ -40,7 +40,7 @@ public class PushConfigVO {
             vo.setId(entity.getId());
             vo.setChannelType(entity.getChannelType());
             vo.setConfigKey(entity.getConfigKey());
-            vo.setConfigValue(maskSensitiveValue(entity.getConfigValue()));
+            vo.setConfigValue(entity.getConfigValue());
             vo.setEnabled(entity.getEnabled() != null && entity.getEnabled() == 1);
             vo.setCreatedAt(entity.getCreatedAt());
             vo.setUpdatedAt(entity.getUpdatedAt());
@@ -74,16 +74,5 @@ public class PushConfigVO {
         vo.setEnabled(false);
         vo.setIsConfigured(false);
         return vo;
-    }
-
-    /**
-     * Mask sensitive values (webhook URLs, etc.)
-     */
-    private static String maskSensitiveValue(String value) {
-        if (value == null || value.length() < 20) {
-            return value;
-        }
-        // Show first 10 and last 10 characters
-        return value.substring(0, 10) + "****" + value.substring(value.length() - 10);
     }
 }
