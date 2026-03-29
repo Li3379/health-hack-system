@@ -207,7 +207,7 @@ async function handleToggle(config: PushConfig) {
   try {
     await pushStore.saveConfig(config.channelType, {
       enabled: config.enabled,
-      configValue: config.configValue
+      configValue: config.configValue?.includes('****') ? undefined : config.configValue
     })
     if (config.enabled) {
       ElMessage.success(`${config.channelLabel}已启用`)
@@ -222,6 +222,11 @@ async function handleToggle(config: PushConfig) {
 }
 
 async function handleSaveConfig(config: PushConfig) {
+  // Don't save if value contains mask pattern
+  if (config.configValue && config.configValue.includes('****')) {
+    ElMessage.warning('配置值已被遮蔽，请重新输入完整的配置值')
+    return
+  }
   if (config.configValue) {
     try {
       await pushStore.saveConfig(config.channelType, {

@@ -9,7 +9,6 @@ import com.hhs.service.push.PushResult;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -22,12 +21,12 @@ import java.util.Map;
 
 /**
  * Feishu (Lark) push channel implementation.
- * Only activated when push.feishu.webhook-url is configured.
+ * Always registered; skips push if no webhook URL is configured for the user.
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
-@ConditionalOnProperty(name = "push.feishu.webhook-url")
+
 public class FeishuPushChannel implements PushChannel {
 
     private final UserPushConfigMapper userPushConfigMapper;
