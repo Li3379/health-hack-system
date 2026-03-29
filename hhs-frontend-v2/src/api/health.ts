@@ -3,7 +3,13 @@ import type { HealthMetricRequest, HealthMetricVO, PageResult } from '@/types/ap
 
 export const healthApi = {
   // 获取健康指标列表
-  getMetrics(params: { page?: number; size?: number; userId?: number }) {
+  getMetrics(params: {
+    page?: number
+    size?: number
+    metricKey?: string
+    startDate?: string
+    endDate?: string
+  }) {
     return request.get<PageResult<HealthMetricVO>>('/api/metrics', { params })
   },
 

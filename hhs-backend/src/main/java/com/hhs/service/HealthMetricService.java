@@ -62,14 +62,17 @@ public interface HealthMetricService {
     // ========================================
 
     /**
-     * List health metrics with pagination
+     * List health metrics with pagination and filters
      *
      * @param page Page number
      * @param size Page size
-     * @param userId Optional user ID filter
+     * @param userId User ID (required, from JWT)
+     * @param metricKey Optional metric key filter
+     * @param startDate Optional start date filter (yyyy-MM-dd)
+     * @param endDate Optional end date filter (yyyy-MM-dd)
      * @return Paginated health metrics
      */
-    Page<HealthMetricVO> list(Integer page, Integer size, Long userId);
+    Page<HealthMetricVO> list(Integer page, Integer size, Long userId, String metricKey, String startDate, String endDate);
 
     /**
      * Create a new health metric
