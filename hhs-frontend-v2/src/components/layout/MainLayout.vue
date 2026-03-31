@@ -173,6 +173,7 @@
         </router-view>
       </el-main>
     </el-container>
+    <AiFloatingBall />
   </el-container>
 </template>
 
@@ -182,6 +183,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useAlertStore } from '@/stores/alert'
 import { useThemeStore } from '@/stores/theme'
+import AiFloatingBall from '@/components/ai-floating-ball/AiFloatingBall.vue'
 
 const route = useRoute()
 const router = useRouter()
