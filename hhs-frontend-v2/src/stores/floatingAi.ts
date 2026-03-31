@@ -55,6 +55,9 @@ export const useFloatingAiStore = defineStore('floatingAi', () => {
       if (!sessionId.value) {
         sessionId.value = `session_${Date.now()}`
       }
+      if (remainingCount.value === 0) {
+        fetchRemainingCount()
+      }
     }
   }
 
@@ -127,6 +130,15 @@ export const useFloatingAiStore = defineStore('floatingAi', () => {
     sessionId.value = `session_${Date.now()}`
   }
 
+  async function fetchRemainingCount() {
+    try {
+      const res = await aiApi.getRemainingCount()
+      remainingCount.value = res.data
+    } catch (error) {
+      console.error('获取剩余对话次数失败:', error)
+    }
+  }
+
   return {
     // State
     panelOpen,
@@ -144,6 +156,7 @@ export const useFloatingAiStore = defineStore('floatingAi', () => {
     showNextTip,
     hideBubble,
     sendMessage,
-    clearMessages
+    clearMessages,
+    fetchRemainingCount
   }
 })

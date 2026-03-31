@@ -143,6 +143,15 @@ public class AIController {
         return Result.success(new AIHistoryResponse(history, remainingCount));
     }
 
+    @Operation(summary = "获取剩余对话次数", description = "查询当前用户今日剩余的AI对话次数")
+    @GetMapping("/chat/remaining")
+    @PreAuthorize("isAuthenticated()")
+    public Result<Integer> getRemainingCount() {
+        Long userId = SecurityUtils.getCurrentUserId();
+        int remaining = rateLimiter.getRemainingCount(userId);
+        return Result.success(remaining);
+    }
+
     @Operation(summary = "会话上下文", description = "获取指定会话最近 N 轮结构化上下文")
     @GetMapping("/chat/sessions/{sessionId}/context")
     @PreAuthorize("isAuthenticated()")

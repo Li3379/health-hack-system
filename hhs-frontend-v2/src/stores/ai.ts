@@ -139,6 +139,15 @@ export const useAiStore = defineStore('ai', () => {
     }
   }
 
+  const fetchRemainingCount = async () => {
+    try {
+      const res = await aiApi.getRemainingCount()
+      remainingCount.value = res.data
+    } catch (error) {
+      console.error('获取剩余对话次数失败:', error)
+    }
+  }
+
   return {
     // State
     sessions,
@@ -156,6 +165,7 @@ export const useAiStore = defineStore('ai', () => {
     switchSession,
     sendMessage,
     deleteSession,
-    getHistory
+    getHistory,
+    fetchRemainingCount
   }
 })
