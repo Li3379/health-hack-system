@@ -208,9 +208,9 @@
         <div class="header-actions">
           <span>评分历史趋势</span>
           <el-radio-group v-model="historyRange" @change="fetchHistory">
-            <el-radio-button label="7">最近7天</el-radio-button>
-            <el-radio-button label="30">最近30天</el-radio-button>
-            <el-radio-button label="90">最近90天</el-radio-button>
+            <el-radio-button value="7">最近7天</el-radio-button>
+            <el-radio-button value="30">最近30天</el-radio-button>
+            <el-radio-button value="90">最近90天</el-radio-button>
           </el-radio-group>
         </div>
       </template>
