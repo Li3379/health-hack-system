@@ -45,5 +45,10 @@ export const aiApi = {
   // 获取会话上下文
   getSessionContext(sessionId: string) {
     return request.get<ChatContextVO>(`/api/ai/chat/sessions/${sessionId}/context`)
+  },
+
+  // 获取剩余对话次数
+  getRemainingCount() {
+    return request.get<number>('/api/ai/chat/remaining')
   }
 }

@@ -456,6 +456,7 @@ const handleFileUpload = () => {
 onMounted(async () => {
   await aiStore.loadSessions()
   aiStore.createNewSession()
+  await aiStore.fetchRemainingCount()
 })
 </script>
 
