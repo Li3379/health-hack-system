@@ -126,3 +126,6 @@ nul
 # Development planning files
 .planning/
 CLAUDE.md
+.superpowers/
+docs/package-lock.json
+docs/superpowers/
