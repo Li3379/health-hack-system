@@ -81,4 +81,13 @@ public interface AlertService {
      * @return Statistics map containing total, pending, critical, warning counts
      */
     java.util.Map<String, Object> getStatistics(Long userId);
+
+    /**
+     * Delete an alert
+     *
+     * @param alertId Alert ID
+     * @param userId User ID (for authorization)
+     * @return true if successful
+     */
+    Boolean deleteAlert(Long alertId, Long userId);
 }
