@@ -36,6 +36,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static java.util.Map.entry;
+
 /**
  * AI解析服务实现
  *
@@ -74,7 +76,6 @@ public class AiParseServiceImpl implements AiParseService {
         | 心率 | heartRate | 次/分 | 60-100 |
         | 收缩压 | systolicBP | mmHg | 90-140 |
         | 舒张压 | diastolicBP | mmHg | 60-90 |
-        | 血压 | bloodPressure | mmHg | 格式: 收缩压/舒张压 |
         | 体重 | weight | kg | - |
         | 体温 | bodyTemperature | ℃ | 36.1-37.2 |
         | 血氧 | bloodOxygen | % | 95-100 |
@@ -97,10 +98,11 @@ public class AiParseServiceImpl implements AiParseService {
 
         1. 识别用户输入中的数值和对应指标
         2. 判断指标属于 HEALTH 还是 WELLNESS 类别
-        3. 如果用户提到"血压"并给出如"120/80"的格式，需要拆分为收缩压和舒张压两个指标
+        3. **血压必须拆分**: 用户提到"血压"时，必须返回两个指标：systolicBP（收缩压）和 diastolicBP（舒张压）。例如用户说"血压120/80"，返回 systolicBP=120 和 diastolicBP=80。**如果用户只给了一个数值（如"血压120"），不要返回任何血压指标，在 warnings 中提示"血压数据不完整，请提供收缩压/舒张压格式，如120/80"**
         4. 置信度(confidence)根据输入的明确程度设置(0.5-1.0)
         5. 如果数值可能异常(超出正常范围)，在warnings中提醒
         6. 如果无法确定具体指标，置信度设为0.5
+        7. **严禁返回指标对照表中不存在的 metricKey**，只能使用上表中列出的 metricKey
 
         ## 返回格式 (必须严格遵循JSON格式)
 
@@ -125,15 +127,15 @@ public class AiParseServiceImpl implements AiParseService {
         - value必须是数字，不要包含单位
         - 如果输入包含多个指标，全部解析出来
         - 如果无法解析出任何指标，metrics数组为空，并在summary中说明原因
-        - warnings数组用于提醒数值异常或歧义
+        - warnings数组用于提醒数值异常、数据不完整或歧义
         """;
 
     /**
-     * 健康指标白名单
+     * 健康指标白名单（不含 bloodPressure，血压必须拆分为 systolicBP/diastolicBP）
      */
     private static final Set<String> HEALTH_KEYS = Set.of(
         "glucose", "fastingGlucose", "postprandialGlucose",
-        "heartRate", "systolicBP", "diastolicBP", "bloodPressure",
+        "heartRate", "systolicBP", "diastolicBP",
         "weight", "bodyTemperature", "bloodOxygen", "bmi",
         "totalCholesterol", "triglycerides"
     );
@@ -145,6 +147,35 @@ public class AiParseServiceImpl implements AiParseService {
         "sleepDuration", "sleepQuality", "steps",
         "exerciseMinutes", "waterIntake", "mood", "energy"
     );
+
+    /**
+     * 逐指标数值合理范围（硬性上下限，超出则拒绝入库）
+     */
+    private static final Map<String, BigDecimal[]> METRIC_RANGES = Map.ofEntries(
+        entry("glucose",             new BigDecimal[]{bd("1"),   bd("33.3")}),
+        entry("fastingGlucose",      new BigDecimal[]{bd("1"),   bd("33.3")}),
+        entry("postprandialGlucose", new BigDecimal[]{bd("1"),   bd("33.3")}),
+        entry("heartRate",           new BigDecimal[]{bd("20"),  bd("300")}),
+        entry("systolicBP",          new BigDecimal[]{bd("40"),  bd("300")}),
+        entry("diastolicBP",         new BigDecimal[]{bd("20"),  bd("200")}),
+        entry("weight",              new BigDecimal[]{bd("1"),   bd("500")}),
+        entry("bodyTemperature",     new BigDecimal[]{bd("34"),  bd("42")}),
+        entry("bloodOxygen",         new BigDecimal[]{bd("50"),  bd("100")}),
+        entry("bmi",                 new BigDecimal[]{bd("5"),   bd("60")}),
+        entry("totalCholesterol",    new BigDecimal[]{bd("1"),   bd("15")}),
+        entry("triglycerides",       new BigDecimal[]{bd("0.1"), bd("10")}),
+        entry("sleepDuration",       new BigDecimal[]{bd("0"),   bd("24")}),
+        entry("sleepQuality",        new BigDecimal[]{bd("1"),   bd("10")}),
+        entry("steps",               new BigDecimal[]{bd("0"),   bd("200000")}),
+        entry("exerciseMinutes",     new BigDecimal[]{bd("0"),   bd("1440")}),
+        entry("waterIntake",         new BigDecimal[]{bd("0"),   bd("20000")}),
+        entry("mood",                new BigDecimal[]{bd("1"),   bd("10")}),
+        entry("energy",              new BigDecimal[]{bd("1"),   bd("10")})
+    );
+
+    private static BigDecimal bd(String val) {
+        return new BigDecimal(val);
+    }
 
     @Override
     @Transactional
@@ -238,12 +269,20 @@ public class AiParseServiceImpl implements AiParseService {
                 List<Map<String, Object>> metricsList = (List<Map<String, Object>>) metricsObj;
 
                 for (Map<String, Object> metricMap : metricsList) {
+                    String metricKey = (String) metricMap.get("metricKey");
+                    String metricName = (String) metricMap.get("metricName");
+
+                    // 拦截 bloodPressure：不允许该 key 入库，要求拆分为 systolicBP/diastolicBP
+                    if ("bloodPressure".equals(metricKey)) {
+                        result.getWarnings().add("血压数据不完整，请提供收缩压/舒张压格式（如：血压120/80）");
+                        log.warn("AI返回了 bloodPressure metricKey，已拦截");
+                        continue;
+                    }
+
                     MetricParseResultVO.ParsedMetric metric = new MetricParseResultVO.ParsedMetric();
+                    metric.setMetricKey(metricKey);
+                    metric.setMetricName(metricName);
 
-                    metric.setMetricKey((String) metricMap.get("metricKey"));
-                    metric.setMetricName((String) metricMap.get("metricName"));
-
-                    // 使用更精确的BigDecimal转换
                     Object valueObj = metricMap.get("value");
                     if (valueObj instanceof Number) {
                         metric.setValue(toBigDecimal((Number) valueObj));
@@ -265,9 +304,24 @@ public class AiParseServiceImpl implements AiParseService {
                     metric.setSelected(true);
 
                     // 验证metricKey有效性
-                    if (isValidMetricKey(metric.getMetricKey(), metric.getCategory())) {
-                        result.getMetrics().add(metric);
+                    if (!isValidMetricKey(metric.getMetricKey(), metric.getCategory())) {
+                        result.getWarnings().add(
+                            String.format("不支持的指标类型 '%s'，已忽略", metricName != null ? metricName : metricKey));
+                        log.warn("无效的metricKey被AI返回: {}", metricKey);
+                        continue;
                     }
+
+                    // 验证数值范围
+                    if (metric.getValue() != null) {
+                        String rangeWarning = validateMetricRange(
+                                metric.getMetricKey(), metric.getValue(),
+                                metric.getMetricName(), metric.getUnit());
+                        if (rangeWarning != null) {
+                            result.getWarnings().add(rangeWarning);
+                        }
+                    }
+
+                    result.getMetrics().add(metric);
                 }
             }
 
@@ -343,6 +397,25 @@ public class AiParseServiceImpl implements AiParseService {
             return WELLNESS_KEYS.contains(metricKey);
         }
         return HEALTH_KEYS.contains(metricKey);
+    }
+
+    /**
+     * 验证指标数值是否在合理范围内
+     *
+     * @return null 表示在范围内，否则返回警告消息
+     */
+    private String validateMetricRange(String metricKey, BigDecimal value, String metricName, String unit) {
+        BigDecimal[] range = METRIC_RANGES.get(metricKey);
+        if (range == null) {
+            return null;
+        }
+        if (value.compareTo(range[0]) < 0 || value.compareTo(range[1]) > 0) {
+            return String.format("指标 %s 的数值 %s %s 超出合理范围（%s~%s %s），请确认输入是否正确",
+                    metricName != null ? metricName : metricKey,
+                    value.toPlainString(), unit,
+                    range[0].toPlainString(), range[1].toPlainString(), unit);
+        }
+        return null;
     }
 
     @Override
