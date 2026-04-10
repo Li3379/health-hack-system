@@ -30,10 +30,10 @@ public class AlertController {
     @Operation(summary = "Get user's alerts with pagination")
     @GetMapping
     public Result<Page<AlertVO>> getUserAlerts(
-            @RequestParam(defaultValue = "1") int page,
-            @RequestParam(defaultValue = "20") int size,
-            @RequestParam(required = false) String alertType,
-            @RequestParam(required = false) Boolean isRead) {
+        @RequestParam(defaultValue = "1") int page,
+        @RequestParam(defaultValue = "20") int size,
+        @RequestParam(required = false) String alertType,
+        @RequestParam(required = false) Boolean isRead) {
         Long userId = SecurityUtils.getCurrentUserId();
         log.debug("Get alerts request: userId={}, page={}, size={}", userId, page, size);
         Page<AlertVO> alerts = alertService.getUserAlerts(userId, page, size, alertType, isRead);
@@ -52,7 +52,7 @@ public class AlertController {
     @Operation(summary = "Get recent alerts for dashboard")
     @GetMapping("/recent")
     public Result<java.util.List<AlertVO>> getRecentAlerts(
-            @RequestParam(defaultValue = "5") int limit) {
+        @RequestParam(defaultValue = "5") int limit) {
         Long userId = SecurityUtils.getCurrentUserId();
         log.debug("Get recent alerts request: userId={}, limit={}", userId, limit);
         java.util.List<AlertVO> alerts = alertService.getRecentAlerts(userId, limit);
@@ -95,11 +95,20 @@ public class AlertController {
         return Result.success(stats);
     }
 
+    @Operation(summary = "Delete an alert")
+    @DeleteMapping("/{id}")
+    public Result<Boolean> deleteAlert(@PathVariable Long id) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        log.info("Delete alert: alertId={}, userId={}", id, userId);
+        Boolean result = alertService.deleteAlert(id, userId);
+        return Result.success(result);
+    }
+
     @Operation(summary = "Get trend prediction for a metric")
     @GetMapping("/trend/{metricKey}")
     public Result<TrendResult> getTrendPrediction(
-            @PathVariable String metricKey,
-            @RequestParam(defaultValue = "7") int days) {
+        @PathVariable String metricKey,
+        @RequestParam(defaultValue = "7") int days) {
         Long userId = SecurityUtils.getCurrentUserId();
         log.info("Get trend prediction: userId={}, metricKey={}, days={}", userId, metricKey, days);
         TrendResult result = trendPredictor.predict(userId, metricKey, days);
@@ -113,8 +122,8 @@ public class AlertController {
         log.debug("Check early warning: userId={}, metricKey={}", userId, metricKey);
         boolean needsWarning = trendPredictor.shouldGenerateEarlyWarning(userId, metricKey);
         return Result.success(java.util.Map.of(
-                "metricKey", metricKey,
-                "earlyWarningNeeded", needsWarning
+            "metricKey", metricKey,
+            "earlyWarningNeeded", needsWarning
         ));
     }
 }

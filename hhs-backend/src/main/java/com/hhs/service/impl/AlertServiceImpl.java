@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.hhs.dto.AlertVO;
 import com.hhs.entity.HealthAlert;
+import com.hhs.exception.BusinessException;
 import com.hhs.mapper.HealthAlertMapper;
 import com.hhs.service.AlertService;
 import com.hhs.websocket.HealthWebSocketHandler;
@@ -47,7 +48,7 @@ public class AlertServiceImpl implements AlertService {
         webSocketHandler.sendAlertToUser(alert.getUserId(), convertToVO(alert));
 
         log.info("Created alert: userId={}, type={}, metricKey={}",
-                alert.getUserId(), alert.getAlertType(), alert.getMetricKey());
+            alert.getUserId(), alert.getAlertType(), alert.getMetricKey());
 
         return alert.getId();
     }
@@ -67,8 +68,8 @@ public class AlertServiceImpl implements AlertService {
     public Page<AlertVO> getUserAlerts(Long userId, int page, int size, String alertType, Boolean isRead) {
         Page<HealthAlert> pageParam = new Page<>(page, size);
         LambdaQueryWrapper<HealthAlert> queryWrapper = new LambdaQueryWrapper<HealthAlert>()
-                .eq(HealthAlert::getUserId, userId)
-                .orderByDesc(HealthAlert::getCreatedAt);
+            .eq(HealthAlert::getUserId, userId)
+            .orderByDesc(HealthAlert::getCreatedAt);
 
         // Apply filters if provided
         if (alertType != null && !alertType.isEmpty()) {
@@ -83,8 +84,8 @@ public class AlertServiceImpl implements AlertService {
         // Convert to VO
         Page<AlertVO> voPage = new Page<>(result.getCurrent(), result.getSize(), result.getTotal());
         List<AlertVO> records = result.getRecords().stream()
-                .map(this::convertToVO)
-                .collect(Collectors.toList());
+            .map(this::convertToVO)
+            .collect(Collectors.toList());
         voPage.setRecords(records);
 
         return voPage;
@@ -113,10 +114,10 @@ public class AlertServiceImpl implements AlertService {
     @Transactional(timeout = 30)
     public Boolean markAsRead(Long alertId, Long userId) {
         int updated = healthAlertMapper.update(null,
-                new LambdaUpdateWrapper<HealthAlert>()
-                        .eq(HealthAlert::getId, alertId)
-                        .eq(HealthAlert::getUserId, userId)
-                        .set(HealthAlert::getIsRead, true)
+            new LambdaUpdateWrapper<HealthAlert>()
+                .eq(HealthAlert::getId, alertId)
+                .eq(HealthAlert::getUserId, userId)
+                .set(HealthAlert::getIsRead, true)
         );
         return updated > 0;
     }
@@ -132,11 +133,11 @@ public class AlertServiceImpl implements AlertService {
     @Transactional(timeout = 30)
     public Boolean acknowledgeAlert(Long alertId, Long userId) {
         int updated = healthAlertMapper.update(null,
-                new LambdaUpdateWrapper<HealthAlert>()
-                        .eq(HealthAlert::getId, alertId)
-                        .eq(HealthAlert::getUserId, userId)
-                        .set(HealthAlert::getIsAcknowledged, true)
-                        .set(HealthAlert::getAcknowledgedAt, LocalDateTime.now())
+            new LambdaUpdateWrapper<HealthAlert>()
+                .eq(HealthAlert::getId, alertId)
+                .eq(HealthAlert::getUserId, userId)
+                .set(HealthAlert::getIsAcknowledged, true)
+                .set(HealthAlert::getAcknowledgedAt, LocalDateTime.now())
         );
         return updated > 0;
     }
@@ -151,9 +152,9 @@ public class AlertServiceImpl implements AlertService {
     @Transactional(timeout = 30)
     public Integer markAllAsRead(Long userId) {
         return healthAlertMapper.update(null,
-                new LambdaUpdateWrapper<HealthAlert>()
-                        .eq(HealthAlert::getUserId, userId)
-                        .set(HealthAlert::getIsRead, true)
+            new LambdaUpdateWrapper<HealthAlert>()
+                .eq(HealthAlert::getUserId, userId)
+                .set(HealthAlert::getIsRead, true)
         );
     }
 
@@ -169,8 +170,8 @@ public class AlertServiceImpl implements AlertService {
     public List<AlertVO> getRecentAlerts(Long userId, int limit) {
         List<HealthAlert> alerts = healthAlertMapper.getRecentAlerts(userId, limit);
         return alerts.stream()
-                .map(this::convertToVO)
-                .collect(Collectors.toList());
+            .map(this::convertToVO)
+            .collect(Collectors.toList());
     }
 
     /**
@@ -212,6 +213,29 @@ public class AlertServiceImpl implements AlertService {
         stats.put("unread", getUnreadCount(userId));
 
         return stats;
+    }
+
+    /**
+     * Delete an alert
+     *
+     * @param alertId Alert ID
+     * @param userId User ID (for authorization)
+     * @return true if successful
+     */
+    @Override
+    @Transactional(timeout = 30)
+    public Boolean deleteAlert(Long alertId, Long userId) {
+        int deleted = healthAlertMapper.delete(
+            new LambdaQueryWrapper<HealthAlert>()
+                .eq(HealthAlert::getId, alertId)
+                .eq(HealthAlert::getUserId, userId)
+        );
+        if (deleted > 0) {
+            log.info("Deleted alert: alertId={}, userId={}", alertId, userId);
+        } else {
+            log.warn("Alert not found or not owned by user: alertId={}, userId={}", alertId, userId);
+        }
+        return deleted > 0;
     }
 
     private AlertVO convertToVO(HealthAlert alert) {
