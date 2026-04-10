@@ -68,10 +68,10 @@ public class LangChain4jConfig {
         return OpenAiChatModel.builder()
             .apiKey(apiKey)
             .baseUrl("https://dashscope.aliyuncs.com/compatible-mode/v1")
-            .modelName("qwen-max")
+            .modelName("qwen3.5-flash")
             .temperature(0.7)
-            .maxTokens(1000)
-            .timeout(Duration.ofSeconds(30))
+            .maxTokens(2000)  // 开发环境 2000，生产环境 1000
+            .timeout(Duration.ofSeconds(60))  // 开发环境 60s，生产环境 30s
             .logRequests(true)
             .logResponses(true)
             .build();
@@ -83,10 +83,12 @@ public class LangChain4jConfig {
 
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
-| model-name | qwen-max | 模型名称 |
+| model-name | qwen3.5-flash | 模型名称 |
 | temperature | 0.7 | 创造性程度 |
-| max-tokens | 1000 | 最大输出长度 |
-| timeout | 30s | 请求超时时间 |
+| max-tokens | 2000（开发）/ 1000（生产） | 最大输出长度 |
+| timeout | 60s（开发）/ 30s（生产） | 请求超时时间 |
+
+> 注意：开发环境和生产环境的配置参数不同，详见 application-dev.yml 和 application-prod.yml。
 
 ## 系统提示词
 

@@ -271,7 +271,7 @@ spring:
         chat-model:
           api-key: ${DASH_SCOPE_API_KEY}
           base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
-          model-name: qwen-max
+          model-name: qwen3.5-flash
 ```
 
 ## 错误处理

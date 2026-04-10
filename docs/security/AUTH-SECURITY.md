@@ -47,6 +47,21 @@
 
 ## JWT 认证
 
+### 安全组件
+
+| 组件 | 类名 | 职责 |
+|------|------|------|
+| JWT 过滤器 | `JwtAuthenticationFilter` | 请求拦截、Token 解析、认证设置 |
+| JWT 工具 | `JwtUtil` | Token 生成、验证、解析 |
+| JWT 配置 | `JwtProperties` | JWT 密钥和过期时间配置 |
+| JWT 密钥验证 | `JwtSecretValidator` | 启动时校验密钥强度 |
+| 安全上下文 | `SecurityUtils` | 获取当前登录用户信息 |
+| 认证入口 | `RestAuthenticationEntryPoint` | 处理未认证请求（401） |
+| 访问拒绝 | `RestAccessDeniedHandler` | 处理权限不足（403） |
+| 用户详情 | `UserDetailsServiceImpl` | Spring Security 用户加载 |
+| 路径验证 | `PathValidationUtil` | 路径安全检查（防止路径穿越） |
+| 登录用户 | `LoginUser` | 认证用户信息载体 |
+
 ### 认证流程
 
 ```
@@ -360,6 +375,11 @@ public class WebMvcConfig implements WebMvcConfigurer {
 | `XIAOMI_CLIENT_SECRET` | 小米健康 OAuth |
 | `BAIDU_OCR_API_KEY` | 百度 OCR |
 | `BAIDU_OCR_SECRET_KEY` | 百度 OCR |
+| `MAIL_HOST` | 邮件推送 SMTP 服务器 |
+| `MAIL_PORT` | 邮件推送端口 |
+| `MAIL_USERNAME` | 邮件推送发件邮箱 |
+| `MAIL_PASSWORD` | 邮件推送授权码 |
+| `ALLOWED_ORIGINS` | CORS 允许的源（逗号分隔） |
 
 ## 安全最佳实践
 
