@@ -22,9 +22,14 @@ public class MetricCategoryService {
             "systolicBP",
             "diastolicBP",
             "glucose",
+            "fastingGlucose",
+            "postprandialGlucose",
             "bmi",
-            "temperature",
-            "weight"
+            "bodyTemperature",
+            "weight",
+            "bloodOxygen",
+            "totalCholesterol",
+            "triglycerides"
     );
 
     /**
