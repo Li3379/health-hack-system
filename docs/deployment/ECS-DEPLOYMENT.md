@@ -30,28 +30,13 @@ sudo usermod -aG docker $USER
 newgrp docker
 ```
 
-### 2. 配置 Docker 镜像加速（可选）
-
-```bash
-sudo mkdir -p /etc/docker
-sudo tee /etc/docker/daemon.json <<EOF
-{
-  "registry-mirrors": [
-    "https://your-mirror.mirror.aliyuncs.com"
-  ]
-}
-EOF
-sudo systemctl daemon-reload
-sudo systemctl restart docker
-```
-
-### 3. 安装 Git
+### 2. 安装 Git
 
 ```bash
 sudo apt install -y git
 ```
 
-### 4. 配置防火墙
+### 3. 配置防火墙
 
 ```bash
 # 开放必要端口
@@ -61,18 +46,46 @@ sudo ufw allow 443/tcp  # HTTPS
 sudo ufw enable
 ```
 
-## 项目部署
+## 自动部署（CI/CD）
+
+项目通过 GitHub Actions 自动构建镜像并部署到 ECS。
+
+### 前提条件
+
+1. GitHub 仓库配置了以下 Secrets：
+   - `ECS_HOST` - 服务器 IP 地址
+   - `ECS_USER` - SSH 用户名
+   - `ECS_SSH_KEY` - SSH 私钥
+   - `ECS_DEPLOY_PATH` - 项目路径（如 `/root/hhs`）
+   - `GHCR_TOKEN` - GitHub PAT（read:packages 权限）
+   - `VITE_API_BASE_URL` - 前端 API 地址（不含 `/api` 后缀）
+   - `VITE_WS_BASE_URL` - WebSocket 地址（不含 `/ws` 后缀）
+
+2. 服务器已安装 Docker 和 Docker Compose
+3. 服务器已克隆项目代码
+
+### 部署流程
+
+```
+Push to master → GitHub Actions 构建 Docker 镜像
+→ 推送到 GHCR (ghcr.io)
+→ SSH 到 ECS 拉取镜像
+→ docker compose up -d --force-recreate
+→ 健康检查
+```
+
+## 手动部署
 
 ### 1. 克隆项目
 
 ```bash
 # 创建目录
-sudo mkdir -p /opt/hhs
-sudo chown $USER:$USER /opt/hhs
+sudo mkdir -p /root/hhs
+sudo chown $USER:$USER /root/hhs
 
 # 克隆代码
-cd /opt
-git clone https://github.com/your-org/hhs.git hhs
+cd /root
+git clone https://github.com/<owner>/hhs.git hhs
 cd hhs
 ```
 
@@ -87,6 +100,9 @@ nano .env
 **必须配置的变量**：
 
 ```env
+# Spring 配置
+SPRING_PROFILES_ACTIVE=prod
+
 # 数据库密码（强密码）
 DB_PASSWORD=your_secure_mysql_password
 
@@ -95,6 +111,10 @@ REDIS_PASSWORD=your_secure_redis_password
 
 # JWT 密钥（至少 32 字符）
 JWT_SECRET=your_256_bit_secret_key_at_least_32_characters_long
+
+# 服务器地址（不含路径后缀）
+BASE_URL=http://your-server-ip
+ALLOWED_ORIGINS=http://your-server-ip
 ```
 
 **可选配置**：
@@ -117,6 +137,12 @@ XIAOMI_CLIENT_SECRET=your_xiaomi_client_secret
 # 百度 OCR
 BAIDU_OCR_API_KEY=your_baidu_api_key
 BAIDU_OCR_SECRET_KEY=your_baidu_secret_key
+
+# 邮件推送（可选）
+MAIL_HOST=smtp.example.com
+MAIL_PORT=465
+MAIL_USERNAME=your_email@example.com
+MAIL_PASSWORD=your_email_authorization_code
 ```
 
 ### 3. 初始化数据库
@@ -124,23 +150,21 @@ BAIDU_OCR_SECRET_KEY=your_baidu_secret_key
 首次部署需要初始化数据库：
 
 ```bash
-# 启动 MySQL
+# 启动 MySQL 容器
 docker compose up -d mysql
 
 # 等待 MySQL 就绪
 sleep 30
 
 # 执行初始化脚本
-docker compose exec -T mysql mysql -uroot -p${DB_PASSWORD} hhs < hhs-backend/src/main/resources/sql/schema.sql
+docker compose exec -T mysql mysql -uroot -p${DB_PASSWORD} hhs \
+  < hhs-backend/src/main/resources/sql/schema.sql
 ```
 
 ### 4. 启动服务
 
 ```bash
-# 开发环境
-docker compose up -d
-
-# 生产环境
+# 生产环境部署
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
 
@@ -151,10 +175,10 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 docker compose ps
 
 # 检查后端健康
-curl http://localhost:8082/actuator/health
+curl http://localhost/8082/actuator/health
 
-# 检查前端
-curl http://localhost:80
+# 检查前端（通过 nginx 代理）
+curl http://localhost/80
 ```
 
 ## 域名配置
@@ -163,36 +187,13 @@ curl http://localhost:80
 
 在域名服务商配置 A 记录指向 ECS 公网 IP。
 
-### 2. 配置 Nginx（可选）
-
-如果需要 HTTPS 或自定义域名：
-
-```bash
-# 安装 Certbot
-sudo apt install -y certbot python3-certbot-nginx
-
-# 申请证书
-sudo certbot --nginx -d your-domain.com
-
-# 自动续期
-sudo systemctl enable certbot.timer
-```
-
-### 3. 更新环境变量
-
-```env
-ALLOWED_ORIGINS=https://your-domain.com
-```
-
-## SSL 证书配置
-
-### 使用 Let's Encrypt
+### 2. 配置 HTTPS
 
 ```bash
 # 安装 Certbot
 sudo apt install -y certbot
 
-# 申请证书
+# 申请证书（standalone 模式）
 sudo certbot certonly --standalone -d your-domain.com
 
 # 证书位置
@@ -200,26 +201,11 @@ sudo certbot certonly --standalone -d your-domain.com
 # /etc/letsencrypt/live/your-domain.com/privkey.pem
 ```
 
-### 更新 Nginx 配置
+### 3. 更新环境变量
 
-在 `hhs-frontend-v2/nginx.conf` 中添加：
-
-```nginx
-server {
-    listen 443 ssl;
-    server_name your-domain.com;
-    
-    ssl_certificate /etc/letsencrypt/live/your-domain.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/your-domain.com/privkey.pem;
-    
-    # ... 其他配置
-}
-
-server {
-    listen 80;
-    server_name your-domain.com;
-    return 301 https://$server_name$request_uri;
-}
+```env
+BASE_URL=https://your-domain.com
+ALLOWED_ORIGINS=https://your-domain.com
 ```
 
 ## 维护操作
@@ -235,24 +221,18 @@ docker compose logs -f backend
 docker compose logs -f frontend
 ```
 
-### 重启服务
-
-```bash
-# 重启所有服务
-docker compose restart
-
-# 重启特定服务
-docker compose restart backend
-```
-
 ### 更新部署
 
 ```bash
 # 拉取最新代码
-git pull
+cd /root/hhs && git pull origin master
 
-# 重新构建并部署
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+# 拉取最新镜像并重启
+docker compose -f docker-compose.yml -f docker-compose.prod.yml pull
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --force-recreate
+
+# 清理旧镜像
+docker image prune -f
 ```
 
 ### 数据备份
@@ -261,44 +241,27 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 # MySQL 备份
 docker compose exec mysql mysqldump -uroot -p${DB_PASSWORD} hhs > backup_$(date +%Y%m%d).sql
 
-# 上传文件备份
-tar -czf uploads_$(date +%Y%m%d).tar.gz /var/lib/docker/volumes/hhs_uploads_data
-```
-
-### 数据恢复
-
-```bash
-# 恢复 MySQL
+# 恢复
 docker compose exec -T mysql mysql -uroot -p${DB_PASSWORD} hhs < backup_20260301.sql
 ```
 
-## 性能优化
+### 性能调优
 
-### MySQL 调优
-
-在 `docker-compose.prod.yml` 中添加：
+在 `docker-compose.prod.yml` 跻加或修改：
 
 ```yaml
+# MySQL 调优
 mysql:
   command:
     - --innodb-buffer-pool-size=1G
     - --max-connections=200
-    - --innodb-log-file-size=256M
-```
 
-### JVM 调优
-
-在 `docker-compose.prod.yml` 中添加：
-
-```yaml
+# JVM 调优
 backend:
   environment:
     JAVA_OPTS: "-Xms512m -Xmx1024m -XX:+UseG1GC"
-```
 
-### Redis 调优
-
-```yaml
+# Redis 调优
 redis:
   command: redis-server --requirepass ${REDIS_PASSWORD} --maxmemory 256mb --maxmemory-policy allkeys-lru
 ```
@@ -308,40 +271,17 @@ redis:
 ### 1. SSH 安全
 
 ```bash
-# 编辑 SSH 配置
-sudo nano /etc/ssh/sshd_config
-
 # 禁用密码登录
-PasswordAuthentication no
-PubkeyAuthentication yes
-
-# 重启 SSH
+sudo nano /etc/ssh/sshd_config
+# 设置: PasswordAuthentication no, PubkeyAuthentication yes
 sudo systemctl restart sshd
 ```
 
 ### 2. 定期更新
 
 ```bash
-# 更新系统
 sudo apt update && sudo apt upgrade -y
-
-# 更新 Docker 镜像
-docker compose pull
-docker compose up -d
-```
-
-### 3. 日志轮转
-
-在 `docker-compose.prod.yml` 中配置：
-
-```yaml
-services:
-  backend:
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
+docker compose pull && docker compose up -d
 ```
 
 ## 故障排查
@@ -351,16 +291,16 @@ services:
 1. 检查端口占用：`sudo netstat -tlnp`
 2. 检查磁盘空间：`df -h`
 3. 检查内存：`free -m`
-4. 查看详细日志：`docker compose logs`
+4. 查看日志：`docker compose logs`
 
 ### 数据库连接失败
 
-1. 检查 MySQL 是否运行：`docker compose ps mysql`
-2. 检查密码是否正确
+1. 检查 MySQL 状态：`docker compose ps mysql`
+2. 检查密码配置
 3. 检查网络：`docker compose exec backend ping mysql`
 
 ### 前端访问空白
 
-1. 检查构建是否成功
-2. 检查 Nginx 配置
-3. 检查 API 地址配置
+1. 检查构建日志：`docker compose logs frontend`
+2. 检查 API 地址配置（VITE_API_BASE_URL 不含 `/api` 后缀）
+3. 检查 Nginx 配置

@@ -416,7 +416,8 @@ CALL cleanup_old_realtime_metrics(3); -- 保留 3 个月数据
 
 Schema 版本通过 `Change Log` 注释追踪：
 
-- v3.5.0 (2026-03-19): 添加 device_platform_config 表
+-- v3.6.0 (2026-03-24): Fix avatar URLs stored with localhost prefix
+
 - v3.4.0 (2026-03-19): 添加 record_time 字段
 - v3.3.0 (2026-03-05): 添加 push_history 表
 - v3.2.0 (2026-03-04): 添加预警优化相关表
