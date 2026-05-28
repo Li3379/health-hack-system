@@ -166,7 +166,7 @@
         </router-view>
       </el-main>
     </el-container>
-    <AiFloatingBall />
+    <AiFloatingBall v-if="!isAiChatPage" />
   </el-container>
 </template>
 
@@ -192,6 +192,7 @@ const themeStore = useThemeStore()
 const collapsed = ref(false)
 const sidebarWidth = computed(() => (collapsed.value ? '64px' : '240px'))
 const activeMenu = computed(() => route.path)
+const isAiChatPage = computed(() => route.path === '/ai/chat')
 
 const toggleCollapse = () => { collapsed.value = !collapsed.value }
 

@@ -48,21 +48,21 @@
               </el-row>
             </template>
             <template #default>
-              <div v-if="insights" class="insights-grid">
+              <div v-if="insights && insights.entryCount > 0" class="insights-grid">
                 <div class="insight-item">
-                  <div class="insight-value">{{ insights.avgMoodScore.toFixed(1) }}</div>
+                  <div class="insight-value">{{ insights.avgMood?.toFixed(1) ?? '-' }}</div>
                   <div class="insight-label">平均心情</div>
                 </div>
                 <div class="insight-item">
-                  <div class="insight-value">{{ insights.avgEnergyLevel.toFixed(1) }}</div>
+                  <div class="insight-value">{{ insights.avgEnergy?.toFixed(1) ?? '-' }}</div>
                   <div class="insight-label">平均精力</div>
                 </div>
                 <div class="insight-item">
-                  <div class="insight-value">{{ insights.avgStressLevel.toFixed(1) }}</div>
+                  <div class="insight-value">{{ insights.avgStress?.toFixed(1) ?? '-' }}</div>
                   <div class="insight-label">平均压力</div>
                 </div>
                 <div class="insight-item">
-                  <div class="insight-value">{{ insights.avgSleepQuality.toFixed(1) }}</div>
+                  <div class="insight-value">{{ insights.avgSleep?.toFixed(1) ?? '-' }}</div>
                   <div class="insight-label">平均睡眠</div>
                 </div>
               </div>
@@ -129,12 +129,14 @@ const fetchData = async () => {
 const handleSubmit = async () => {
   submitting.value = true
   try {
+    const today = new Date().toISOString().split('T')[0]
     await moodApi.create({
       moodScore: form.moodScore,
       energyLevel: form.energyLevel,
       stressLevel: form.stressLevel,
       sleepQuality: form.sleepQuality,
-      notes: form.notes || undefined
+      notes: form.notes || undefined,
+      entryDate: today
     })
     ElMessage.success('记录成功')
     form.notes = ''

@@ -115,23 +115,36 @@ onUnmounted(() => {
 .floating-bubble {
   width: 264px;
   border-radius: var(--radius-lg);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border-light);
-  box-shadow: var(--shadow-lg);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.15),
+    0 1px 0 rgba(255, 255, 255, 0.06) inset;
   display: flex;
   overflow: hidden;
   cursor: pointer;
-  transition: var(--transition-shadow);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  transition: box-shadow 0.25s ease, transform 0.25s var(--ease-spring);
 }
 
 .floating-bubble:hover {
-  box-shadow: var(--shadow-xl);
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.2),
+    0 1px 0 rgba(255, 255, 255, 0.08) inset;
+  transform: translateY(-2px);
+}
+
+[data-theme='dark'] .floating-bubble {
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.4),
+    0 1px 0 rgba(255, 255, 255, 0.04) inset;
 }
 
 .bubble-accent {
   width: 3px;
   flex-shrink: 0;
-  background: var(--color-primary);
+  background: linear-gradient(180deg, var(--accent-cool), var(--accent-warm));
 }
 
 .bubble-content {
@@ -148,39 +161,43 @@ onUnmounted(() => {
 }
 
 .bubble-icon {
-  color: var(--color-primary);
+  color: var(--accent-cool);
   flex-shrink: 0;
 }
 
 .bubble-label {
   font-size: 10px;
-  font-weight: var(--font-weight-medium);
-  color: var(--color-primary);
+  font-weight: 600;
+  color: var(--accent-cool);
   flex: 1;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .bubble-close {
   flex-shrink: 0;
-  color: var(--color-text-tertiary);
+  color: var(--text-4);
   width: 20px;
   height: 20px;
+  transition: color 0.15s, transform 0.2s var(--ease-spring);
 }
 
 .bubble-close:hover {
-  color: var(--color-text-secondary);
+  color: var(--text-2);
+  transform: scale(1.1);
 }
 
 .bubble-title {
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-1);
   margin: 0 0 2px;
 }
 
 .bubble-text {
-  font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
-  line-height: var(--line-height-normal);
+  font-size: 12px;
+  color: var(--text-3);
+  line-height: 1.5;
   margin: 0;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -190,18 +207,20 @@ onUnmounted(() => {
 
 .bubble-action {
   font-size: 10px;
-  color: var(--color-primary);
+  color: var(--accent-cool);
   margin-top: 6px;
   display: block;
+  font-weight: 500;
+  transition: transform 0.2s var(--ease-spring);
 }
 
 .floating-bubble:hover .bubble-action {
-  text-decoration: underline;
+  transform: translateX(2px);
 }
 
 /* Transitions */
 .bubble-fade-enter-active {
-  animation: bubbleIn 0.3s ease-out;
+  animation: bubbleIn 0.35s var(--ease-spring);
 }
 
 .bubble-fade-leave-active {
@@ -211,7 +230,7 @@ onUnmounted(() => {
 @keyframes bubbleIn {
   from {
     opacity: 0;
-    transform: translateY(8px) scale(0.95);
+    transform: translateY(8px) scale(0.92);
   }
   to {
     opacity: 1;
@@ -226,13 +245,19 @@ onUnmounted(() => {
   }
   to {
     opacity: 0;
-    transform: translateY(-4px) scale(0.95);
+    transform: translateY(-4px) scale(0.92);
   }
 }
 
-/* Dark mode */
-[data-theme='dark'] .floating-bubble {
-  background: var(--color-surface-raised);
-  border-color: var(--color-border);
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .floating-bubble {
+    animation: none !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .floating-bubble:hover {
+    transform: none;
+  }
 }
 </style>

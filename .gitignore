@@ -130,3 +130,4 @@ nul
 .playwright-mcp/
 docs/package-lock.json
 docs/superpowers/
+.gstack/
