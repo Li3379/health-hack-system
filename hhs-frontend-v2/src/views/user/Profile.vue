@@ -149,6 +149,9 @@ import {
 import { Upload } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { userApi } from '@/api/user'
+import { healthApi } from '@/api/health'
+import { alertApi } from '@/api/alert'
+import { screeningApi } from '@/api/screening'
 import { formatDateTime } from '@/utils/format'
 import type { UpdateProfileRequest, ChangePasswordRequest } from '@/types/api'
 
@@ -315,12 +318,26 @@ const handleAvatarUpload = async (options: UploadRequestOptions) => {
 }
 
 const fetchStats = async () => {
-  // 这里可以调用统计接口获取数据
-  // 暂时使用模拟数据
-  stats.metricCount = 156
-  stats.alertCount = 23
-  stats.reportCount = 8
-  stats.aiChatCount = 45
+  try {
+    const [metricsRes, alertsRes, reportsRes] = await Promise.allSettled([
+      healthApi.getMetrics({ page: 1, size: 1 }),
+      alertApi.getAlerts({ page: 1, size: 1 }),
+      screeningApi.listReports({ page: 1, size: 1 })
+    ])
+
+    if (metricsRes.status === 'fulfilled') {
+      stats.metricCount = metricsRes.value.data?.total ?? 0
+    }
+    if (alertsRes.status === 'fulfilled') {
+      stats.alertCount = alertsRes.value.data?.total ?? 0
+    }
+    if (reportsRes.status === 'fulfilled') {
+      stats.reportCount = reportsRes.value.data?.total ?? 0
+    }
+    stats.aiChatCount = 0
+  } catch {
+    // fallback: keep zeros
+  }
 }
 
 onMounted(() => {

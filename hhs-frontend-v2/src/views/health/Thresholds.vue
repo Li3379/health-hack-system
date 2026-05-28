@@ -61,11 +61,12 @@
             style="width: 100%"
             :disabled="!!editingId"
           >
-            <el-option label="血糖" value="BLOOD_GLUCOSE" />
-            <el-option label="血压" value="BLOOD_PRESSURE" />
-            <el-option label="心率" value="HEART_RATE" />
-            <el-option label="体温" value="BODY_TEMPERATURE" />
-            <el-option label="血氧" value="BLOOD_OXYGEN" />
+            <el-option label="血糖" value="glucose" />
+            <el-option label="收缩压" value="systolicBP" />
+            <el-option label="舒张压" value="diastolicBP" />
+            <el-option label="心率" value="heartRate" />
+            <el-option label="体温" value="temperature" />
+            <el-option label="血氧" value="bloodOxygen" />
           </el-select>
         </el-form-item>
 

@@ -36,13 +36,13 @@
         </div>
 
         <!-- Form -->
-        <el-form ref="formRef" :model="form" :rules="rules" label-width="0" size="large" class="login-form">
+        <el-form ref="formRef" :model="form" :rules="rules" label-width="0" size="large" class="login-form" @submit.prevent>
           <el-form-item prop="username">
-            <el-input v-model="form.username" placeholder="请输入用户名" :prefix-icon="User" />
+            <el-input v-model="form.username" placeholder="请输入用户名" :prefix-icon="User" @change="syncFromNative" />
           </el-form-item>
 
           <el-form-item prop="password">
-            <el-input v-model="form.password" type="password" placeholder="请输入密码" :prefix-icon="Lock" show-password @keyup.enter="handleLogin" />
+            <el-input v-model="form.password" type="password" placeholder="请输入密码" :prefix-icon="Lock" show-password @keyup.enter="handleLogin" @change="syncFromNative" />
           </el-form-item>
 
           <el-form-item>
@@ -85,6 +85,7 @@
 import { ref, reactive } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { User, Lock, Monitor, ChatDotRound, TrendCharts } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 
 const authStore = useAuthStore()
@@ -104,18 +105,30 @@ const rules: FormRules = {
   ]
 }
 
+// 同步浏览器 autofill 填充的原生值到 Vue reactive form
+const syncFromNative = () => {
+  const inputs = document.querySelectorAll<HTMLInputElement>('.login-form input')
+  if (inputs[0]?.value) form.username = inputs[0].value
+  if (inputs[1]?.value) form.password = inputs[1].value
+}
+
 const handleLogin = async () => {
   if (!formRef.value) return
-  await formRef.value.validate(async valid => {
-    if (valid) {
-      loading.value = true
-      try {
-        await authStore.login(form)
-      } finally {
-        loading.value = false
-      }
-    }
-  })
+  syncFromNative()
+  try {
+    await formRef.value.validate()
+  } catch {
+    ElMessage.warning('请检查输入信息')
+    return
+  }
+  loading.value = true
+  try {
+    await authStore.login(form)
+  } catch {
+    // authStore.login 和 Axios 拦截器已处理错误提示
+  } finally {
+    loading.value = false
+  }
 }
 </script>
 
@@ -135,6 +148,7 @@ const handleLogin = async () => {
   position: absolute;
   inset: 0;
   z-index: 0;
+  pointer-events: none;
 }
 .bg-gradient {
   position: absolute;
