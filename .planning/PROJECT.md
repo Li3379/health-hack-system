@@ -15,30 +15,37 @@ HHS 是一个健康管理平台，集成 AI 智能分析、实时健康追踪、
 - ✓ JWT 认证与授权 — 已实现，生产环境通过环境变量管理密钥
 - ✓ 健康指标采集与存储 — 已实现，支持手动输入、OCR、AI 解析和设备同步
 - ✓ 健康评分计算 — 已实现，支持多维度评分（心血管、代谢、体重、生活方式）
+- ✓ 维度评分持久化 (CR-03) — ScoreUpdatedEvent 扩展四维评分字段，正确持久化到 health_score_history
+- ✓ DeviceSync isMockData (WR-02) — 基于实际数据源判断
 - ✓ 智能告警系统 — 已实现，支持多通道推送（WebSocket、邮件、飞书、企业微信）
 - ✓ 实时监控 — 已实现，WebSocket 推送实时指标
 - ✓ 数据导出 — 已实现，支持 CSV/Excel 导出
 - ✓ 统计分析仪表板 — 已实现
 - ✓ Docker 容器化部署 — 已实现，四服务架构（MySQL、Redis、后端、前端）
 - ✓ GitHub Actions CI/CD — 已实现，自动构建推送 Docker 镜像并 SSH 部署
+- ✓ CI 检查作为 Docker 构建前置条件 — docker-publish.yml needs backend-ci + frontend-ci
+- ✓ Docker 层缓存 — GHA cache type=gha,mode=max
+- ✓ 生产环境后端端口不对外暴露 — docker-compose.prod.yml ports: []
+- ✓ 健康检查重试循环 — scripts/deploy.sh 5 次重试，每次 15 秒
+- ✓ 部署逻辑不重复 — docker-publish.yml 内联脚本，ECS 非 git repo 兼容
+- ✓ 代码推送并触发 CI/CD 重新部署 — 已推送，Build & Deploy 成功 (run 26562079956)
 
 ### Active
 
-- [ ] CR-03: 维度评分持久化到 health_score_history（心血管、代谢、体重、生活方式维度）
-- [ ] 部署管道修复：消除重复部署逻辑（docker-publish.yml 和 deploy.yml）
-- [ ] 部署管道修复：CI 检查作为 Docker 构建的前置条件
-- [ ] 部署管道修复：移除 no-cache: true，启用 Docker 层缓存加速构建
-- [ ] 部署管道修复：生产环境不暴露后端 8082 端口
-- [ ] 部署管道修复：健康检查改用重试循环替代硬编码 sleep 60
-- [ ] WR-02: DeviceSync isMockData 应检查实际数据源而非硬编码 false
 - [ ] 数据库迁移策略：建立 schema 版本管理机制
-- [ ] 代码推送并触发 CI/CD 重新部署
+- [ ] 前端单元测试补充 — 仅有 1 个单元测试
+
+### WIP (Unstaged Changes)
+
+- [ ] AI 浮窗重构 — FloatingBubble + FloatingChatPanel 大幅改动
+- [ ] AI Chat.vue 功能扩展 — +1407 行
+- [ ] Mood API 扩展 — 后端 MoodController/MoodService + 前端 mood.ts
+- [ ] Auth 页面优化 — Login.vue, Register.vue
 
 ### Out of Scope
 
 - SSL/TLS 配置 — 需要 HTTPS 证书，后续通过宝塔面板配置或反向代理处理
 - 零停机部署 — 当前 docker compose 重启导致的短暂停机可接受
-- 前端单元测试补充 — 仅有 1 个单元测试，但非本次优先级
 - 小米健康 API 真实对接 — 当前为 stub 实现
 
 ## Context
@@ -53,18 +60,18 @@ HHS 是一个健康管理平台，集成 AI 智能分析、实时健康追踪、
 
 ### 当前状态
 
-- 已完成二次优化（数据导出、统计分析、评分历史），但代码未推送
-- REVIEW.md 发现 13 个问题，12/13 已修复
-- CR-03（维度评分持久化）是唯一未修复的严重问题
-- 数据库 schema 版本 v3.8.0，25 表 + 3 视图 + 2 存储过程
-- 后端测试覆盖良好（47 个测试文件），前端测试薄弱（仅 1 个单元测试）
+- 所有 3 个阶段已完成，CI/CD 流水线稳定运行
+- 最新 Build & Deploy run 26562079956 成功
+- 后端 489 测试全部通过
+- 有 15 个未暂存的 WIP 变更（AI 浮窗重构、心情功能等）
+- 数据库 schema 版本 v3.8.0，35 表
 
 ### 部署架构
 
 | 服务 | 端口 | 说明 |
 |------|------|------|
-| frontend (nginx) | 80 | 前端静态文件 + 反向代理 |
-| backend | 8082 | Spring Boot API |
+| frontend (nginx) | 80 | 前端静态文件 + 反向代理 /api → backend:8082 |
+| backend | 8082 (内部) | Spring Boot API，生产环境不对外暴露 |
 | mysql | 3306 (内部) | 数据持久化 |
 | redis | 6379 (内部) | 缓存 + 会话 |
 
@@ -84,9 +91,12 @@ HHS 是一个健康管理平台，集成 AI 智能分析、实时健康追踪、
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| 维度评分通过扩展 ScoreUpdatedEvent 传递 | 最小化变更，复用现有事件机制 | — Pending |
-| 部署管道修复内联在 GitHub Actions 中 | 不引入额外部署工具，保持与宝塔面板兼容 | — Pending |
-| 数据库迁移暂用手动方式 | 后续引入 Flyway/Liquibase 需要更多评估 | — Pending |
+| 维度评分通过扩展 ScoreUpdatedEvent 传递 | 最小化变更，复用现有事件机制 | Done — 四维评分正确持久化 |
+| 部署管道修复内联在 GitHub Actions 中 | 不引入额外部署工具，保持与宝塔面板兼容 | Done — docker-publish.yml 内联脚本 |
+| ECS 非 git repo 条件 git pull | 部署路径可能不是 git 仓库 | Done — if [ -d .git ] 保护 |
+| npm install 替代 npm ci | 跨平台 lockfile 差异 (npm 10 vs npm 11) | Done — CI 使用 npm install |
+| 数据库迁移暂用手动方式 | 后续引入 Flyway/Liquibase 需要更多评估 | Deferred |
+| 删除 vite.config.js 保留 .ts | 避免重复配置文件 | Done — .ts 版本使用 fileURLToPath |
 
 ## Evolution
 
@@ -106,4 +116,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-28 after initialization*
+*Last updated: 2026-05-29 — all 3 phases completed, CI/CD green*

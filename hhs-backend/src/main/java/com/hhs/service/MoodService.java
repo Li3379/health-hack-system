@@ -44,4 +44,12 @@ public interface MoodService {
      * @return Map containing avgMood, avgEnergy, avgStress, avgSleep, trend
      */
     Map<String, Object> getMoodInsights(Long userId);
+
+    /**
+     * Delete a mood entry by ID (only if owned by the user)
+     *
+     * @param userId  User ID
+     * @param entryId Entry ID
+     */
+    void deleteMoodEntry(Long userId, Long entryId);
 }

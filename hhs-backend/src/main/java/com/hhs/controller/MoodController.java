@@ -68,4 +68,14 @@ public class MoodController {
         Map<String, Object> insights = moodService.getMoodInsights(userId);
         return Result.success(insights);
     }
+
+    @Operation(summary = "删除心情记录")
+    @DeleteMapping("/entries/{id}")
+    @PreAuthorize("isAuthenticated()")
+    public Result<Void> deleteMoodEntry(@PathVariable Long id) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        log.info("Delete mood entry request: userId={}, entryId={}", userId, id);
+        moodService.deleteMoodEntry(userId, id);
+        return Result.success(null);
+    }
 }

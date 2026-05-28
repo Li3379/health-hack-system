@@ -36,17 +36,17 @@
         </div>
 
         <!-- Form -->
-        <el-form ref="formRef" :model="form" :rules="rules" label-width="0" size="large" class="login-form" @submit.prevent>
+        <el-form ref="formRef" :model="form" :rules="rules" label-width="0" size="large" class="login-form" @submit.prevent="handleLogin">
           <el-form-item prop="username">
             <el-input v-model="form.username" placeholder="请输入用户名" :prefix-icon="User" @change="syncFromNative" />
           </el-form-item>
 
           <el-form-item prop="password">
-            <el-input v-model="form.password" type="password" placeholder="请输入密码" :prefix-icon="Lock" show-password @keyup.enter="handleLogin" @change="syncFromNative" />
+            <el-input v-model="form.password" type="password" placeholder="请输入密码" :prefix-icon="Lock" show-password @change="syncFromNative" />
           </el-form-item>
 
           <el-form-item>
-            <el-button type="primary" :loading="loading" class="login-btn" @click="handleLogin">
+            <el-button type="primary" native-type="submit" :loading="loading" class="login-btn">
               <span v-if="!loading">登 录</span>
               <span v-else>登录中...</span>
             </el-button>

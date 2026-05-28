@@ -158,4 +158,15 @@ public class MoodServiceImpl implements MoodService {
         }
         return "stable";
     }
+
+    @Override
+    @Transactional(timeout = 30)
+    public void deleteMoodEntry(Long userId, Long entryId) {
+        MoodEntry entry = moodEntryMapper.selectById(entryId);
+        if (entry == null || !entry.getUserId().equals(userId)) {
+            throw new IllegalArgumentException("心情记录不存在或无权删除");
+        }
+        moodEntryMapper.deleteById(entryId);
+        log.info("Mood entry deleted: id={}, userId={}", entryId, userId);
+    }
 }

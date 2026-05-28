@@ -45,6 +45,7 @@
           label-width="0"
           size="large"
           class="register-form"
+          @submit.prevent="handleRegister"
         >
           <el-form-item prop="username">
             <el-input
@@ -89,9 +90,9 @@
           <el-form-item>
             <el-button
               type="primary"
+              native-type="submit"
               :loading="loading"
               class="register-button"
-              @click="handleRegister"
             >
               <span v-if="!loading">立即注册</span>
               <span v-else>注册中...</span>

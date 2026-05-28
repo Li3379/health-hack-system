@@ -18,27 +18,27 @@ export interface CreateMoodRequest {
   stressLevel?: number
   sleepQuality?: number
   notes?: string
+  entryDate?: string
 }
 
 export interface MoodInsights {
-  avgMoodScore: number
-  avgEnergyLevel: number
-  avgStressLevel: number
-  avgSleepQuality: number
-  totalEntries: number
+  avgMood: number | null
+  avgEnergy: number | null
+  avgStress: number | null
+  avgSleep: number | null
+  entryCount: number
   trend: string
-  recentEntries: MoodEntry[]
 }
 
 export const moodApi = {
   /** Record a new mood entry */
   create(data: CreateMoodRequest) {
-    return request.post<MoodEntry>('/api/mood', data)
+    return request.post<MoodEntry>('/api/mood/entries', data)
   },
 
   /** List mood entries with optional date range */
   list(params?: { startDate?: string; endDate?: string }) {
-    return request.get<MoodEntry[]>('/api/mood', { params })
+    return request.get<MoodEntry[]>('/api/mood/history', { params })
   },
 
   /** Get mood insights and averages */
@@ -48,6 +48,6 @@ export const moodApi = {
 
   /** Delete a mood entry */
   remove(id: number) {
-    return request.delete<void>(`/api/mood/${id}`)
+    return request.delete<void>(`/api/mood/entries/${id}`)
   }
 }
