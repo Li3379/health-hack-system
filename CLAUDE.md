@@ -93,11 +93,11 @@ Services: MySQL (port 3307 in dev), Redis (port 6380 in dev), backend (8082), fr
 - **service/domain/** — Stateless domain logic (scoring, validation, risk analysis). No Spring annotations, pure logic.
 - **service/alert/** — Intelligent alert subsystem: deduplication, trend prediction, AI analysis, frequency strategy, recovery notification.
 - **service/push/** — Multi-channel push system. `PushChannel` interface with implementations in `push/channel/`: WebSocket, Email, Feishu, WeCom.
-- **entity/** — MyBatis-Plus entity classes (23 tables).
+- **entity/** — MyBatis-Plus entity classes (35 tables).
 - **mapper/** — MyBatis-Plus mapper interfaces.
 - **dto/** — Request/response DTOs and VOs.
 - **domain/event/** — Spring application events: `AlertGeneratedEvent`, `MetricRecordedEvent`, `OcrProcessingEvent`, `ScoreUpdatedEvent`.
-- **domain/handler/** — Event listeners for cache invalidation, alert processing, OCR pipeline.
+- **domain/handler/** — Event listeners: `AlertEventListener`, `CacheInvalidationListener`, `GamificationEventListener`, `OcrEventListener`, `ScoreUpdatedEventListener`.
 - **config/** — Spring configuration classes.
 - **security/** — JWT auth filter, `JwtUtil`, `SecurityUtils`, `UserDetailsServiceImpl`.
 - **exception/** — `BusinessException` (expected errors with `ErrorCode`), `SystemException` (transient errors), `GlobalExceptionHandler`.
@@ -107,7 +107,7 @@ Services: MySQL (port 3307 in dev), Redis (port 6380 in dev), backend (8082), fr
 ### Key Backend Patterns
 
 - **Service Interface + Impl**: All services follow `FooService` (interface) + `FooServiceImpl` (implementation). The impl classes live in `service/impl/`.
-- **Domain services** (`service/domain/`): Pure logic classes like `ScoreCalculator`, `RiskScorer`, `MetricValidator`, `ThresholdEvaluator`. These are stateless and testable without Spring context.
+- **Domain services** (`service/domain/`): Pure logic classes like `ScoreCalculator`, `DimensionScoreCalculator`, `RiskScorer`, `MetricValidator`, `ThresholdEvaluator`. These are stateless and testable without Spring context.
 - **Error handling**: Throw `BusinessException(ErrorCode.XXX)` for expected errors. `GlobalExceptionHandler` translates to HTTP responses with i18n support (Chinese default, English via `Accept-Language: en`).
 - **Response wrapper**: All API responses use `Result<T>` with `code: 200` for success. Frontend Axios interceptor checks `code === 200`.
 - **MyBatis-Plus**: Entities use `@TableName`, `@TableId`, `@TableField` annotations. Mappers extend `BaseMapper<T>`. No XML mappers for simple CRUD.
@@ -119,7 +119,7 @@ Services: MySQL (port 3307 in dev), Redis (port 6380 in dev), backend (8082), fr
 
 - **api/** — API modules matching backend controllers 1:1. Use `request` from `@/utils/request.ts`.
 - **stores/** — Pinia stores: `auth`, `ai`, `alert`, `floatingAi`, `push`, `realtime`, `theme`, `wellness`.
-- **views/** — Page components organized by domain: `dashboard/`, `health/`, `ai/`, `data-input/`, `prevention/`, `screening/`, `realtime/`, `wellness/`, `user/`, `settings/`, `auth/`, `oauth/`.
+- **views/** — Page components organized by domain: `dashboard/`, `health/`, `ai/`, `data-input/`, `prevention/`, `screening/`, `realtime/`, `wellness/`, `user/`, `settings/`, `auth/`, `oauth/`, `goals/`, `mood/`, `reminders/`.
 - **components/** — Shared components: `ai-floating-ball/` (floating AI chat), `device/`, `layout/`, `HealthScoreCircle.vue`.
 - **composables/** — Vue composables: `useDraggable`, `useTilt3D`, `useWebGLBall`.
 - **types/** — TypeScript types: `api.ts` (all API types), `platform.ts`.
@@ -135,7 +135,7 @@ Services: MySQL (port 3307 in dev), Redis (port 6380 in dev), backend (8082), fr
 
 ### Database
 
-- MySQL 8.0+ with 25 tables defined in `hhs-backend/src/main/resources/sql/schema.sql`.
+- MySQL 8.0+ with 35 tables defined in `hhs-backend/src/main/resources/sql/schema.sql`.
 - Single schema file for initialization. Run: `mysql -u root -p hhs < src/main/resources/sql/schema.sql`.
 - MyBatis-Plus handles camelCase to underscore mapping automatically.
 
@@ -159,6 +159,8 @@ Services: MySQL (port 3307 in dev), Redis (port 6380 in dev), backend (8082), fr
 
 - **Backend CI** (`.github/workflows/backend-ci.yml`): 2-job pipeline. Job 1: `mvn clean verify -DskipITs`. Job 2: integration tests with Testcontainers (needs Docker).
 - **Frontend CI** (`.github/workflows/frontend-ci.yml`): Single job: `npm ci` → `npm run build` → `npm run lint:check` → `npm run test:run`.
+- **Docker Publish** (`.github/workflows/docker-publish.yml`): Builds and pushes Docker images to registry.
+- **Deploy** (`.github/workflows/deploy.yml`): Auto-deploy to production server via SSH.
 - Both CI workflows trigger on pushes to any branch that modify their respective directories.
 
 ### Testing

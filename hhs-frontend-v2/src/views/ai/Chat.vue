@@ -104,7 +104,7 @@
             </div>
           </div>
 
-          <!-- Health Insights (Placeholder) -->
+          <!-- Health Insights -->
           <div class="health-insights">
             <div class="insight-header">
               <el-icon color="var(--color-primary)"><TrendCharts /></el-icon>
@@ -114,20 +114,23 @@
               <div class="insight-card">
                 <el-icon :size="20" color="var(--color-success)"><Sunrise /></el-icon>
                 <span class="insight-label">今日血压</span>
-                <span class="insight-value insight-placeholder">暂无数据</span>
+                <span v-if="bloodPressure" class="insight-value">{{ bloodPressure.systolic }}/{{ bloodPressure.diastolic }} mmHg</span>
+                <span v-else class="insight-value insight-placeholder">暂无数据</span>
               </div>
               <div class="insight-card">
                 <el-icon :size="20" color="var(--color-warning)"><Odometer /></el-icon>
                 <span class="insight-label">血糖水平</span>
-                <span class="insight-value insight-placeholder">暂无数据</span>
+                <span v-if="bloodGlucose !== null" class="insight-value">{{ bloodGlucose }} mmol/L</span>
+                <span v-else class="insight-value insight-placeholder">暂无数据</span>
               </div>
               <div class="insight-card">
                 <el-icon :size="20" color="var(--color-danger)"><Sunset /></el-icon>
                 <span class="insight-label">心率</span>
-                <span class="insight-value insight-placeholder">暂无数据</span>
+                <span v-if="heartRate !== null" class="insight-value">{{ heartRate }} 次/分</span>
+                <span v-else class="insight-value insight-placeholder">暂无数据</span>
               </div>
             </div>
-            <p class="insight-hint">添加健康数据后，这里将展示您的实时指标，帮助 AI 提供更精准的建议</p>
+            <p v-if="!bloodPressure && bloodGlucose === null && heartRate === null" class="insight-hint">添加健康数据后，这里将展示您的实时指标，帮助 AI 提供更精准的建议</p>
           </div>
         </div>
 
@@ -304,8 +307,10 @@ import {
   Lightning
 } from '@element-plus/icons-vue'
 import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 import { useAuthStore } from '@/stores/auth'
 import { useAiStore } from '@/stores/ai'
+import { healthApi } from '@/api/health'
 import { formatDateTime, formatRelativeTime } from '@/utils/format'
 import type { ConversationVO } from '@/types/api'
 
@@ -327,6 +332,11 @@ const historyConversations = ref<ConversationVO[]>([])
 const sidebarCollapsed = ref(false)
 const isRecording = ref(false)
 const attachmentPreview = ref<string | null>(null)
+
+// Health insights data
+const bloodPressure = ref<{ systolic: number; diastolic: number } | null>(null)
+const bloodGlucose = ref<number | null>(null)
+const heartRate = ref<number | null>(null)
 
 // Quick suggestions for empty state
 const quickSuggestions = computed(() => [
@@ -367,7 +377,8 @@ const quickSuggestions = computed(() => [
 // Methods
 const renderMarkdown = (content: string): string => {
   try {
-    return marked.parse(content) as string
+    const raw = marked.parse(content) as string
+    return DOMPurify.sanitize(raw)
   } catch {
     return content
   }
@@ -453,10 +464,40 @@ const handleFileUpload = () => {
   attachmentPreview.value = '体检报告.pdf'
 }
 
+const fetchHealthInsights = async () => {
+  try {
+    const today = new Date().toISOString().split('T')[0]
+    const res = await healthApi.getMetrics({ page: 1, size: 100, startDate: today })
+    const metrics = res.data?.records ?? []
+
+    // Get latest blood pressure (systolic/diastolic)
+    const systolic = metrics.find(m => m.metricKey === 'systolicBP')
+    const diastolic = metrics.find(m => m.metricKey === 'diastolicBP')
+    if (systolic && diastolic) {
+      bloodPressure.value = { systolic: systolic.value, diastolic: diastolic.value }
+    }
+
+    // Get latest blood glucose
+    const glucose = metrics.find(m => m.metricKey === 'glucose')
+    if (glucose) {
+      bloodGlucose.value = glucose.value
+    }
+
+    // Get latest heart rate
+    const hr = metrics.find(m => m.metricKey === 'heartRate')
+    if (hr) {
+      heartRate.value = hr.value
+    }
+  } catch {
+    // keep null values
+  }
+}
+
 onMounted(async () => {
   await aiStore.loadSessions()
   aiStore.createNewSession()
   await aiStore.fetchRemainingCount()
+  await fetchHealthInsights()
 })
 </script>
 

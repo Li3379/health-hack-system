@@ -3,6 +3,8 @@ package com.hhs.vo;
 import lombok.Builder;
 import lombok.Data;
 
+import java.time.LocalDateTime;
+
 @Data
 @Builder
 public class UserVO {
@@ -18,4 +20,8 @@ public class UserVO {
     private String email;
 
     private String phone;
+
+    private LocalDateTime createdAt;
+
+    private LocalDateTime updatedAt;
 }

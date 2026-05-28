@@ -212,6 +212,8 @@ public class UserServiceImpl implements UserService {
                 .avatar(user.getAvatar())
                 .email(user.getEmail())
                 .phone(user.getPhone())
+                .createdAt(user.getCreateTime())
+                .updatedAt(user.getUpdateTime())
                 .build();
     }
 }

@@ -46,7 +46,7 @@
         <el-row :gutter="20">
           <el-col :xs="24" :md="12">
             <el-form-item label="身高(cm)" prop="heightCm">
-              <el-input-number v-model="form.heightCm" :min="50" :max="300" style="width: 100%" />
+              <el-input-number v-model="form.heightCm" :min="50" :max="300" :disabled="!editing" style="width: 100%" />
             </el-form-item>
           </el-col>
           <el-col :xs="24" :md="12">
@@ -56,6 +56,7 @@
                 :min="20"
                 :max="500"
                 :precision="1"
+                :disabled="!editing"
                 style="width: 100%"
               />
             </el-form-item>
