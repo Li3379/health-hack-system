@@ -129,6 +129,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { CircleCheck, Warning } from '@element-plus/icons-vue'
 import { useAlertStore } from '@/stores/alert'
 import { alertApi } from '@/api/alert'
 import {
@@ -248,44 +249,42 @@ onMounted(() => {
 
 <style scoped>
 .alerts-page {
-  padding: 20px;
+  padding: 32px;
+  max-width: var(--content-max-width);
+  margin: 0 auto;
 }
-
 .header-actions {
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
-
 .stats-row {
-  margin-bottom: 20px;
-  padding: 20px 0;
-  border-bottom: 1px solid #ebeef5;
+  margin-bottom: 24px;
+  padding: 24px 0;
+  border-bottom: 1px solid var(--border);
 }
-
-.stat-item {
-  text-align: center;
-}
-
+.stat-item { text-align: center; }
 .stat-value {
-  font-size: 32px;
-  font-weight: bold;
-  color: #409eff;
-  margin-bottom: 8px;
+  font: 700 36px/1.2 var(--font-ui);
+  color: var(--accent-cool);
+  letter-spacing: -0.02em;
+  margin-bottom: 6px;
 }
-
 .stat-label {
-  font-size: 14px;
-  color: #909399;
+  font: 400 13px/1 var(--font-ui);
+  color: var(--text-3);
 }
-
 .filter-bar {
-  margin-bottom: 20px;
+  margin-bottom: 24px;
+  padding: 20px;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
 }
-
 .pagination {
-  margin-top: 20px;
+  margin-top: 24px;
   display: flex;
   justify-content: flex-end;
 }
+@media (max-width: 768px) { .alerts-page { padding: 20px; } }
 </style>

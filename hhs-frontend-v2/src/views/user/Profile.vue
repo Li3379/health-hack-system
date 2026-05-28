@@ -146,6 +146,7 @@ import {
   type FormRules,
   type UploadRequestOptions
 } from 'element-plus'
+import { Upload } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { userApi } from '@/api/user'
 import { formatDateTime } from '@/utils/format'

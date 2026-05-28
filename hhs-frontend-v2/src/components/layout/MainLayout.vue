@@ -2,7 +2,6 @@
   <el-container class="main-layout">
     <!-- Sidebar -->
     <el-aside :width="sidebarWidth" class="sidebar">
-      <!-- Logo -->
       <div class="logo">
         <div class="logo-icon">
           <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -22,7 +21,6 @@
         <span v-show="!collapsed" class="logo-text">HHS</span>
       </div>
 
-      <!-- Navigation Menu -->
       <el-scrollbar class="menu-scrollbar">
         <el-menu
           :default-active="activeMenu"
@@ -44,11 +42,7 @@
             <el-menu-item index="/health/metrics">健康指标</el-menu-item>
             <el-menu-item index="/health/alerts">
               <span>健康预警</span>
-              <el-badge
-                v-if="alertStore.unreadCount > 0"
-                :value="alertStore.unreadCount"
-                class="menu-badge"
-              />
+              <el-badge v-if="alertStore.unreadCount > 0" :value="alertStore.unreadCount" class="menu-badge" />
             </el-menu-item>
             <el-menu-item index="/health/thresholds">阈值设置</el-menu-item>
             <el-menu-item index="/health/score">健康评分</el-menu-item>
@@ -94,7 +88,6 @@
         </el-menu>
       </el-scrollbar>
 
-      <!-- Collapse Toggle -->
       <div class="sidebar-footer">
         <button class="collapse-btn" @click="toggleCollapse">
           <el-icon :size="18">
@@ -117,29 +110,32 @@
         </div>
 
         <div class="header-right">
-          <!-- Theme Toggle -->
-          <el-tooltip
-            :content="themeStore.effectiveTheme === 'dark' ? '切换到亮色模式' : '切换到暗色模式'"
-            placement="bottom"
-          >
-            <button class="theme-toggle" @click="themeStore.toggleTheme()">
-              <el-icon :size="20">
-                <Sunny v-if="themeStore.effectiveTheme === 'dark'" />
+          <el-dropdown trigger="click" @command="handleThemeChange">
+            <button class="theme-toggle">
+              <el-icon :size="18">
+                <Sunny v-if="themeStore.effectiveTheme === 'light'" />
                 <Moon v-else />
               </el-icon>
             </button>
-          </el-tooltip>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="light" :class="{ 'is-active': themeStore.effectiveTheme === 'light' }">
+                  <el-icon><Sunny /></el-icon>浅色模式
+                </el-dropdown-item>
+                <el-dropdown-item command="dark" :class="{ 'is-active': themeStore.effectiveTheme === 'dark' }">
+                  <el-icon><Moon /></el-icon>深色模式
+                </el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
 
-          <!-- User Dropdown -->
           <el-dropdown trigger="click" @command="handleCommand">
             <div class="user-info">
-              <el-avatar :src="authStore.user?.avatar" :size="36" class="user-avatar">
+              <el-avatar :src="authStore.user?.avatar" :size="32" class="user-avatar">
                 {{ authStore.user?.nickname?.[0] || authStore.user?.username?.[0] }}
               </el-avatar>
               <div class="user-details">
-                <span class="username">
-                  {{ authStore.user?.nickname || authStore.user?.username }}
-                </span>
+                <span class="username">{{ authStore.user?.nickname || authStore.user?.username }}</span>
                 <span class="user-role">健康用户</span>
               </div>
               <el-icon class="dropdown-arrow"><ArrowDown /></el-icon>
@@ -147,16 +143,13 @@
             <template #dropdown>
               <el-dropdown-menu>
                 <el-dropdown-item command="profile">
-                  <el-icon><User /></el-icon>
-                  个人中心
+                  <el-icon><User /></el-icon>个人中心
                 </el-dropdown-item>
                 <el-dropdown-item command="push-settings">
-                  <el-icon><Bell /></el-icon>
-                  推送设置
+                  <el-icon><Bell /></el-icon>推送设置
                 </el-dropdown-item>
                 <el-dropdown-item command="logout" divided>
-                  <el-icon><SwitchButton /></el-icon>
-                  退出登录
+                  <el-icon><SwitchButton /></el-icon>退出登录
                 </el-dropdown-item>
               </el-dropdown-menu>
             </template>
@@ -183,6 +176,11 @@ import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useAlertStore } from '@/stores/alert'
 import { useThemeStore } from '@/stores/theme'
+import {
+  HomeFilled, DataLine, Upload, ChatDotRound, Sunny, Document,
+  Files, Fold, Expand, ArrowDown, User, Bell, SwitchButton, Moon
+} from '@element-plus/icons-vue'
+import type { Theme } from '@/stores/theme'
 import AiFloatingBall from '@/components/ai-floating-ball/AiFloatingBall.vue'
 
 const route = useRoute()
@@ -193,12 +191,9 @@ const themeStore = useThemeStore()
 
 const collapsed = ref(false)
 const sidebarWidth = computed(() => (collapsed.value ? '64px' : '240px'))
-
 const activeMenu = computed(() => route.path)
 
-const toggleCollapse = () => {
-  collapsed.value = !collapsed.value
-}
+const toggleCollapse = () => { collapsed.value = !collapsed.value }
 
 const pageTitle = computed(() => {
   const titles: Record<string, string> = {
@@ -222,13 +217,13 @@ const pageTitle = computed(() => {
 })
 
 const handleCommand = (command: string) => {
-  if (command === 'profile') {
-    router.push('/user/profile')
-  } else if (command === 'push-settings') {
-    router.push('/user/push-settings')
-  } else if (command === 'logout') {
-    authStore.logout()
-  }
+  if (command === 'profile') router.push('/user/profile')
+  else if (command === 'push-settings') router.push('/user/push-settings')
+  else if (command === 'logout') authStore.logout()
+}
+
+const handleThemeChange = (theme: Theme) => {
+  themeStore.setTheme(theme)
 }
 </script>
 
@@ -238,131 +233,136 @@ const handleCommand = (command: string) => {
   overflow: hidden;
 }
 
-/* Sidebar Styles */
+/* Sidebar - Dark Editorial */
 .sidebar {
-  background: var(--color-sidebar-bg);
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
   display: flex;
   flex-direction: column;
-  transition: width var(--transition-base);
+  transition: width 0.3s var(--ease);
   overflow: hidden;
-  border-right: 1px solid rgba(255, 255, 255, 0.05);
+  border-right: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-md);
 }
 
 .logo {
-  height: var(--header-height);
+  height: 64px;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 12px;
   padding: 0 16px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid var(--glass-border);
+  background: var(--glass-bg);
 }
-
 .logo-icon {
   width: 32px;
   height: 32px;
-  color: var(--color-primary-light);
+  color: var(--accent-cool);
   flex-shrink: 0;
 }
-
 .logo-text {
-  font-size: 20px;
-  font-weight: var(--font-weight-bold);
-  color: var(--color-sidebar-text-active);
-  white-space: nowrap;
-  overflow: hidden;
+  font: 600 18px/1 var(--font-ui);
+  color: var(--text-1);
+  letter-spacing: -0.01em;
 }
 
-.menu-scrollbar {
-  flex: 1;
-  overflow: hidden;
-}
+.menu-scrollbar { flex: 1; overflow: hidden; }
 
 .sidebar-menu {
   border-right: none;
   background: transparent;
 }
-
 .sidebar-menu :deep(.el-menu-item),
 .sidebar-menu :deep(.el-sub-menu__title) {
-  color: var(--color-sidebar-text);
-  height: 48px;
-  line-height: 48px;
-  margin: 4px 8px;
+  color: var(--text-3);
+  height: 44px;
+  line-height: 44px;
+  margin: 2px 8px;
   border-radius: var(--radius-md);
-  transition: var(--transition-colors);
+  font: 400 14px/1 var(--font-ui);
+  transition: all var(--dur-spring-fast) var(--ease-spring-soft);
 }
-
 .sidebar-menu :deep(.el-menu-item:hover),
 .sidebar-menu :deep(.el-sub-menu__title:hover) {
-  background: var(--color-sidebar-hover);
+  background: var(--surface-hover);
+  color: var(--text-1);
+  transform: translateX(4px);
 }
-
 .sidebar-menu :deep(.el-menu-item.is-active) {
-  background: var(--color-primary) !important;
-  color: var(--color-sidebar-text-active) !important;
+  background: var(--accent-cool-soft) !important;
+  color: var(--accent-cool) !important;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 2px 8px rgba(var(--accent-cool-rgb), 0.2);
 }
-
 .sidebar-menu :deep(.el-sub-menu.is-active > .el-sub-menu__title) {
-  color: var(--color-primary-lightest);
+  color: var(--accent-cool);
 }
-
 .sidebar-menu :deep(.el-menu) {
   background: transparent;
 }
-
 .sidebar-menu :deep(.el-menu--inline .el-menu-item) {
   padding-left: 52px !important;
-  height: 40px;
-  line-height: 40px;
+  height: 38px;
+  line-height: 38px;
 }
-
-.menu-badge {
-  margin-left: 8px;
-}
+.menu-badge { margin-left: 8px; }
 
 .sidebar-footer {
   padding: 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  border-top: 1px solid var(--glass-border);
+  background: var(--glass-bg);
 }
-
 .collapse-btn {
   width: 100%;
-  height: 40px;
+  height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--color-sidebar-hover);
-  border: none;
+  background: var(--surface-2);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius-md);
-  color: var(--color-sidebar-text);
+  color: var(--text-3);
   cursor: pointer;
-  transition: var(--transition-colors);
+  transition: all var(--dur-spring-fast) var(--ease-spring-soft);
 }
-
 .collapse-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: var(--color-sidebar-text-active);
+  background: var(--surface-hover);
+  color: var(--text-1);
+  border-color: var(--glass-border-strong);
+  transform: scale(1.02);
+}
+.collapse-btn:active {
+  transform: scale(0.98);
 }
 
 /* Main Container */
 .main-container {
   display: flex;
   flex-direction: column;
-  background: var(--color-bg-secondary);
+  background: var(--bg);
   overflow: hidden;
+  position: relative;
 }
 
-/* Header Styles */
+/* Header */
 .header {
-  height: var(--header-height);
-  background: var(--color-bg-primary);
-  border-bottom: 1px solid var(--color-border);
+  height: 64px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  border-bottom: 1px solid var(--glass-border);
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 24px;
-  box-shadow: var(--shadow-xs);
+  position: relative;
+  z-index: 10;
+  box-shadow: var(--shadow-sm);
 }
 
 .header-left {
@@ -370,98 +370,99 @@ const handleCommand = (command: string) => {
   align-items: center;
   gap: 16px;
 }
-
 .mobile-menu-btn {
   display: none;
   padding: 8px;
   background: transparent;
   border: none;
   border-radius: var(--radius-md);
-  color: var(--color-text-secondary);
+  color: var(--text-3);
   cursor: pointer;
-  transition: var(--transition-colors);
+  transition: all var(--dur-fast) var(--ease);
 }
-
 .mobile-menu-btn:hover {
-  background: var(--color-bg-tertiary);
-  color: var(--color-text-primary);
+  background: var(--surface-hover);
+  color: var(--text-1);
 }
-
 .page-title {
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text-primary);
-  margin: 0;
+  font: 600 16px/1 var(--font-ui);
+  color: var(--text-1);
+  letter-spacing: -0.01em;
 }
 
 .header-right {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
 }
 
+/* Theme Toggle */
 .theme-toggle {
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--color-bg-tertiary);
-  border: none;
+  background: var(--glass-bg);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius-full);
-  color: var(--color-text-secondary);
+  color: var(--text-3);
   cursor: pointer;
-  transition: var(--transition-colors), var(--transition-transform);
+  transition: all var(--dur-spring-fast) var(--ease-spring-soft);
 }
-
 .theme-toggle:hover {
-  background: var(--color-primary);
-  color: var(--color-text-inverse);
-  transform: rotate(15deg);
+  background: var(--glass-bg-hover);
+  color: var(--text-1);
+  border-color: var(--glass-border-strong);
+  transform: rotate(15deg) scale(1.1);
+}
+.theme-toggle:active {
+  transform: rotate(15deg) scale(0.95);
 }
 
+/* User Info */
 .user-info {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 6px 12px 6px 6px;
+  gap: 10px;
+  padding: 4px 12px 4px 4px;
   border-radius: var(--radius-full);
   cursor: pointer;
-  transition: var(--transition-colors);
+  transition: all var(--dur-spring-fast) var(--ease-spring-soft);
 }
-
 .user-info:hover {
-  background: var(--color-bg-tertiary);
+  background: var(--surface-hover);
+  transform: translateY(-2px);
 }
-
+.user-info:active {
+  transform: translateY(0) scale(0.98);
+}
 .user-avatar {
-  background: var(--color-primary);
-  color: var(--color-text-inverse);
-  font-weight: var(--font-weight-semibold);
+  background: var(--surface-3);
+  color: var(--text-2);
+  font-weight: 600;
+  font-size: 13px;
 }
-
 .user-details {
   display: flex;
   flex-direction: column;
-  line-height: 1.2;
+  line-height: 1.3;
 }
-
 .username {
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-  color: var(--color-text-primary);
+  font: 500 13px/1 var(--font-ui);
+  color: var(--text-1);
 }
-
 .user-role {
-  font-size: var(--font-size-xs);
-  color: var(--color-text-tertiary);
+  font: 400 11px/1 var(--font-mono);
+  color: var(--text-4);
+  letter-spacing: 0.04em;
 }
-
 .dropdown-arrow {
-  color: var(--color-text-tertiary);
-  transition: var(--transition-transform);
+  color: var(--text-4);
+  transition: transform var(--dur-fast) var(--ease);
 }
-
 .user-info:hover .dropdown-arrow {
   transform: translateY(2px);
 }
@@ -471,25 +472,25 @@ const handleCommand = (command: string) => {
   flex: 1;
   overflow-y: auto;
   padding: 0;
-  background: var(--color-bg-secondary);
+  background: var(--bg);
 }
 
 /* Page Transitions */
-.fade-slide-enter-active,
-.fade-slide-leave-active {
-  transition:
-    opacity 0.2s ease,
-    transform 0.2s ease;
+.fade-slide-enter-active {
+  transition: opacity var(--dur-slow) var(--ease-cinema),
+              transform var(--dur-slow) var(--ease-cinema);
 }
-
+.fade-slide-leave-active {
+  transition: opacity var(--dur-fast) var(--ease),
+              transform var(--dur-fast) var(--ease);
+}
 .fade-slide-enter-from {
   opacity: 0;
-  transform: translateY(10px);
+  transform: translateY(12px);
 }
-
 .fade-slide-leave-to {
   opacity: 0;
-  transform: translateY(-10px);
+  transform: translateY(-6px);
 }
 
 /* Responsive */
@@ -499,20 +500,11 @@ const handleCommand = (command: string) => {
     left: 0;
     top: 0;
     bottom: 0;
-    z-index: var(--z-fixed);
-    transform: translateX(collapsed.value ? '-100%': '0');
+    z-index: 1030;
+    transform: translateX(-100%);
   }
-
-  .mobile-menu-btn {
-    display: flex;
-  }
-
-  .user-details {
-    display: none;
-  }
-
-  .header {
-    padding: 0 16px;
-  }
+  .mobile-menu-btn { display: flex; }
+  .user-details { display: none; }
+  .header { padding: 0 16px; }
 }
 </style>

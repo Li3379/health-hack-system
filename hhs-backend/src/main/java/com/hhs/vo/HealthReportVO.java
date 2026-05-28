@@ -27,7 +27,10 @@ public record HealthReportVO(
     List<ImprovementSuggestion> suggestions,
 
     // 总结
-    String summary
+    String summary,
+
+    // 是否为预估数据（AI解析失败时使用fallback值）
+    boolean isEstimated
 ) {
     public record UserInfo(
         String gender,

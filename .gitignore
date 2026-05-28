@@ -120,12 +120,13 @@ out/
 nul
 
 # ====================
-# Claude Code
+# Claude Code & Tools
 # ====================
 .claude/
-# Development planning files
-.planning/
-CLAUDE.md
 .superpowers/
+.codegraph/
+.cursor/
+.omc/
+.playwright-mcp/
 docs/package-lock.json
 docs/superpowers/

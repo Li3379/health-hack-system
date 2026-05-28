@@ -10,7 +10,22 @@
     </div>
 
     <!-- 摘要卡片 -->
-    <el-row v-loading="wellnessStore.loading" :gutter="20" class="summary-row">
+    <el-skeleton :loading="wellnessStore.loading" animated>
+      <template #template>
+        <el-row :gutter="20" class="summary-row">
+          <el-col v-for="n in 6" :key="n" :xs="12" :sm="8" :md="4" :lg="3">
+            <el-card class="metric-card" shadow="hover">
+              <div style="text-align: center;">
+                <el-skeleton-item variant="circle" style="width: 48px; height: 48px; margin: 0 auto 12px;" />
+                <el-skeleton-item variant="text" style="width: 60px; height: 28px; margin: 0 auto 4px;" />
+                <el-skeleton-item variant="text" style="width: 80px; height: 14px; margin: 0 auto;" />
+              </div>
+            </el-card>
+          </el-col>
+        </el-row>
+      </template>
+      <template #default>
+    <el-row :gutter="20" class="summary-row">
       <el-col
         v-for="metric in summaryMetrics"
         :key="metric.metricKey"
@@ -34,8 +49,29 @@
             class="metric-trend"
             :class="{ positive: metric.trend > 0, negative: metric.trend < 0 }"
           >
-            <el-icon><component :is="metric.trend > 0 ? 'Top' : 'Bottom'" /></el-icon>
+            <el-icon><Top v-if="metric.trend > 0" /><Bottom v-else /></el-icon>
             {{ Math.abs(metric.trend).toFixed(1) }}%
+          </div>
+        </el-card>
+      </el-col>
+    </el-row>
+      </template>
+    </el-skeleton>
+
+
+    <!-- 活动环 -->
+    <el-row :gutter="20" class="activity-row">
+      <el-col :xs="24" :sm="12" :md="8" :lg="6">
+        <el-card class="activity-card" shadow="hover">
+          <template #header>
+            <span>今日活动概览</span>
+          </template>
+          <div class="activity-body">
+            <ActivityRings
+              :exercise-percent="exercisePercent"
+              :sleep-percent="sleepPercent"
+              :habits-percent="habitsPercent"
+            />
           </div>
         </el-card>
       </el-col>
@@ -154,20 +190,97 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
-import * as echarts from 'echarts'
+import { ref, reactive, computed, onMounted, nextTick } from 'vue'
+import {
+  Plus, Moon, Star, Aim, Timer, Coffee, Sunny, Lightning,
+  DataLine, Top, Bottom
+} from '@element-plus/icons-vue'
+import * as echarts from 'echarts/core'
+import { LineChart } from 'echarts/charts'
+import { TooltipComponent, GridComponent } from 'echarts/components'
+import { CanvasRenderer } from 'echarts/renderers'
+
+echarts.use([LineChart, TooltipComponent, GridComponent, CanvasRenderer])
 import { useWellnessStore } from '@/stores/wellness'
 import { WELLNESS_METRICS, getWellnessMetricColor, getWellnessMetricIcon } from '@/utils/format'
+import { useECharts } from '@/composables/useECharts'
+import ActivityRings from '@/components/ActivityRings.vue'
 import type { FormInstance, FormRules } from 'element-plus'
+import type { EChartsCoreOption } from 'echarts/core'
 import dayjs from 'dayjs'
+
+const wellnessIconMap: Record<string, any> = {
+  Moon, Star, Aim, Timer, Coffee, Sunny, Lightning, DataLine
+}
 
 const wellnessStore = useWellnessStore()
 
-// Chart refs
+// Chart refs and data
 const sleepChartRef = ref<HTMLElement>()
 const activityChartRef = ref<HTMLElement>()
-let sleepChartInstance: echarts.ECharts | null = null
-let activityChartInstance: echarts.ECharts | null = null
+let sleepTrendData: any = null
+let sleepColor = ''
+let activityTrendData: any = null
+let activityColor = ''
+
+const buildSleepOption = (): EChartsCoreOption => {
+  if (!sleepTrendData) return {}
+  return {
+    tooltip: { trigger: 'axis' },
+    xAxis: {
+      type: 'category',
+      data: sleepTrendData.dates || [],
+      boundaryGap: false,
+      axisLabel: { formatter: (value: string) => dayjs(value).format('MM-DD') }
+    },
+    yAxis: { type: 'value', name: sleepTrendData.unit || '' },
+    series: [{
+      data: sleepTrendData.values || [],
+      type: 'line',
+      smooth: true,
+      areaStyle: {
+        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+          { offset: 0, color: sleepColor + '4D' },
+          { offset: 1, color: sleepColor + '0D' }
+        ])
+      },
+      lineStyle: { width: 2 },
+      itemStyle: {}
+    }],
+    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true }
+  }
+}
+
+const buildActivityOption = (): EChartsCoreOption => {
+  if (!activityTrendData) return {}
+  return {
+    tooltip: { trigger: 'axis' },
+    xAxis: {
+      type: 'category',
+      data: activityTrendData.dates || [],
+      boundaryGap: false,
+      axisLabel: { formatter: (value: string) => dayjs(value).format('MM-DD') }
+    },
+    yAxis: { type: 'value', name: activityTrendData.unit || '' },
+    series: [{
+      data: activityTrendData.values || [],
+      type: 'line',
+      smooth: true,
+      areaStyle: {
+        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+          { offset: 0, color: activityColor + '4D' },
+          { offset: 1, color: activityColor + '0D' }
+        ])
+      },
+      lineStyle: { width: 2 },
+      itemStyle: {}
+    }],
+    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true }
+  }
+}
+
+const { init: initSleepChart, updateOption: updateSleepChart } = useECharts(sleepChartRef, buildSleepOption)
+const { init: initActivityChart, updateOption: updateActivityChart } = useECharts(activityChartRef, buildActivityOption)
 
 // Selection state
 const sleepMetric = ref('sleepDuration')
@@ -197,7 +310,7 @@ const summaryMetrics = computed(() => {
   return wellnessStore.summary.metrics.map(m => ({
     ...m,
     color: getWellnessMetricColor(m.metricKey),
-    icon: getWellnessMetricIcon(m.metricKey)
+    icon: wellnessIconMap[getWellnessMetricIcon(m.metricKey)] || DataLine
   }))
 })
 
@@ -205,6 +318,25 @@ const formatValue = (value: number | null): string => {
   if (value === null) return '--'
   return value.toFixed(1)
 }
+
+
+// Activity ring percentages (derived from wellness summary)
+const exercisePercent = computed(() => {
+  const steps = wellnessStore.summary?.totalSteps ?? 0
+  return Math.min(Math.round((steps / 10000) * 100), 100)
+})
+
+const sleepPercent = computed(() => {
+  const hours = wellnessStore.summary?.avgSleepDuration ?? 0
+  return Math.min(Math.round((hours / 8) * 100), 100)
+})
+
+const habitsPercent = computed(() => {
+  if (!wellnessStore.summary?.metrics?.length) return 0
+  const active = wellnessStore.summary.metrics.filter(m => m.latestValue !== null).length
+  return Math.round((active / wellnessStore.summary.metrics.length) * 100)
+})
+
 
 const getDateRange = (days: number) => {
   const end = dayjs()
@@ -218,83 +350,17 @@ const getDateRange = (days: number) => {
 const fetchSleepTrend = async () => {
   const { startDate, endDate } = getDateRange(dateRange.value)
   await wellnessStore.fetchTrend(sleepMetric.value, startDate, endDate)
-  sleepChartInstance = renderChart(
-    sleepChartInstance,
-    sleepChartRef.value,
-    wellnessStore.trendData,
-    getWellnessMetricColor(sleepMetric.value)
-  )
+  sleepTrendData = wellnessStore.trendData
+  sleepColor = getWellnessMetricColor(sleepMetric.value)
+  updateSleepChart()
 }
 
 const fetchActivityTrend = async () => {
   const { startDate, endDate } = getDateRange(dateRange.value)
   await wellnessStore.fetchTrend(activityMetric.value, startDate, endDate)
-  activityChartInstance = renderChart(
-    activityChartInstance,
-    activityChartRef.value,
-    wellnessStore.trendData,
-    getWellnessMetricColor(activityMetric.value)
-  )
-}
-
-const renderChart = (
-  chartInstance: echarts.ECharts | null,
-  chartRef: HTMLElement | undefined,
-  data: any,
-  color: string
-): echarts.ECharts | null => {
-  if (!chartRef || !data) return chartInstance
-
-  if (!chartInstance) {
-    chartInstance = echarts.init(chartRef)
-  }
-
-  const option = {
-    tooltip: {
-      trigger: 'axis'
-    },
-    xAxis: {
-      type: 'category',
-      data: data.dates || [],
-      boundaryGap: false,
-      axisLabel: {
-        formatter: (value: string) => dayjs(value).format('MM-DD')
-      }
-    },
-    yAxis: {
-      type: 'value',
-      name: data.unit || ''
-    },
-    series: [
-      {
-        data: data.values || [],
-        type: 'line',
-        smooth: true,
-        areaStyle: {
-          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: color + '4D' },
-            { offset: 1, color: color + '0D' }
-          ])
-        },
-        lineStyle: {
-          color: color,
-          width: 2
-        },
-        itemStyle: {
-          color: color
-        }
-      }
-    ],
-    grid: {
-      left: '3%',
-      right: '4%',
-      bottom: '3%',
-      containLabel: true
-    }
-  }
-
-  chartInstance.setOption(option)
-  return chartInstance
+  activityTrendData = wellnessStore.trendData
+  activityColor = getWellnessMetricColor(activityMetric.value)
+  updateActivityChart()
 }
 
 const handleAddMetric = async () => {
@@ -333,18 +399,9 @@ onMounted(async () => {
   // Wait for DOM and render charts
   await nextTick()
   await fetchSleepTrend()
+  initSleepChart()
   await fetchActivityTrend()
-
-  // Handle window resize
-  window.addEventListener('resize', () => {
-    sleepChartInstance?.resize()
-    activityChartInstance?.resize()
-  })
-})
-
-onUnmounted(() => {
-  sleepChartInstance?.dispose()
-  activityChartInstance?.dispose()
+  initActivityChart()
 })
 </script>
 
@@ -363,7 +420,7 @@ onUnmounted(() => {
 .page-header h2 {
   margin: 0;
   font-size: 20px;
-  color: #303133;
+  color: var(--text-1);
 }
 
 .summary-row {
@@ -393,19 +450,19 @@ onUnmounted(() => {
 .metric-value {
   font-size: 28px;
   font-weight: bold;
-  color: #303133;
+  color: var(--text-1);
   margin-bottom: 4px;
 }
 
 .metric-label {
   font-size: 14px;
-  color: #606266;
+  color: var(--text-2);
   margin-bottom: 2px;
 }
 
 .metric-unit {
   font-size: 12px;
-  color: #909399;
+  color: var(--text-3);
 }
 
 .metric-trend {
@@ -418,11 +475,26 @@ onUnmounted(() => {
 }
 
 .metric-trend.positive {
-  color: #67c23a;
+  color: var(--color-health-excellent);
 }
 
 .metric-trend.negative {
-  color: #f56c6c;
+  color: var(--color-health-poor);
+}
+
+.activity-row {
+  margin-bottom: 20px;
+}
+
+.activity-card {
+  margin-bottom: 20px;
+}
+
+.activity-body {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 10px 0;
 }
 
 .charts-row {

@@ -110,6 +110,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
+import { Plus } from '@element-plus/icons-vue'
 import { wellnessApi } from '@/api/wellness'
 import { formatDateTime, WELLNESS_METRICS } from '@/utils/format'
 import type { WellnessMetricVO, WellnessMetricRequest } from '@/types/api'

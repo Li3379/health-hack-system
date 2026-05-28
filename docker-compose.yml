@@ -74,10 +74,10 @@ services:
       # CORS configuration
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost}
       # Email push notifications (optional)
-      MAIL_HOST: ${MAIL_HOST:}
-      MAIL_PORT: ${MAIL_PORT:465}
-      MAIL_USERNAME: ${MAIL_USERNAME:}
-      MAIL_PASSWORD: ${MAIL_PASSWORD:}
+      MAIL_HOST: ${MAIL_HOST:-}
+      MAIL_PORT: ${MAIL_PORT:-465}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
     depends_on:
       mysql:
         condition: service_healthy

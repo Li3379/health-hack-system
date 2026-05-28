@@ -1,0 +1,578 @@
+/* ============================================
+   HHS 3D Visual Enhancement Layer
+   独立视觉优化 - 不影响业务逻辑
+   使用 CSS 3D Transform + Glassmorphism + 深度层次
+   ============================================ */
+
+/* ---- 3D 变量扩展 ---- */
+:root {
+  --perspective-base: 1000px;
+  --perspective-card: 1200px;
+  --depth-1: translateZ(0px);
+  --depth-2: translateZ(10px);
+  --depth-3: translateZ(20px);
+  --glass-bg: rgba(255, 255, 255, 0.6);
+  --glass-border: rgba(255, 255, 255, 0.25);
+  --glass-blur: 16px;
+  --shadow-3d-sm: 0 2px 4px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.04);
+  --shadow-3d-md: 0 4px 8px rgba(0,0,0,0.08), 0 8px 24px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-3d-lg: 0 8px 16px rgba(0,0,0,0.1), 0 16px 48px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
+  --shadow-3d-xl: 0 12px 24px rgba(0,0,0,0.12), 0 24px 64px rgba(0,0,0,0.1), 0 4px 8px rgba(0,0,0,0.06);
+  --shadow-color-blue: 0 8px 32px rgba(37, 99, 235, 0.15), 0 2px 8px rgba(37, 99, 235, 0.08);
+  --shadow-color-green: 0 8px 32px rgba(16, 185, 129, 0.15), 0 2px 8px rgba(16, 185, 129, 0.08);
+  --shadow-color-red: 0 8px 32px rgba(239, 68, 68, 0.15), 0 2px 8px rgba(239, 68, 68, 0.08);
+  --shadow-color-orange: 0 8px 32px rgba(245, 158, 11, 0.15), 0 2px 8px rgba(245, 158, 11, 0.08);
+}
+
+[data-theme='dark'] {
+  --glass-bg: rgba(30, 41, 59, 0.6);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --shadow-3d-sm: 0 2px 4px rgba(0,0,0,0.2), 0 4px 12px rgba(0,0,0,0.15);
+  --shadow-3d-md: 0 4px 8px rgba(0,0,0,0.25), 0 8px 24px rgba(0,0,0,0.2), 0 1px 2px rgba(0,0,0,0.15);
+  --shadow-3d-lg: 0 8px 16px rgba(0,0,0,0.3), 0 16px 48px rgba(0,0,0,0.25), 0 2px 4px rgba(0,0,0,0.15);
+  --shadow-3d-xl: 0 12px 24px rgba(0,0,0,0.35), 0 24px 64px rgba(0,0,0,0.3), 0 4px 8px rgba(0,0,0,0.2);
+  --shadow-color-blue: 0 8px 32px rgba(37, 99, 235, 0.25), 0 2px 8px rgba(37, 99, 235, 0.15);
+  --shadow-color-green: 0 8px 32px rgba(16, 185, 129, 0.25), 0 2px 8px rgba(16, 185, 129, 0.15);
+  --shadow-color-red: 0 8px 32px rgba(239, 68, 68, 0.25), 0 2px 8px rgba(239, 68, 68, 0.15);
+  --shadow-color-orange: 0 8px 32px rgba(245, 158, 11, 0.25), 0 2px 8px rgba(245, 158, 11, 0.15);
+}
+
+/* ============================================
+   3D 卡片系统
+   ============================================ */
+.stat-card {
+  position: relative;
+  perspective: var(--perspective-card);
+  transform-style: preserve-3d;
+  box-shadow: var(--shadow-3d-md) !important;
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border) !important;
+  overflow: hidden;
+  transition:
+    transform 0.4s cubic-bezier(0.23, 1, 0.32, 1),
+    box-shadow 0.4s cubic-bezier(0.23, 1, 0.32, 1) !important;
+}
+
+.stat-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.15) 0%,
+    rgba(255, 255, 255, 0) 60%
+  );
+  pointer-events: none;
+  z-index: 1;
+  border-radius: inherit;
+}
+
+[data-theme='dark'] .stat-card::before {
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.05) 0%,
+    rgba(255, 255, 255, 0) 60%
+  );
+}
+
+.stat-card:hover {
+  transform: translateY(-6px) rotateX(2deg) rotateY(-1deg) !important;
+  box-shadow: var(--shadow-3d-xl) !important;
+}
+
+.stat-card .stat-icon {
+  box-shadow: var(--shadow-3d-sm);
+  transition: transform 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.stat-card:hover .stat-icon {
+  transform: translateZ(12px) scale(1.05);
+}
+
+/* ---- 指标颜色阴影 ---- */
+.stat-icon[style*="var(--color-primary)"],
+.stat-icon[style*="primary"] {
+  box-shadow: var(--shadow-color-blue) !important;
+}
+
+.stat-icon[style*="var(--color-success)"],
+.stat-icon[style*="success"] {
+  box-shadow: var(--shadow-color-green) !important;
+}
+
+.stat-icon[style*="var(--color-warning)"],
+.stat-icon[style*="warning"] {
+  box-shadow: var(--shadow-color-orange) !important;
+}
+
+.stat-icon.has-alerts {
+  box-shadow: var(--shadow-color-red) !important;
+}
+
+/* ============================================
+   内容卡片 Glassmorphism
+   ============================================ */
+.el-card,
+.score-card,
+.alerts-card,
+.actions-card,
+.quick-input-card {
+  box-shadow: var(--shadow-3d-md) !important;
+  border: 1px solid var(--glass-border) !important;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition:
+    box-shadow 0.35s cubic-bezier(0.23, 1, 0.32, 1),
+    transform 0.35s cubic-bezier(0.23, 1, 0.32, 1) !important;
+}
+
+.el-card:hover,
+.score-card:hover,
+.alerts-card:hover,
+.actions-card:hover {
+  box-shadow: var(--shadow-3d-lg) !important;
+}
+
+/* ============================================
+   快速入口 3D 效果
+   ============================================ */
+.entry-item {
+  perspective: 600px;
+  transform-style: preserve-3d;
+}
+
+.entry-icon {
+  box-shadow: var(--shadow-3d-md);
+  transform: translateZ(0);
+  transition:
+    transform 0.4s cubic-bezier(0.23, 1, 0.32, 1),
+    box-shadow 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.entry-item:hover .entry-icon {
+  transform: translateZ(16px) scale(1.08);
+  box-shadow: var(--shadow-3d-lg);
+}
+
+/* ============================================
+   侧边栏 3D 深度
+   ============================================ */
+.sidebar {
+  box-shadow:
+    4px 0 16px rgba(0, 0, 0, 0.1),
+    1px 0 4px rgba(0, 0, 0, 0.05);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  background: rgba(30, 41, 59, 0.95) !important;
+}
+
+[data-theme='dark'] .sidebar {
+  background: rgba(15, 23, 42, 0.95) !important;
+  box-shadow:
+    4px 0 16px rgba(0, 0, 0, 0.3),
+    1px 0 4px rgba(0, 0, 0, 0.2);
+}
+
+.sidebar-menu :deep(.el-menu-item.is-active) {
+  box-shadow: var(--shadow-color-blue);
+  transform: translateZ(4px);
+}
+
+/* ---- Logo 3D 浮动 ---- */
+.logo-icon {
+  animation: logoFloat 4s ease-in-out infinite;
+  filter: drop-shadow(0 2px 8px rgba(37, 99, 235, 0.3));
+}
+
+@keyframes logoFloat {
+  0%, 100% { transform: translateY(0) rotateY(0deg); }
+  50% { transform: translateY(-3px) rotateY(5deg); }
+}
+
+/* ============================================
+   头部栏 3D 效果
+   ============================================ */
+.header {
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.06),
+    0 1px 2px rgba(0, 0, 0, 0.04);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  background: rgba(255, 255, 255, 0.85) !important;
+  border-bottom: 1px solid var(--glass-border) !important;
+}
+
+[data-theme='dark'] .header {
+  background: rgba(15, 23, 42, 0.85) !important;
+}
+
+.theme-toggle {
+  box-shadow: var(--shadow-3d-sm);
+  transition:
+    transform 0.3s cubic-bezier(0.23, 1, 0.32, 1),
+    box-shadow 0.3s cubic-bezier(0.23, 1, 0.32, 1),
+    background-color 0.2s ease,
+    color 0.2s ease !important;
+}
+
+.theme-toggle:hover {
+  transform: rotate(20deg) scale(1.1) !important;
+  box-shadow: var(--shadow-3d-md);
+}
+
+.user-info {
+  transition:
+    background-color 0.2s ease,
+    transform 0.3s cubic-bezier(0.23, 1, 0.32, 1) !important;
+}
+
+.user-info:hover {
+  transform: translateY(-1px);
+}
+
+.user-avatar {
+  box-shadow: var(--shadow-3d-sm);
+  transition: transform 0.3s ease;
+}
+
+.user-info:hover .user-avatar {
+  transform: scale(1.05);
+}
+
+/* ============================================
+   登录页 3D 增强
+   ============================================ */
+.login-card {
+  transform-style: preserve-3d;
+  box-shadow:
+    0 25px 50px -12px rgba(0, 0, 0, 0.2),
+    0 0 0 1px rgba(255, 255, 255, 0.1) inset,
+    0 2px 4px rgba(0, 0, 0, 0.06) !important;
+  transition: transform 0.5s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.login-card:hover {
+  transform: translateY(-4px) rotateX(1deg);
+}
+
+.login-button {
+  box-shadow: var(--shadow-3d-md);
+  transition:
+    transform 0.3s cubic-bezier(0.23, 1, 0.32, 1),
+    box-shadow 0.3s cubic-bezier(0.23, 1, 0.32, 1),
+    background-color 0.2s ease !important;
+}
+
+.login-button:hover {
+  box-shadow: var(--shadow-3d-lg), 0 4px 16px rgba(37, 99, 235, 0.3) !important;
+}
+
+.logo-container {
+  filter: drop-shadow(0 4px 12px rgba(37, 99, 235, 0.2));
+}
+
+/* ============================================
+   预警列表 3D 层次
+   ============================================ */
+.alert-item {
+  box-shadow: var(--shadow-3d-sm);
+  border-left: 3px solid transparent;
+  transition:
+    transform 0.3s cubic-bezier(0.23, 1, 0.32, 1),
+    box-shadow 0.3s cubic-bezier(0.23, 1, 0.32, 1),
+    background-color 0.2s ease !important;
+}
+
+.alert-item:hover {
+  transform: translateX(4px);
+  box-shadow: var(--shadow-3d-md);
+}
+
+.alert-item.alert-critical,
+.alert-item.alert-high {
+  border-left-color: var(--color-danger);
+}
+
+.alert-item.alert-medium {
+  border-left-color: var(--color-warning);
+}
+
+.alert-item.alert-low {
+  border-left-color: var(--color-success);
+}
+
+.alert-indicator {
+  box-shadow: 0 0 8px currentColor;
+}
+
+/* ============================================
+   表格 3D 效果
+   ============================================ */
+.el-table {
+  box-shadow: var(--shadow-3d-sm);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.el-table th.el-table__cell {
+  background: var(--color-bg-tertiary) !important;
+  font-weight: var(--font-weight-semibold);
+}
+
+.el-table .el-table__row {
+  transition: background-color 0.15s ease;
+}
+
+.el-table .el-table__row:hover > td.el-table__cell {
+  background: var(--color-bg-tertiary) !important;
+}
+
+/* ============================================
+   按钮 3D 效果
+   ============================================ */
+.el-button--primary {
+  box-shadow: var(--shadow-3d-sm);
+  transition:
+    transform 0.2s cubic-bezier(0.23, 1, 0.32, 1),
+    box-shadow 0.2s cubic-bezier(0.23, 1, 0.32, 1),
+    background-color 0.2s ease,
+    border-color 0.2s ease !important;
+}
+
+.el-button--primary:hover {
+  box-shadow: var(--shadow-3d-md), 0 4px 16px rgba(37, 99, 235, 0.2) !important;
+  transform: translateY(-1px);
+}
+
+.el-button--primary:active {
+  transform: translateY(1px) !important;
+  box-shadow: var(--shadow-3d-sm) !important;
+}
+
+.el-button--default {
+  transition:
+    transform 0.2s cubic-bezier(0.23, 1, 0.32, 1),
+    box-shadow 0.2s cubic-bezier(0.23, 1, 0.32, 1),
+    background-color 0.2s ease,
+    border-color 0.2s ease !important;
+}
+
+.el-button--default:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-3d-sm) !important;
+}
+
+/* ============================================
+   输入框 3D 效果
+   ============================================ */
+.el-input__wrapper,
+.el-input-number {
+  transition:
+    box-shadow 0.25s cubic-bezier(0.23, 1, 0.32, 1),
+    border-color 0.25s ease !important;
+}
+
+.el-input__wrapper:hover {
+  box-shadow: var(--shadow-3d-sm) !important;
+}
+
+.el-input__wrapper.is-focus,
+.el-input.is-focus .el-input__wrapper {
+  box-shadow: var(--shadow-focus), var(--shadow-3d-sm) !important;
+}
+
+/* ============================================
+   弹窗 3D 效果
+   ============================================ */
+.el-dialog {
+  box-shadow: var(--shadow-3d-xl) !important;
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+.el-overlay {
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+/* ============================================
+   标签 3D 效果
+   ============================================ */
+.el-tag {
+  box-shadow: var(--shadow-3d-sm);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.el-tag:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-3d-md);
+}
+
+/* ============================================
+   分页 3D 效果
+   ============================================ */
+.el-pagination .el-pager li {
+  box-shadow: var(--shadow-3d-sm);
+  border-radius: var(--radius-md);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+}
+
+.el-pagination .el-pager li:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-3d-md);
+}
+
+.el-pagination .el-pager li.is-active {
+  box-shadow: var(--shadow-color-blue);
+}
+
+/* ============================================
+   健康评分圆环 3D
+   ============================================ */
+.score-display {
+  perspective: 800px;
+}
+
+/* ============================================
+   快捷录入按钮网格 3D
+   ============================================ */
+.button-grid .el-button {
+  box-shadow: var(--shadow-3d-sm);
+  transition:
+    transform 0.3s cubic-bezier(0.23, 1, 0.32, 1),
+    box-shadow 0.3s cubic-bezier(0.23, 1, 0.32, 1),
+    background-color 0.2s ease,
+    border-color 0.2s ease !important;
+}
+
+.button-grid .el-button:hover {
+  transform: translateY(-3px) scale(1.02);
+  box-shadow: var(--shadow-3d-md) !important;
+}
+
+.button-grid .el-button:active {
+  transform: translateY(0) scale(0.98) !important;
+}
+
+/* ============================================
+   数据录入概览卡片 3D
+   ============================================ */
+.overview-card {
+  box-shadow: var(--shadow-3d-md) !important;
+  border: 1px solid var(--glass-border) !important;
+  transition:
+    transform 0.4s cubic-bezier(0.23, 1, 0.32, 1),
+    box-shadow 0.4s cubic-bezier(0.23, 1, 0.32, 1) !important;
+}
+
+.overview-card:hover {
+  transform: translateY(-4px) rotateX(2deg) !important;
+  box-shadow: var(--shadow-3d-lg) !important;
+}
+
+.overview-icon {
+  box-shadow: var(--shadow-3d-sm);
+  transition: transform 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.overview-card:hover .overview-icon {
+  transform: translateZ(10px) scale(1.05);
+}
+
+/* ============================================
+   徽章 3D 脉冲
+   ============================================ */
+.el-badge__content {
+  box-shadow: 0 2px 6px rgba(239, 68, 68, 0.4);
+  animation: badgePulse 2.5s ease-in-out infinite;
+}
+
+@keyframes badgePulse {
+  0%, 100% { box-shadow: 0 2px 6px rgba(239, 68, 68, 0.4); transform: scale(1); }
+  50% { box-shadow: 0 2px 12px rgba(239, 68, 68, 0.6); transform: scale(1.08); }
+}
+
+/* ============================================
+   页面过渡动画增强
+   ============================================ */
+.fade-slide-enter-active {
+  transition:
+    opacity 0.35s cubic-bezier(0.23, 1, 0.32, 1),
+    transform 0.35s cubic-bezier(0.23, 1, 0.32, 1) !important;
+}
+
+.fade-slide-leave-active {
+  transition:
+    opacity 0.2s cubic-bezier(0.55, 0, 1, 0.45),
+    transform 0.2s cubic-bezier(0.55, 0, 1, 0.45) !important;
+}
+
+.fade-slide-enter-from {
+  opacity: 0;
+  transform: translateY(16px) scale(0.98);
+}
+
+.fade-slide-leave-to {
+  opacity: 0;
+  transform: translateY(-8px) scale(0.99);
+}
+
+/* ============================================
+   滚动条 3D 立体感
+   ============================================ */
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(
+    180deg,
+    rgba(148, 163, 184, 0.8) 0%,
+    rgba(100, 116, 139, 0.9) 100%
+  ) !important;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  box-shadow: inset 0 0 4px rgba(255, 255, 255, 0.1);
+}
+
+[data-theme='dark'] ::-webkit-scrollbar-thumb {
+  background: linear-gradient(
+    180deg,
+    rgba(71, 85, 105, 0.8) 0%,
+    rgba(51, 65, 85, 0.9) 100%
+  ) !important;
+}
+
+/* ============================================
+   性能优化 - 硬件加速
+   ============================================ */
+.stat-card,
+.el-card,
+.entry-icon,
+.overview-card,
+.alert-item,
+.el-button,
+.login-card {
+  will-change: transform;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 减少动画模式支持 */
+@media (prefers-reduced-motion: reduce) {
+  .stat-card,
+  .el-card,
+  .entry-icon,
+  .overview-card,
+  .alert-item,
+  .el-button,
+  .login-card,
+  .theme-toggle,
+  .logo-icon {
+    transition: none !important;
+    animation: none !important;
+  }
+
+  .stat-card:hover,
+  .el-card:hover,
+  .overview-card:hover {
+    transform: none !important;
+  }
+}

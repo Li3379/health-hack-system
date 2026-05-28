@@ -62,8 +62,9 @@ public class HealthScoreServiceImpl implements HealthScoreService {
         // Cache the result
         cacheScore(userId, score);
 
-        // Publish event for cache invalidation
-        eventPublisher.publishEvent(new ScoreUpdatedEvent(userId, score.getScore()));
+        // Publish event for cache invalidation and score history persistence
+        eventPublisher.publishEvent(new ScoreUpdatedEvent(userId, score.getScore(), score.getLevel(),
+                score.getFactors(), score.getDimensionScores()));
 
         return score;
     }
@@ -94,8 +95,9 @@ public class HealthScoreServiceImpl implements HealthScoreService {
         // Cache the result
         cacheScore(userId, score);
 
-        // Publish event for cache invalidation
-        eventPublisher.publishEvent(new ScoreUpdatedEvent(userId, score.getScore()));
+        // Publish event for cache invalidation and score history persistence
+        eventPublisher.publishEvent(new ScoreUpdatedEvent(userId, score.getScore(), score.getLevel(),
+                score.getFactors(), score.getDimensionScores()));
 
         return score;
     }

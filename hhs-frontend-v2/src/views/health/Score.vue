@@ -2,7 +2,18 @@
   <div class="score-page">
     <!-- 当前评分 -->
     <el-card class="score-card">
-      <div v-loading="loading" class="score-display">
+      <el-skeleton :loading="loading" animated>
+        <template #template>
+          <div class="score-display">
+            <el-skeleton-item variant="circle" style="width: 180px; height: 180px;" />
+            <div class="score-info">
+              <el-skeleton-item variant="text" style="width: 200px; height: 20px;" />
+              <el-skeleton-item variant="text" style="width: 160px; height: 16px; margin-top: 12px;" />
+              <el-skeleton-item variant="button" style="width: 120px; height: 36px; margin-top: 20px;" />
+            </div>
+          </div>
+        </template>
+        <template #default>
         <!-- 无数据状态 -->
         <div v-if="scoreData?.level === 'NO_DATA'" class="no-data-content">
           <el-empty description="">
@@ -11,11 +22,11 @@
                 <el-icon :size="80"><Monitor /></el-icon>
               </div>
             </template>
-            <div class="no-data-message">{{ scoreData.message || '暂无健康数据' }}</div>
+            <div class="no-data-message">{{ scoreData?.message || '暂无健康数据' }}</div>
             <div class="no-data-tips">添加以下健康数据后可获得评分：</div>
             <div class="required-metrics">
               <el-tag
-                v-for="metric in scoreData.factors?.requiredMetrics"
+                v-for="metric in scoreData?.factors?.requiredMetrics"
                 :key="metric"
                 type="info"
                 effect="plain"
@@ -32,10 +43,12 @@
         <!-- 正常评分显示 -->
         <div v-else-if="scoreData" class="score-content">
           <div class="score-main">
-            <div class="score-circle">
-              <div class="score-number">{{ scoreData.score }}</div>
-              <div class="score-level">{{ getScoreLevelLabel(scoreData.level) }}</div>
-            </div>
+            <HealthScoreCircle
+              :score="scoreData.score"
+              :level="getScoreLevelLabel(scoreData.level)"
+              :size="180"
+              :stroke-width="10"
+            />
             <div class="score-info">
               <p class="score-tips">{{ getScoreTips(scoreData.level) }}</p>
               <div class="score-meta">
@@ -54,7 +67,8 @@
           </div>
         </div>
         <el-empty v-else description="暂无评分数据" />
-      </div>
+        </template>
+      </el-skeleton>
     </el-card>
 
     <!-- 健康报告对话框 -->
@@ -68,9 +82,14 @@
       <div v-if="reportData" class="report-content">
         <!-- 报告头部信息 -->
         <div class="report-header">
-          <span class="report-time">
-            报告生成时间: {{ formatDateTime(reportData.generatedAt) }}
-          </span>
+          <div class="report-header-left">
+            <span class="report-time">
+              报告生成时间: {{ formatDateTime(reportData.generatedAt) }}
+            </span>
+            <el-tag v-if="reportData.isEstimated" type="warning" size="small" effect="dark">
+              预估数据
+            </el-tag>
+          </div>
           <el-button type="primary" size="small" :loading="reportLoading" @click="regenerateReport">
             重新生成
           </el-button>
@@ -92,7 +111,7 @@
           <template #header>
             <span>综合健康评分</span>
           </template>
-          <div class="overall-score">
+          <div class="overall-score" :class="'level-' + (reportData.scoreLevel || '').toLowerCase()">
             <div class="score-value">{{ reportData.overallScore }}</div>
             <div class="score-level">({{ getScoreLevelLabel(reportData.scoreLevel) }})</div>
           </div>
@@ -120,7 +139,7 @@
         <!-- 风险提示 -->
         <el-card v-if="reportData.riskAlerts?.length" class="report-section" shadow="never">
           <template #header>
-            <span style="color: #e6a23c">风险提示</span>
+            <span style="color: var(--color-warning)">风险提示</span>
           </template>
           <el-alert
             v-for="(alert, idx) in reportData.riskAlerts"
@@ -202,6 +221,26 @@
       </el-row>
     </el-card>
 
+    <!-- 雷达图 + 仪表盘 -->
+    <el-row v-if="scoreData && scoreData.level !== 'NO_DATA'" :gutter="20" class="charts-row">
+      <el-col :xs="24" :lg="12">
+        <el-card>
+          <template #header>
+            <span>健康维度雷达图</span>
+          </template>
+          <div ref="radarChartRef" class="chart-container"></div>
+        </el-card>
+      </el-col>
+      <el-col :xs="24" :lg="12">
+        <el-card>
+          <template #header>
+            <span>健康评分仪表盘</span>
+          </template>
+          <div ref="gaugeChartRef" class="chart-container"></div>
+        </el-card>
+      </el-col>
+    </el-row>
+
     <!-- 评分历史 -->
     <el-card v-if="scoreData && scoreData.level !== 'NO_DATA'" class="history-card">
       <template #header>
@@ -220,13 +259,20 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, shallowRef, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Plus, Monitor } from '@element-plus/icons-vue'
-import * as echarts from 'echarts'
+import { Plus, Monitor, Loading } from '@element-plus/icons-vue'
+import * as echarts from 'echarts/core'
+import { LineChart, RadarChart, GaugeChart } from 'echarts/charts'
+import { TooltipComponent, GridComponent, RadarComponent } from 'echarts/components'
+import { CanvasRenderer } from 'echarts/renderers'
+
+echarts.use([LineChart, RadarChart, GaugeChart, TooltipComponent, GridComponent, RadarComponent, CanvasRenderer])
 import { scoreApi } from '@/api/score'
 import { formatDateTime, getScoreLevelLabel } from '@/utils/format'
+import { useECharts } from '@/composables/useECharts'
+import HealthScoreCircle from '@/components/HealthScoreCircle.vue'
 import type { HealthScoreVO, HealthReportVO } from '@/types/api'
 
 const router = useRouter()
@@ -239,7 +285,120 @@ const scoreData = ref<HealthScoreVO | null>(null)
 const reportData = ref<HealthReportVO | null>(null)
 const historyRange = ref('30')
 const chartRef = ref<HTMLElement>()
-let chartInstance: echarts.ECharts | null = null
+const historyData = shallowRef<any[]>([])
+
+const buildChartOption = (): echarts.EChartsCoreOption => {
+  if (!historyData.value.length) return {}
+  const dates = historyData.value.map(item => item.scoreDate)
+  const scores = historyData.value.map(item => item.overallScore)
+  return {
+    tooltip: { trigger: 'axis', formatter: '{b}<br/>评分: {c}' },
+    xAxis: { type: 'category', data: dates, boundaryGap: false },
+    yAxis: { type: 'value', min: 0, max: 100, name: '评分' },
+    series: [{
+      data: scores,
+      type: 'line',
+      smooth: true,
+      areaStyle: {
+        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+          { offset: 0, color: 'rgba(94, 234, 212, 0.3)' },
+          { offset: 1, color: 'rgba(94, 234, 212, 0.05)' }
+        ])
+      },
+      lineStyle: { width: 2 },
+      itemStyle: {}
+    }],
+    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true }
+  }
+}
+
+const { init: initChart, updateOption } = useECharts(chartRef, buildChartOption)
+
+// Radar chart
+const radarChartRef = ref<HTMLElement>()
+
+const buildRadarOption = (): echarts.EChartsCoreOption => {
+  if (!scoreData.value?.factors) return {}
+  const factors = scoreData.value.factors
+  const indicators: any[] = []
+  const currentValues: number[] = []
+
+  for (const [key, value] of Object.entries(factors)) {
+    if (typeof value === 'object' && value !== null && 'score' in value) {
+      indicators.push({ name: getFactorLabel(key), max: 100 })
+      currentValues.push((value as any).score)
+    }
+  }
+
+  if (indicators.length === 0) return {}
+
+  return {
+    tooltip: {},
+    radar: {
+      indicator: indicators,
+      shape: 'polygon',
+    },
+    series: [{
+      type: 'radar',
+      data: [{
+        value: currentValues,
+        name: '当前',
+        areaStyle: { opacity: 0.2 },
+        lineStyle: { width: 2 },
+      }],
+    }],
+  }
+}
+
+const { init: initRadarChart } = useECharts(radarChartRef, buildRadarOption)
+
+// Gauge chart
+const gaugeChartRef = ref<HTMLElement>()
+
+const buildGaugeOption = (): echarts.EChartsCoreOption => {
+  if (!scoreData.value) return {}
+  const score = scoreData.value.score
+  return {
+    series: [{
+      type: 'gauge',
+      startAngle: 200,
+      endAngle: -20,
+      min: 0,
+      max: 100,
+      splitNumber: 10,
+      axisLine: {
+        lineStyle: {
+          width: 20,
+          color: [
+            [0.4, getCSSColor('--color-health-poor')],
+            [0.6, getCSSColor('--color-health-fair')],
+            [0.8, getCSSColor('--color-health-good')],
+            [1, getCSSColor('--color-health-excellent')],
+          ],
+        },
+      },
+      pointer: { itemStyle: { color: 'auto' } },
+      axisTick: { distance: -20, length: 6, lineStyle: { color: '#fff', width: 1 } },
+      splitLine: { distance: -24, length: 12, lineStyle: { color: '#fff', width: 2 } },
+      axisLabel: { color: 'inherit', distance: 30, fontSize: 12 },
+      detail: {
+        valueAnimation: true,
+        formatter: '{value}分',
+        color: 'inherit',
+        fontSize: 28,
+        offsetCenter: [0, '60%'],
+      },
+      title: { offsetCenter: [0, '85%'], fontSize: 14 },
+      data: [{ value: score, name: getScoreLevelLabel(scoreData.value.level) }],
+    }],
+  }
+}
+
+function getCSSColor(name: string): string {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || '#8d909c'
+}
+
+const { init: initGaugeChart } = useECharts(gaugeChartRef, buildGaugeOption)
 
 // AbortController for cancelling report generation
 let reportAbortController: AbortController | null = null
@@ -351,69 +510,13 @@ const fetchHistory = async () => {
   try {
     const days = parseInt(historyRange.value)
     const res = await scoreApi.getScoreHistory(days)
-    renderChart(res.data)
+    historyData.value = res.data
+    updateOption()
   } catch (error) {
     ElMessage.error('获取历史数据失败')
   } finally {
     historyLoading.value = false
   }
-}
-
-const renderChart = (data: any[]) => {
-  if (!chartRef.value) return
-
-  if (!chartInstance) {
-    chartInstance = echarts.init(chartRef.value)
-  }
-
-  const dates = data.map(item => item.date)
-  const scores = data.map(item => item.score)
-
-  const option = {
-    tooltip: {
-      trigger: 'axis',
-      formatter: '{b}<br/>评分: {c}'
-    },
-    xAxis: {
-      type: 'category',
-      data: dates,
-      boundaryGap: false
-    },
-    yAxis: {
-      type: 'value',
-      min: 0,
-      max: 100,
-      name: '评分'
-    },
-    series: [
-      {
-        data: scores,
-        type: 'line',
-        smooth: true,
-        areaStyle: {
-          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: 'rgba(64, 158, 255, 0.3)' },
-            { offset: 1, color: 'rgba(64, 158, 255, 0.05)' }
-          ])
-        },
-        lineStyle: {
-          color: '#409eff',
-          width: 2
-        },
-        itemStyle: {
-          color: '#409eff'
-        }
-      }
-    ],
-    grid: {
-      left: '3%',
-      right: '4%',
-      bottom: '3%',
-      containLabel: true
-    }
-  }
-
-  chartInstance.setOption(option)
 }
 
 const getScoreTips = (level: string): string => {
@@ -470,19 +573,19 @@ const getFactorPercentage = (value: any): number => {
 }
 
 const getFactorColor = (value: any): string => {
-  // Handle new factor structure
   let score: number
   if (typeof value === 'object' && value !== null && 'score' in value) {
     score = value.score
   } else if (typeof value === 'number') {
     score = value
   } else {
-    return '#409eff'
+    return 'var(--accent-cool)'
   }
 
-  if (score >= 80) return '#67c23a'
-  if (score >= 60) return '#e6a23c'
-  return '#f56c6c'
+  if (score >= 90) return 'var(--color-health-excellent)'
+  if (score >= 75) return 'var(--color-health-good)'
+  if (score >= 60) return 'var(--color-health-fair)'
+  return 'var(--color-health-poor)'
 }
 
 const getStatusType = (status: string): 'success' | 'warning' | 'danger' | 'info' => {
@@ -497,19 +600,19 @@ const getStatusType = (status: string): 'success' | 'warning' | 'danger' | 'info
 }
 
 const getScoreColor = (score: number): string => {
-  if (score >= 80) return '#67c23a'
-  if (score >= 60) return '#e6a23c'
-  return '#f56c6c'
+  if (score >= 90) return 'var(--color-health-excellent)'
+  if (score >= 75) return 'var(--color-health-good)'
+  if (score >= 60) return 'var(--color-health-fair)'
+  return 'var(--color-health-poor)'
 }
 
 onMounted(async () => {
   await fetchScore()
   await nextTick()
+  initRadarChart()
+  initGaugeChart()
   await fetchHistory()
-
-  window.addEventListener('resize', () => {
-    chartInstance?.resize()
-  })
+  initChart()
 })
 </script>
 
@@ -535,20 +638,20 @@ onMounted(async () => {
 }
 
 .no-data-icon {
-  color: #909399;
+  color: var(--text-3);
   margin-bottom: 20px;
 }
 
 .no-data-message {
   font-size: 20px;
-  color: #303133;
+  color: var(--text-1);
   margin-bottom: 16px;
   font-weight: 500;
 }
 
 .no-data-tips {
   font-size: 14px;
-  color: #606266;
+  color: var(--text-2);
   margin-bottom: 20px;
 }
 
@@ -582,15 +685,26 @@ onMounted(async () => {
 .score-number {
   font-size: 96px;
   font-weight: bold;
-  color: #409eff;
   line-height: 1;
 }
 
 .score-level {
   font-size: 24px;
-  color: #606266;
   margin-top: 16px;
 }
+
+/* Score Level Colors - theme token based */
+.level-excellent .score-number { color: var(--color-health-excellent); text-shadow: 0 4px 24px rgba(34,197,94,0.35); }
+.level-excellent .score-level { color: var(--color-health-excellent); opacity: 0.8; }
+
+.level-good .score-number { color: var(--color-health-good); text-shadow: 0 4px 24px rgba(132,204,22,0.35); }
+.level-good .score-level { color: var(--color-health-good); opacity: 0.8; }
+
+.level-fair .score-number { color: var(--color-health-fair); text-shadow: 0 4px 24px rgba(234,179,8,0.35); }
+.level-fair .score-level { color: var(--color-health-fair); opacity: 0.8; }
+
+.level-poor .score-number { color: var(--color-health-poor); text-shadow: 0 4px 24px rgba(239,68,68,0.35); }
+.level-poor .score-level { color: var(--color-health-poor); opacity: 0.8; }
 
 .score-info {
   flex: 1;
@@ -599,14 +713,14 @@ onMounted(async () => {
 
 .score-tips {
   font-size: 16px;
-  color: #606266;
+  color: var(--text-2);
   margin-bottom: 16px;
   line-height: 1.6;
 }
 
 .score-meta {
   font-size: 14px;
-  color: #909399;
+  color: var(--text-3);
   margin-bottom: 20px;
   display: flex;
   align-items: center;
@@ -619,7 +733,7 @@ onMounted(async () => {
 
 .factor-item {
   padding: 16px;
-  background: #f5f7fa;
+  background: var(--surface-2);
   border-radius: 8px;
   margin-bottom: 16px;
 }
@@ -633,13 +747,21 @@ onMounted(async () => {
 
 .factor-name {
   font-size: 14px;
-  color: #606266;
+  color: var(--text-2);
 }
 
 .factor-value {
   font-size: 18px;
   font-weight: bold;
-  color: #303133;
+  color: var(--text-1);
+}
+
+.charts-row {
+  margin-bottom: 20px;
+}
+
+.charts-row .el-card {
+  margin-bottom: 20px;
 }
 
 .history-card {
@@ -684,13 +806,19 @@ onMounted(async () => {
   align-items: center;
   margin-bottom: 20px;
   padding: 12px 16px;
-  background: #f5f7fa;
+  background: var(--surface-2);
   border-radius: 8px;
+}
+
+.report-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .report-time {
   font-size: 14px;
-  color: #606266;
+  color: var(--text-2);
 }
 
 .report-loading {
@@ -704,7 +832,7 @@ onMounted(async () => {
 
 .report-loading p {
   font-size: 16px;
-  color: #606266;
+  color: var(--text-2);
 }
 
 .report-section {
@@ -721,17 +849,28 @@ onMounted(async () => {
 .overall-score .score-value {
   font-size: 64px;
   font-weight: bold;
-  color: #409eff;
 }
 
 .overall-score .score-level {
   font-size: 24px;
-  color: #606266;
 }
+
+/* Report Score Level Colors - theme token based */
+.level-excellent.overall-score .score-value { color: var(--color-health-excellent); }
+.level-excellent.overall-score .score-level { color: var(--color-health-excellent); opacity: 0.8; }
+
+.level-good.overall-score .score-value { color: var(--color-health-good); }
+.level-good.overall-score .score-level { color: var(--color-health-good); opacity: 0.8; }
+
+.level-fair.overall-score .score-value { color: var(--color-health-fair); }
+.level-fair.overall-score .score-level { color: var(--color-health-fair); opacity: 0.8; }
+
+.level-poor.overall-score .score-value { color: var(--color-health-poor); }
+.level-poor.overall-score .score-level { color: var(--color-health-poor); opacity: 0.8; }
 
 .dimension-item {
   padding: 16px;
-  background: #f5f7fa;
+  background: var(--surface-2);
   border-radius: 8px;
   margin-bottom: 16px;
 }
@@ -750,7 +889,7 @@ onMounted(async () => {
 
 .dimension-desc {
   font-size: 14px;
-  color: #606266;
+  color: var(--text-2);
   margin-top: 8px;
 }
 
@@ -770,18 +909,18 @@ onMounted(async () => {
 
 .suggestion-content {
   font-size: 15px;
-  color: #303133;
+  color: var(--text-1);
   margin-bottom: 4px;
 }
 
 .suggestion-action {
   font-size: 14px;
-  color: #606266;
+  color: var(--text-2);
 }
 
 .summary-text {
   font-size: 16px;
   line-height: 1.8;
-  color: #303133;
+  color: var(--text-1);
 }
 </style>

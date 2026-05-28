@@ -19,7 +19,16 @@ export const scoreApi = {
 
   // 获取评分历史
   getScoreHistory(days = 30) {
-    return request.get<Array<{ date: string; score: number; level: string }>>(
+    return request.get<Array<{
+      scoreDate: string
+      overallScore: number
+      cardiovascularScore: number | null
+      metabolicScore: number | null
+      weightScore: number | null
+      lifestyleScore: number | null
+      factorsSnapshot: string | null
+      createdAt: string
+    }>>(
       '/api/health/score/history',
       { params: { days } }
     )

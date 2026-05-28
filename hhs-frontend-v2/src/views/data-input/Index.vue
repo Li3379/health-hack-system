@@ -154,62 +154,40 @@ onMounted(() => {
 
 <style scoped>
 .data-input-page {
-  padding: 20px;
+  padding: 32px;
+  max-width: var(--content-max-width);
+  margin: 0 auto;
 }
-
-.overview-row {
-  margin-bottom: 20px;
-}
+.overview-row { margin-bottom: 24px; }
 
 .overview-card {
-  border-radius: 12px;
+  background: var(--surface-1) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-lg) !important;
+  box-shadow: none !important;
+  transition: border-color var(--dur-mid) var(--ease), transform var(--dur-mid) var(--ease) !important;
 }
-
-.overview-content {
+.overview-card:hover {
+  border-color: var(--border-strong) !important;
+  transform: translateY(-2px) !important;
+}
+.overview-content { display: flex; align-items: center; gap: 14px; }
+.overview-icon {
+  width: 44px;
+  height: 44px;
   display: flex;
   align-items: center;
-  gap: 16px;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  transition: transform var(--dur-mid) var(--ease);
 }
-
-.overview-icon {
-  font-size: 40px;
-  padding: 12px;
-  border-radius: 12px;
-}
-
-.overview-icon.health {
-  background: rgba(64, 158, 255, 0.1);
-  color: #409eff;
-}
-
-.overview-icon.wellness {
-  background: rgba(103, 194, 58, 0.1);
-  color: #67c23a;
-}
-
-.overview-icon.sync {
-  background: rgba(230, 162, 60, 0.1);
-  color: #e6a23c;
-}
-
-.overview-icon.ai {
-  background: rgba(144, 97, 249, 0.1);
-  color: #9061f9;
-}
-
-.overview-info {
-  display: flex;
-  flex-direction: column;
-}
-
-.overview-value {
-  font-size: 28px;
-  font-weight: 600;
-  color: var(--color-text-primary);
-}
-
-.overview-label {
-  font-size: 14px;
-  color: var(--color-text-secondary);
-}
+.overview-card:hover .overview-icon { transform: scale(1.08); }
+.overview-icon.health { background: var(--accent-cool-soft); color: var(--accent-cool); }
+.overview-icon.wellness { background: var(--accent-cool-soft); color: var(--accent-cool); }
+.overview-icon.sync { background: var(--accent-warm-soft); color: var(--accent-warm); }
+.overview-icon.ai { background: var(--accent-cool-soft); color: var(--accent-cool); }
+.overview-info { display: flex; flex-direction: column; }
+.overview-value { font: 700 28px/1.2 var(--font-ui); color: var(--text-1); letter-spacing: -0.02em; }
+.overview-label { font: 400 13px/1.4 var(--font-ui); color: var(--text-3); margin-top: 2px; }
+@media (max-width: 768px) { .data-input-page { padding: 20px; } }
 </style>

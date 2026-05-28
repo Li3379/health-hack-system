@@ -385,6 +385,7 @@ CREATE TABLE IF NOT EXISTS `health_report` (
     `suggestions` JSON NOT NULL COMMENT 'Improvement suggestions (JSON)',
     `summary` TEXT NOT NULL COMMENT 'Health summary',
     `user_info` JSON NOT NULL COMMENT 'User info snapshot (JSON)',
+    `is_estimated` TINYINT(1) NOT NULL DEFAULT 0 COMMENT 'Whether report uses estimated data (1=yes, 0=no)',
     `generated_at` DATETIME NOT NULL COMMENT 'Report generation time',
     `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT 'Record creation time',
     UNIQUE KEY `uk_report_id` (`report_id`),
@@ -715,6 +716,173 @@ CREATE TABLE IF NOT EXISTS `device_platform_config` (
     KEY `idx_configured` (`configured`),
     KEY `idx_enabled` (`enabled`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Device platform OAuth configuration table';
+
+-- =====================================================
+-- 13. HEALTH SCORE HISTORY (v3.7.0)
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS `health_score_history` (
+    `id` BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT 'Record ID',
+    `user_id` BIGINT NOT NULL COMMENT 'User ID',
+    `score_date` DATE NOT NULL COMMENT 'Score date',
+    `overall_score` DECIMAL(5,2) DEFAULT NULL COMMENT 'Overall health score',
+    `cardiovascular_score` DECIMAL(5,2) DEFAULT NULL COMMENT 'Cardiovascular score',
+    `metabolic_score` DECIMAL(5,2) DEFAULT NULL COMMENT 'Metabolic score',
+    `weight_score` DECIMAL(5,2) DEFAULT NULL COMMENT 'Weight score',
+    `lifestyle_score` DECIMAL(5,2) DEFAULT NULL COMMENT 'Lifestyle score',
+    `factors_snapshot` JSON DEFAULT NULL COMMENT 'Score factors snapshot (JSON)',
+    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT 'Creation time',
+    INDEX `idx_user_date` (`user_id`, `score_date`),
+    UNIQUE KEY `uk_user_date` (`user_id`, `score_date`),
+    CONSTRAINT `fk_health_score_history_user` FOREIGN KEY (`user_id`) REFERENCES `sys_user` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Health score history table';
+
+-- =====================================================
+-- 14. DATA EXPORT (v3.8.0)
+-- =====================================================
+
+-- Export job table for async data export (CSV / Excel)
+CREATE TABLE IF NOT EXISTS `export_jobs` (
+    `id` BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT 'Job ID',
+    `user_id` BIGINT NOT NULL COMMENT 'User ID',
+    `export_type` VARCHAR(20) NOT NULL COMMENT 'Export type: csv, excel',
+    `content_type` VARCHAR(30) NOT NULL COMMENT 'Content type: metrics, scores, screenings',
+    `status` VARCHAR(20) NOT NULL DEFAULT 'pending' COMMENT 'Status: pending, processing, completed, failed',
+    `file_path` VARCHAR(500) DEFAULT NULL COMMENT 'Stored file path',
+    `file_name` VARCHAR(200) DEFAULT NULL COMMENT 'Download file name',
+    `start_date` DATE DEFAULT NULL COMMENT 'Export date range start',
+    `end_date` DATE DEFAULT NULL COMMENT 'Export date range end',
+    `error_message` VARCHAR(500) DEFAULT NULL COMMENT 'Error message on failure',
+    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT 'Creation time',
+    `completed_at` DATETIME DEFAULT NULL COMMENT 'Completion time',
+    KEY `idx_user_id` (`user_id`),
+    KEY `idx_status` (`status`),
+    KEY `idx_created_at` (`created_at`),
+    CONSTRAINT `fk_export_jobs_user` FOREIGN KEY (`user_id`) REFERENCES `sys_user` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Data export job table';
+
+-- =====================================================
+-- 15. USER REMINDERS (Phase 3)
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS `user_reminders` (
+    `id` BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT 'Reminder ID',
+    `user_id` BIGINT NOT NULL COMMENT 'User ID',
+    `title` VARCHAR(100) NOT NULL COMMENT 'Reminder title',
+    `description` VARCHAR(500) DEFAULT NULL COMMENT 'Description',
+    `reminder_type` VARCHAR(30) NOT NULL COMMENT 'Type: medication, exercise, measurement, custom',
+    `cron_expression` VARCHAR(50) NOT NULL COMMENT 'Cron expression for scheduling',
+    `is_active` TINYINT(1) NOT NULL DEFAULT 1 COMMENT 'Enabled flag',
+    `last_triggered_at` DATETIME DEFAULT NULL COMMENT 'Last trigger time',
+    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT 'Creation time',
+    `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Update time',
+    KEY `idx_user_id` (`user_id`),
+    KEY `idx_active` (`is_active`),
+    CONSTRAINT `fk_reminders_user` FOREIGN KEY (`user_id`) REFERENCES `sys_user` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='User reminders table';
+
+-- =====================================================
+-- 16. GAMIFICATION (Phase 3)
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS `user_streaks` (
+    `id` BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT 'Streak ID',
+    `user_id` BIGINT NOT NULL COMMENT 'User ID',
+    `current_streak` INT NOT NULL DEFAULT 0 COMMENT 'Current consecutive days',
+    `longest_streak` INT NOT NULL DEFAULT 0 COMMENT 'Longest streak ever',
+    `last_activity_date` DATE DEFAULT NULL COMMENT 'Last activity date',
+    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT 'Creation time',
+    `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Update time',
+    UNIQUE KEY `uk_user_id` (`user_id`),
+    CONSTRAINT `fk_streaks_user` FOREIGN KEY (`user_id`) REFERENCES `sys_user` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='User activity streaks';
+
+CREATE TABLE IF NOT EXISTS `achievements` (
+    `id` BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT 'Achievement ID',
+    `code` VARCHAR(50) NOT NULL COMMENT 'Unique code: first_record, streak_7, etc.',
+    `name` VARCHAR(100) NOT NULL COMMENT 'Display name',
+    `description` VARCHAR(500) DEFAULT NULL COMMENT 'Description',
+    `icon` VARCHAR(50) DEFAULT NULL COMMENT 'Icon identifier',
+    `points` INT NOT NULL DEFAULT 0 COMMENT 'Points awarded',
+    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT 'Creation time',
+    UNIQUE KEY `uk_code` (`code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Achievement definitions';
+
+CREATE TABLE IF NOT EXISTS `user_achievements` (
+    `id` BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT 'ID',
+    `user_id` BIGINT NOT NULL COMMENT 'User ID',
+    `achievement_id` BIGINT NOT NULL COMMENT 'Achievement ID',
+    `unlocked_at` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT 'Unlock time',
+    UNIQUE KEY `uk_user_achievement` (`user_id`, `achievement_id`),
+    KEY `idx_user_id` (`user_id`),
+    CONSTRAINT `fk_user_ach_user` FOREIGN KEY (`user_id`) REFERENCES `sys_user` (`id`) ON DELETE CASCADE,
+    CONSTRAINT `fk_user_ach_achievement` FOREIGN KEY (`achievement_id`) REFERENCES `achievements` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='User unlocked achievements';
+
+CREATE TABLE IF NOT EXISTS `user_points` (
+    `id` BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT 'Point ID',
+    `user_id` BIGINT NOT NULL COMMENT 'User ID',
+    `points` INT NOT NULL COMMENT 'Points (positive=add, negative=spend)',
+    `source` VARCHAR(50) NOT NULL COMMENT 'Source: achievement, goal, manual',
+    `reference_id` BIGINT DEFAULT NULL COMMENT 'Reference entity ID',
+    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT 'Creation time',
+    KEY `idx_user_id` (`user_id`),
+    CONSTRAINT `fk_points_user` FOREIGN KEY (`user_id`) REFERENCES `sys_user` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='User points ledger';
+
+-- =====================================================
+-- 17. HEALTH GOALS (Phase 3)
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS `health_goals` (
+    `id` BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT 'Goal ID',
+    `user_id` BIGINT NOT NULL COMMENT 'User ID',
+    `title` VARCHAR(100) NOT NULL COMMENT 'Goal title',
+    `description` VARCHAR(500) DEFAULT NULL COMMENT 'Description',
+    `metric_key` VARCHAR(50) DEFAULT NULL COMMENT 'Related metric key',
+    `target_value` DECIMAL(10,2) NOT NULL COMMENT 'Target value',
+    `current_value` DECIMAL(10,2) NOT NULL DEFAULT 0 COMMENT 'Current progress',
+    `unit` VARCHAR(20) DEFAULT NULL COMMENT 'Unit of measurement',
+    `status` VARCHAR(20) NOT NULL DEFAULT 'active' COMMENT 'Status: active, completed, abandoned',
+    `start_date` DATE NOT NULL COMMENT 'Start date',
+    `end_date` DATE DEFAULT NULL COMMENT 'Target end date',
+    `completed_at` DATETIME DEFAULT NULL COMMENT 'Completion time',
+    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT 'Creation time',
+    `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Update time',
+    KEY `idx_user_id` (`user_id`),
+    KEY `idx_status` (`status`),
+    CONSTRAINT `fk_goals_user` FOREIGN KEY (`user_id`) REFERENCES `sys_user` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Health goals';
+
+CREATE TABLE IF NOT EXISTS `goal_progress` (
+    `id` BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT 'Progress ID',
+    `goal_id` BIGINT NOT NULL COMMENT 'Goal ID',
+    `value` DECIMAL(10,2) NOT NULL COMMENT 'Progress value',
+    `note` VARCHAR(500) DEFAULT NULL COMMENT 'Progress note',
+    `recorded_at` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT 'Record time',
+    KEY `idx_goal_id` (`goal_id`),
+    CONSTRAINT `fk_progress_goal` FOREIGN KEY (`goal_id`) REFERENCES `health_goals` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Goal progress entries';
+
+-- =====================================================
+-- 18. MOOD TRACKING (Phase 3)
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS `mood_entries` (
+    `id` BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT 'Entry ID',
+    `user_id` BIGINT NOT NULL COMMENT 'User ID',
+    `mood_score` TINYINT NOT NULL COMMENT 'Mood score 1-10',
+    `energy_level` TINYINT DEFAULT NULL COMMENT 'Energy level 1-10',
+    `stress_level` TINYINT DEFAULT NULL COMMENT 'Stress level 1-10',
+    `sleep_quality` TINYINT DEFAULT NULL COMMENT 'Sleep quality 1-10',
+    `notes` VARCHAR(500) DEFAULT NULL COMMENT 'Optional notes',
+    `entry_date` DATE NOT NULL COMMENT 'Entry date',
+    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT 'Creation time',
+    KEY `idx_user_id` (`user_id`),
+    KEY `idx_entry_date` (`entry_date`),
+    UNIQUE KEY `uk_user_date` (`user_id`, `entry_date`),
+    CONSTRAINT `fk_mood_user` FOREIGN KEY (`user_id`) REFERENCES `sys_user` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Mood tracking entries';
 
 -- =====================================================
 -- END OF SCHEMA

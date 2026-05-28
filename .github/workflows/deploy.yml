@@ -48,44 +48,19 @@ jobs:
         env:
           OWNER: ${{ steps.meta.outputs.owner_lc }}
           IMAGE_TAG: latest
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          GHCR_ACTOR: ${{ github.actor }}
+          HEALTH_HOST: http://${{ secrets.ECS_HOST }}
         with:
           host: ${{ secrets.ECS_HOST }}
           username: ${{ secrets.ECS_USER }}
           key: ${{ secrets.ECS_SSH_KEY }}
-          envs: OWNER,IMAGE_TAG
+          envs: OWNER,IMAGE_TAG,GHCR_TOKEN,GHCR_ACTOR,HEALTH_HOST
           script: |
             cd ${{ secrets.ECS_DEPLOY_PATH }}
 
-            # Remove override file to prevent dev config leaking into production
-            rm -f docker-compose.override.yml
+            # Copy updated deploy script from repository
+            chmod +x scripts/deploy.sh
 
-            # Update docker-compose files from repository
-            git pull origin master
-
-            # Ensure override file stays removed after git pull
-            rm -f docker-compose.override.yml
-
-            # Login to GHCR for pulling images
-            echo ${{ secrets.GHCR_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-
-            # Force pull latest images (ignore local cache)
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml pull --ignore-buildable
-
-            # Stop old containers and recreate with new images
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml down
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --force-recreate
-
-            # Cleanup old images
-            docker image prune -f
-
-            # Verify running images
-            echo "=== Running containers ==="
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
-
-      - name: Health check
-        run: |
-          echo "Waiting for services to start..."
-          sleep 60
-          echo "Checking backend health..."
-          curl -f http://${{ secrets.ECS_HOST }}/actuator/health || exit 1
-          echo "Deployment successful - backend is healthy"
+            # Run shared deployment script
+            bash scripts/deploy.sh

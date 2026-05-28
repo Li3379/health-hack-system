@@ -101,8 +101,9 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { useRoute, useRouter } from 'vue-router'
+import { Top, Bottom, Minus, Document } from '@element-plus/icons-vue'
 import { screeningApi } from '@/api/screening'
 import { formatDateTime } from '@/utils/format'
 import type { ExaminationReportVO, LabResultVO } from '@/types/api'

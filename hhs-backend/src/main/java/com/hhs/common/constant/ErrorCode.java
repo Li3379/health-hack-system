@@ -46,6 +46,17 @@ public enum ErrorCode {
     HEALTH_DATA_CONFLICT(409, "health.data_conflict", "健康数据冲突", "Health data conflict"),
 
     // ========================================
+    // Goal errors (GOAL_*)
+    // ========================================
+    GOAL_NOT_FOUND(404, "goal.not_found", "健康目标不存在", "Health goal not found"),
+    GOAL_FORBIDDEN(403, "goal.forbidden", "无权操作此目标", "No permission to operate this goal"),
+
+    // ========================================
+    // Mood errors (MOOD_*)
+    // ========================================
+    MOOD_ENTRY_NOT_FOUND(404, "mood.entry_not_found", "心情记录不存在", "Mood entry not found"),
+
+    // ========================================
     // Resource errors (RESOURCE_*)
     // ========================================
     RESOURCE_NOT_FOUND(404, "resource.not_found", "资源不存在", "Resource not found"),

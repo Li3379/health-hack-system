@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.hhs.common.Result;
 import com.hhs.common.constant.ErrorCode;
 import com.hhs.component.DeviceSyncRateLimiter;
+import com.hhs.config.DeviceMockProperties;
 import com.hhs.exception.BusinessException;
 import com.hhs.security.SecurityUtils;
 import com.hhs.service.DeviceConnectionService;
@@ -34,6 +35,7 @@ public class DeviceSyncController {
     private final SyncHistoryService syncHistoryService;
     private final DeviceSyncOrchestrationService orchestrationService;
     private final DeviceSyncRateLimiter rateLimiter;
+    private final DeviceMockProperties deviceMockProperties;
 
     /**
      * 获取已连接设备列表
@@ -46,6 +48,20 @@ public class DeviceSyncController {
 
         return Result.success(connections);
     }
+
+    /**
+     * 获取设备配置信息（是否启用模拟数据）
+     */
+    @GetMapping("/config")
+    @Operation(summary = "获取设备配置", description = "获取设备模块配置信息，如是否启用模拟数据")
+    public Result<DeviceConfig> getConfig() {
+        return Result.success(new DeviceConfig(deviceMockProperties.isEnabled()));
+    }
+
+    /**
+     * 设备配置VO
+     */
+    public record DeviceConfig(boolean mockEnabled) {}
 
     /**
      * 获取支持的平台列表

@@ -145,6 +145,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
+import { Plus } from '@element-plus/icons-vue'
 import { healthApi } from '@/api/health'
 import { formatDateTime, getMetricLabel } from '@/utils/format'
 import type { HealthMetricVO, HealthMetricRequest } from '@/types/api'
