@@ -1,9 +1,11 @@
 package com.hhs.controller;
 
 import com.hhs.common.Result;
+import com.hhs.entity.HealthScoreHistory;
 import com.hhs.security.SecurityUtils;
 import com.hhs.service.HealthReportService;
 import com.hhs.service.HealthScoreService;
+import com.hhs.service.ScoreHistoryService;
 import com.hhs.service.domain.MetricValidator;
 import com.hhs.vo.HealthReportVO;
 import com.hhs.vo.HealthScoreVO;
@@ -30,6 +32,7 @@ public class HealthScoreController {
 
     private final HealthScoreService healthScoreService;
     private final HealthReportService healthReportService;
+    private final ScoreHistoryService scoreHistoryService;
     private final MetricValidator metricValidator;
 
     // ==================== Health Score APIs ====================
@@ -72,27 +75,15 @@ public class HealthScoreController {
 
     @Operation(summary = "Get health score history")
     @GetMapping("/score/history")
-    public Result<List<Map<String, Object>>> getScoreHistory(
+    public Result<List<HealthScoreHistory>> getScoreHistory(
             @RequestParam(defaultValue = "30") Integer days) {
+        if (days == null || days < 1) days = 30;
+        if (days > 365) days = 365;
         Long userId = SecurityUtils.getCurrentUserId();
         log.debug("Get score history request: userId={}, days={}", userId, days);
 
-        // Check if user has data
-        if (!metricValidator.hasAnyData(userId)) {
-            log.info("User {} has no health data for history", userId);
-            return Result.success(List.of());
-        }
-
-        HealthScoreVO currentScore = healthScoreService.calculateScore(userId);
-
-        // Return current score as history (single entry)
-        Map<String, Object> historyEntry = Map.of(
-            "date", currentScore.getCalculatedAt(),
-            "score", currentScore.getScore(),
-            "level", currentScore.getLevel()
-        );
-
-        return Result.success(List.of(historyEntry));
+        List<HealthScoreHistory> history = scoreHistoryService.getHistory(userId, days);
+        return Result.success(history);
     }
 
     // ==================== Health Report APIs ====================

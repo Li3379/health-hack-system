@@ -30,6 +30,7 @@ on:
       - 'hhs-backend/**'
       - 'hhs-frontend-v2/**'
       - 'docker-compose*.yml'
+      - 'scripts/**'
       - '.github/workflows/docker-publish.yml'
   workflow_dispatch:
 
@@ -48,10 +49,58 @@ env:
 
 jobs:
   # ===========================================================================
+  # BACKEND CI
+  # ===========================================================================
+  backend-ci:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Run backend tests
+        run: cd hhs-backend && mvn clean verify -DskipITs
+
+  # ===========================================================================
+  # FRONTEND CI
+  # ===========================================================================
+  frontend-ci:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: hhs-frontend-v2/package-lock.json
+
+      - name: Install dependencies
+        run: cd hhs-frontend-v2 && npm ci
+
+      - name: Build frontend
+        run: cd hhs-frontend-v2 && npm run build
+
+      - name: Lint check
+        run: cd hhs-frontend-v2 && npm run lint:check
+
+      - name: Run tests
+        run: cd hhs-frontend-v2 && npm run test:run
+
+  # ===========================================================================
   # BACKEND IMAGE BUILD
   # ===========================================================================
   build-backend:
     runs-on: ubuntu-latest
+    needs: [backend-ci]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -80,14 +129,15 @@ jobs:
           tags: |
             ghcr.io/${{ steps.meta.outputs.owner_lc }}/hhs-backend:latest
             ghcr.io/${{ steps.meta.outputs.owner_lc }}/hhs-backend:sha-${{ github.sha }}
-          # Disable cache to ensure latest source code is always built
-          no-cache: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
   # ===========================================================================
   # FRONTEND IMAGE BUILD
   # ===========================================================================
   build-frontend:
     runs-on: ubuntu-latest
+    needs: [frontend-ci]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -116,14 +166,11 @@ jobs:
           tags: |
             ghcr.io/${{ steps.meta.outputs.owner_lc }}/hhs-frontend:latest
             ghcr.io/${{ steps.meta.outputs.owner_lc }}/hhs-frontend:sha-${{ github.sha }}
-          # Build arguments for frontend
-          # IMPORTANT: Do NOT include /api or /ws suffix in these URLs!
-          # See documentation at top of file for correct configuration
           build-args: |
             VITE_API_BASE_URL=${{ secrets.VITE_API_BASE_URL }}
             VITE_WS_BASE_URL=${{ secrets.VITE_WS_BASE_URL }}
-          # Disable cache to ensure nginx.conf changes are picked up
-          no-cache: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
   # ===========================================================================
   # DEPLOY TO ECS
@@ -147,44 +194,19 @@ jobs:
         env:
           OWNER: ${{ steps.meta.outputs.owner_lc }}
           IMAGE_TAG: latest
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          GHCR_ACTOR: ${{ github.actor }}
+          HEALTH_HOST: http://${{ secrets.ECS_HOST }}
         with:
           host: ${{ secrets.ECS_HOST }}
           username: ${{ secrets.ECS_USER }}
           key: ${{ secrets.ECS_SSH_KEY }}
-          envs: OWNER,IMAGE_TAG
+          envs: OWNER,IMAGE_TAG,GHCR_TOKEN,GHCR_ACTOR,HEALTH_HOST
           script: |
             cd ${{ secrets.ECS_DEPLOY_PATH }}
-            
-            # Remove override file to prevent dev config leaking into production
-            rm -f docker-compose.override.yml
-            
-            # Pull latest code and docker-compose files
-            git pull origin master
-            
-            # Ensure override file stays removed after git pull
-            rm -f docker-compose.override.yml
-            
-            # Login to GHCR for pulling images
-            echo ${{ secrets.GHCR_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-            
-            # Force pull latest images (ignore local cache)
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml pull --ignore-buildable
-            
-            # Stop and remove old containers to ensure new images are used
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml down
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --force-recreate
-            
-            # Cleanup old images
-            docker image prune -f
-            
-            # Verify running images
-            echo "=== Running containers ==="
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
 
-      - name: Health check
-        run: |
-          echo "Waiting for services to start..."
-          sleep 60
-          echo "Checking backend health..."
-          curl -f http://${{ secrets.ECS_HOST }}/actuator/health || exit 1
-          echo "Deployment successful - backend is healthy"
+            # Copy updated deploy script from repository
+            chmod +x scripts/deploy.sh
+
+            # Run shared deployment script
+            bash scripts/deploy.sh

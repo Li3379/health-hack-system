@@ -59,6 +59,11 @@ export const deviceApi = {
     return request.get<DeviceConnectionVO[]>('/api/device/connections')
   },
 
+  // 获取设备配置（是否启用模拟数据）
+  getConfig() {
+    return request.get<{ mockEnabled: boolean }>('/api/device/config')
+  },
+
   // 获取支持的平台列表
   getPlatforms() {
     return request.get<PlatformInfo[]>('/api/device/platforms')

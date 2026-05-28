@@ -64,6 +64,11 @@ public class HealthReport {
     private String userInfo;
 
     /**
+     * 是否为预估数据（AI解析失败时使用fallback值）
+     */
+    private Boolean isEstimated;
+
+    /**
      * 报告生成时间
      */
     private LocalDateTime generatedAt;

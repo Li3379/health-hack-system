@@ -276,6 +276,7 @@ public class HealthReportServiceImpl implements HealthReportService {
             entity.setSuggestions(objectMapper.writeValueAsString(report.suggestions()));
             entity.setSummary(report.summary());
             entity.setUserInfo(objectMapper.writeValueAsString(report.userInfo()));
+            entity.setIsEstimated(report.isEstimated());
             entity.setGeneratedAt(report.generatedAt());
             entity.setCreatedAt(LocalDateTime.now());
 
@@ -339,7 +340,8 @@ public class HealthReportServiceImpl implements HealthReportService {
                 dimensions,
                 riskAlerts,
                 suggestions,
-                entity.getSummary()
+                entity.getSummary(),
+                Boolean.TRUE.equals(entity.getIsEstimated())
             );
         } catch (Exception e) {
             log.error("Failed to convert entity to VO: {}", e.getMessage());
@@ -444,7 +446,8 @@ public class HealthReportServiceImpl implements HealthReportService {
             dimensions,
             riskAlerts,
             suggestions,
-            summary
+            summary,
+            false
         );
     }
 
@@ -588,7 +591,8 @@ public class HealthReportServiceImpl implements HealthReportService {
             dimensions,
             new ArrayList<>(),
             suggestions,
-            "您的健康评分为" + scoreVO.getScore() + "分，" + getLevelText(scoreVO.getLevel()) + "。"
+            "您的健康评分为" + scoreVO.getScore() + "分，" + getLevelText(scoreVO.getLevel()) + "。",
+            true
         );
     }
 

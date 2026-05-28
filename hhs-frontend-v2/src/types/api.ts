@@ -375,6 +375,7 @@ export interface HealthReportVO {
     action: string
   }>
   summary: string
+  isEstimated?: boolean
 }
 
 // 设备同步相关

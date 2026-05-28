@@ -111,6 +111,26 @@ const routes: RouteRecordRaw[] = [
         name: 'DevicePlatformConfig',
         component: () => import('@/views/settings/DevicePlatformConfig.vue'),
         meta: { requiresAdmin: true }
+      },
+      {
+        path: 'reminders',
+        name: 'Reminders',
+        component: () => import('@/views/reminders/Index.vue')
+      },
+      {
+        path: 'goals',
+        name: 'HealthGoals',
+        component: () => import('@/views/goals/Index.vue')
+      },
+      {
+        path: 'mood',
+        name: 'MoodTracker',
+        component: () => import('@/views/mood/MoodTracker.vue')
+      },
+      {
+        path: 'screening/compare/:idA/:idB',
+        name: 'ScreeningCompare',
+        component: () => import('@/views/screening/Compare.vue')
       }
     ]
   }

@@ -1,16 +1,18 @@
 <template>
-  <el-dialog v-model="visible" :title="metric?.name + '录入'" width="400px" destroy-on-close>
+  <el-dialog v-model="visible" :title="metric?.name + '录入'" width="420px" destroy-on-close>
     <el-form ref="formRef" :model="form" :rules="rules" label-width="80px">
       <el-form-item label="数值" prop="value">
         <el-input-number
           v-model="form.value"
           :precision="precision"
           :step="step"
-          :min="min"
-          :max="max"
+          :min="currentRange.min"
+          :max="currentRange.max"
           placeholder="请输入数值"
           style="width: 100%"
+          @blur="handleValueBlur"
         />
+        <div class="range-hint">有效范围: {{ rangeHint }}</div>
       </el-form-item>
 
       <el-form-item v-if="metric?.key === 'systolicBP'" label="舒张压" prop="diastolicValue">
@@ -22,8 +24,9 @@
           :max="200"
           placeholder="舒张压"
           style="width: 100%"
+          @blur="handleDiastolicBlur"
         />
-        <span class="unit-label">mmHg</span>
+        <div class="range-hint">有效范围: 40 - 200 mmHg</div>
       </el-form-item>
 
       <el-form-item label="单位">
@@ -56,6 +59,28 @@ import type { FormInstance, FormRules } from 'element-plus'
 import { healthApi } from '@/api/health'
 import { wellnessApi } from '@/api/wellness'
 
+interface MetricRange {
+  min: number
+  max: number
+}
+
+const METRIC_RANGES: Record<string, MetricRange> = {
+  glucose: { min: 1.0, max: 25.0 },
+  systolicBP: { min: 60, max: 200 },
+  heartRate: { min: 30, max: 220 },
+  temperature: { min: 30, max: 43 },
+  weight: { min: 20, max: 200 },
+  bmi: { min: 10, max: 50 },
+  sleepDuration: { min: 0, max: 24 },
+  steps: { min: 0, max: 100000 },
+  waterIntake: { min: 0, max: 10000 },
+  mood: { min: 1, max: 5 },
+  energy: { min: 1, max: 5 },
+  exerciseMinutes: { min: 0, max: 300 }
+}
+
+const DEFAULT_RANGE: MetricRange = { min: 0, max: 10000 }
+
 const props = defineProps<{
   modelValue: boolean
   metric: any
@@ -80,7 +105,17 @@ const form = ref({
   recordDate: new Date().toISOString().split('T')[0]
 })
 
-// 根据指标类型设置精度和步长
+const currentRange = computed<MetricRange>(() => {
+  if (!props.metric?.key) return DEFAULT_RANGE
+  return METRIC_RANGES[props.metric.key] || DEFAULT_RANGE
+})
+
+const rangeHint = computed(() => {
+  const r = currentRange.value
+  const unit = props.metric?.unit || ''
+  return `${r.min} - ${r.max}${unit ? ' ' + unit : ''}`
+})
+
 const precision = computed(() => {
   if (['glucose', 'temperature', 'weight', 'bmi'].includes(props.metric?.key)) {
     return 1
@@ -94,38 +129,26 @@ const step = computed(() => {
   return 1
 })
 
-const min = computed(() => {
-  if (props.metric?.key === 'glucose') return 0
-  if (props.metric?.key === 'heartRate') return 20
-  if (props.metric?.key === 'temperature') return 30
-  if (props.metric?.key === 'weight') return 20
-  if (props.metric?.key === 'systolicBP') return 60
-  if (props.metric?.key === 'steps') return 0
-  if (props.metric?.key === 'sleepDuration') return 0
-  return 0
-})
-
-const max = computed(() => {
-  if (props.metric?.key === 'glucose') return 50
-  if (props.metric?.key === 'heartRate') return 300
-  if (props.metric?.key === 'temperature') return 45
-  if (props.metric?.key === 'weight') return 300
-  if (props.metric?.key === 'systolicBP') return 250
-  if (props.metric?.key === 'steps') return 100000
-  if (props.metric?.key === 'sleepDuration') return 24
-  return 10000
-})
-
-// 指标范围验证器
 const validateRange = (_rule: any, value: number, callback: any) => {
   if (value === undefined || value === null) {
     callback(new Error('请输入数值'))
     return
   }
-  const minVal = min.value
-  const maxVal = max.value
-  if (value < minVal || value > maxVal) {
-    callback(new Error(`数值应在 ${minVal}-${maxVal} 之间`))
+  const r = currentRange.value
+  if (value < r.min || value > r.max) {
+    callback(new Error(`请重新输入，有效范围: ${r.min} - ${r.max}`))
+  } else {
+    callback()
+  }
+}
+
+const validateDiastolicRange = (_rule: any, value: number, callback: any) => {
+  if (value === undefined || value === null) {
+    callback()
+    return
+  }
+  if (value < 40 || value > 200) {
+    callback(new Error('请重新输入，有效范围: 40 - 200'))
   } else {
     callback()
   }
@@ -133,13 +156,15 @@ const validateRange = (_rule: any, value: number, callback: any) => {
 
 const rules: FormRules = {
   value: [
-    { required: true, message: '请输入数值', trigger: 'blur' },
-    { validator: validateRange, trigger: 'blur' }
+    { required: true, message: '请输入数值', trigger: 'change' },
+    { validator: validateRange, trigger: 'change' }
+  ],
+  diastolicValue: [
+    { validator: validateDiastolicRange, trigger: 'change' }
   ],
   recordDate: [{ required: true, message: '请选择日期', trigger: 'change' }]
 }
 
-// 重置表单
 watch(visible, val => {
   if (val) {
     form.value = {
@@ -147,8 +172,32 @@ watch(visible, val => {
       diastolicValue: undefined,
       recordDate: new Date().toISOString().split('T')[0]
     }
+    setTimeout(() => {
+      formRef.value?.clearValidate()
+    }, 0)
   }
 })
+
+const handleValueBlur = () => {
+  const val = form.value.value
+  if (val === undefined || val === null) return
+  const r = currentRange.value
+  if (val < r.min || val > r.max) {
+    ElMessage.warning(`数值超出有效范围 ${r.min} - ${r.max}，请重新输入`)
+    form.value.value = undefined
+    formRef.value?.validateField('value')
+  }
+}
+
+const handleDiastolicBlur = () => {
+  const val = form.value.diastolicValue
+  if (val === undefined || val === null) return
+  if (val < 40 || val > 200) {
+    ElMessage.warning(`舒张压超出有效范围 40 - 200，请重新输入`)
+    form.value.diastolicValue = undefined
+    formRef.value?.validateField('diastolicValue')
+  }
+}
 
 const handleSubmit = async () => {
   if (!formRef.value) return
@@ -171,7 +220,6 @@ const handleSubmit = async () => {
         await healthApi.createMetric(data)
       }
 
-      // 如果是血压，还需要保存舒张压
       if (props.metric.key === 'systolicBP' && form.value.diastolicValue) {
         const diastolicData = {
           metricKey: 'diastolicBP',
@@ -195,6 +243,13 @@ const handleSubmit = async () => {
 </script>
 
 <style scoped>
+.range-hint {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--el-color-info);
+  line-height: 1.4;
+}
+
 .unit-label {
   margin-left: 8px;
   color: var(--color-text-secondary);

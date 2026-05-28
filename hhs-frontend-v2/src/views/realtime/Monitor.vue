@@ -42,6 +42,21 @@
     </el-card>
 
     <!-- 最新指标 -->
+    <el-skeleton :loading="metricsLoading" animated>
+      <template #template>
+        <el-row :gutter="20" class="metrics-row">
+          <el-col v-for="n in 4" :key="n" :xs="24" :sm="12" :md="8" :lg="6">
+            <el-card class="metric-card">
+              <div style="text-align: center;">
+                <el-skeleton-item variant="text" style="width: 80px; height: 14px; margin: 0 auto 12px;" />
+                <el-skeleton-item variant="text" style="width: 100px; height: 36px; margin: 0 auto 8px;" />
+                <el-skeleton-item variant="text" style="width: 60px; height: 12px; margin: 0 auto;" />
+              </div>
+            </el-card>
+          </el-col>
+        </el-row>
+      </template>
+      <template #default>
     <el-row :gutter="20" class="metrics-row">
       <el-col v-for="metric in latestMetrics" :key="metric.id" :xs="24" :sm="12" :md="8" :lg="6">
         <el-card class="metric-card">
@@ -61,6 +76,24 @@
         </el-card>
       </el-col>
     </el-row>
+      </template>
+    </el-skeleton>
+
+    <!-- 心率仪表盘 -->
+    <el-card class="gauge-card">
+      <template #header>
+        <div class="header-actions">
+          <span>实时心率</span>
+          <el-tag v-if="heartRateValue !== null" :type="heartRateTagType" size="small">
+            {{ heartRateStatusText }}
+          </el-tag>
+        </div>
+      </template>
+      <div class="gauge-content">
+        <GaugeChart :value="heartRateValue" title="心率 (bpm)" />
+      </div>
+    </el-card>
+
 
     <!-- 实时图表 -->
     <el-card class="chart-card">
@@ -140,27 +173,105 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, onUnmounted, nextTick, computed } from 'vue'
 import { ElMessage } from 'element-plus'
-import * as echarts from 'echarts'
+import { Connection } from '@element-plus/icons-vue'
+import * as echarts from 'echarts/core'
+import { LineChart } from 'echarts/charts'
+import { TooltipComponent, GridComponent } from 'echarts/components'
+import { CanvasRenderer } from 'echarts/renderers'
+
+echarts.use([LineChart, TooltipComponent, GridComponent, CanvasRenderer])
 import { useAuthStore } from '@/stores/auth'
 import { useRealtimeStore } from '@/stores/realtime'
 import { realtimeApi } from '@/api/realtime'
 import { formatRelativeTime } from '@/utils/format'
+import { useECharts } from '@/composables/useECharts'
+import GaugeChart from '@/components/charts/GaugeChart.vue'
 import type { RealtimeMetricVO } from '@/types/api'
 
 const authStore = useAuthStore()
 const realtimeStore = useRealtimeStore()
 const chartLoading = ref(false)
+const metricsLoading = ref(false)
 const selectedMetric = ref('heartRate')
 const latestMetrics = ref<RealtimeMetricVO[]>([])
+
+const heartRateValue = computed(() => {
+  const hr = realtimeStore.latestMetrics.find(m => m.metricKey === 'heartRate')
+  return hr?.value ?? null
+})
+
+const heartRateTagType = computed(() => {
+  const v = heartRateValue.value
+  if (v === null) return 'info' as const
+  if (v < 60) return 'info' as const
+  if (v <= 100) return 'success' as const
+  if (v <= 120) return 'warning' as const
+  return 'danger' as const
+})
+
+const heartRateStatusText = computed(() => {
+  const v = heartRateValue.value
+  if (v === null) return '无数据'
+  if (v < 60) return '偏低'
+  if (v <= 100) return '正常'
+  if (v <= 120) return '偏高'
+  return '过高'
+})
+
 const chartRef = ref<HTMLElement>()
-let chartInstance: echarts.ECharts | null = null
+let trendData: any = null
+
+const buildChartOption = (): echarts.EChartsCoreOption => {
+  if (!trendData) return {}
+  const times = trendData.dataPoints.map((p: any) => new Date(p.timestamp).toLocaleTimeString())
+  const values = trendData.dataPoints.map((p: any) => p.value)
+  return {
+    tooltip: {
+      trigger: 'axis',
+      formatter: '{b}<br/>{a}: {c} ' + trendData.unit
+    },
+    xAxis: {
+      type: 'category',
+      data: times,
+      boundaryGap: false
+    },
+    yAxis: {
+      type: 'value',
+      name: trendData.unit
+    },
+    series: [
+      {
+        name: trendData.metricDisplayName,
+        data: values,
+        type: 'line',
+        smooth: true,
+        areaStyle: {
+          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+            { offset: 0, color: 'rgba(94, 234, 212, 0.3)' },
+            { offset: 1, color: 'rgba(94, 234, 212, 0.05)' }
+          ])
+        },
+        lineStyle: { width: 2 },
+        itemStyle: { borderWidth: 2 }
+      }
+    ],
+    grid: {
+      left: '3%',
+      right: '4%',
+      bottom: '3%',
+      containLabel: true
+    }
+  }
+}
+
+const { init: initChart, updateOption } = useECharts(chartRef, buildChartOption)
 let pingInterval: ReturnType<typeof setInterval> | null = null
 
 // 计算状态显示
 const statusColor = computed(() => {
-  if (realtimeStore.connected) return '#67c23a'
-  if (realtimeStore.connecting) return '#e6a23c'
-  return '#f56c6c'
+  if (realtimeStore.connected) return 'var(--color-health-excellent)'
+  if (realtimeStore.connecting) return 'var(--color-health-fair)'
+  return 'var(--color-health-poor)'
 })
 
 const statusText = computed(() => {
@@ -190,11 +301,14 @@ const disconnect = () => {
 }
 
 const fetchLatestMetrics = async () => {
+  metricsLoading.value = true
   try {
     const res = await realtimeApi.getLatestMetrics()
     latestMetrics.value = res.data
   } catch (error) {
     console.error('Failed to fetch latest metrics:', error)
+  } finally {
+    metricsLoading.value = false
   }
 }
 
@@ -204,68 +318,13 @@ const fetchTrend = async () => {
   chartLoading.value = true
   try {
     const res = await realtimeApi.getMetricTrend(selectedMetric.value, 24)
-    renderChart(res.data)
+    trendData = res.data
+    updateOption()
   } catch (error) {
     ElMessage.error('获取趋势数据失败')
   } finally {
     chartLoading.value = false
   }
-}
-
-const renderChart = (data: any) => {
-  if (!chartRef.value) return
-
-  if (!chartInstance) {
-    chartInstance = echarts.init(chartRef.value)
-  }
-
-  const times = data.dataPoints.map((p: any) => new Date(p.timestamp).toLocaleTimeString())
-  const values = data.dataPoints.map((p: any) => p.value)
-
-  const option = {
-    tooltip: {
-      trigger: 'axis',
-      formatter: '{b}<br/>{a}: {c} ' + data.unit
-    },
-    xAxis: {
-      type: 'category',
-      data: times,
-      boundaryGap: false
-    },
-    yAxis: {
-      type: 'value',
-      name: data.unit
-    },
-    series: [
-      {
-        name: data.metricDisplayName,
-        data: values,
-        type: 'line',
-        smooth: true,
-        areaStyle: {
-          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: 'rgba(103, 194, 58, 0.3)' },
-            { offset: 1, color: 'rgba(103, 194, 58, 0.05)' }
-          ])
-        },
-        lineStyle: {
-          color: '#67c23a',
-          width: 2
-        },
-        itemStyle: {
-          color: '#67c23a'
-        }
-      }
-    ],
-    grid: {
-      left: '3%',
-      right: '4%',
-      bottom: '3%',
-      containLabel: true
-    }
-  }
-
-  chartInstance.setOption(option)
 }
 
 const handleAdd = async () => {
@@ -299,6 +358,8 @@ const startPing = () => {
   }, 30000) // 每30秒发送心跳
 }
 
+let refreshInterval: ReturnType<typeof setInterval> | null = null
+
 onMounted(async () => {
   // 页面加载时自动连接
   if (authStore.token && !realtimeStore.connected && !realtimeStore.connecting) {
@@ -308,26 +369,20 @@ onMounted(async () => {
   await fetchLatestMetrics()
   await nextTick()
   await fetchTrend()
-
-  // 监听窗口大小变化
-  window.addEventListener('resize', () => {
-    chartInstance?.resize()
-  })
+  initChart()
 
   // 启动心跳
   startPing()
 
   // 定时刷新数据
-  const refreshInterval = setInterval(() => {
+  refreshInterval = setInterval(() => {
     fetchLatestMetrics()
   }, 10000)
+})
 
-  // 清理函数
-  onUnmounted(() => {
-    clearInterval(refreshInterval)
-    if (pingInterval) clearInterval(pingInterval)
-    chartInstance?.dispose()
-  })
+onUnmounted(() => {
+  if (refreshInterval) clearInterval(refreshInterval)
+  if (pingInterval) clearInterval(pingInterval)
 })
 </script>
 
@@ -355,11 +410,11 @@ onMounted(async () => {
 }
 
 .status-indicator .connected {
-  color: #67c23a;
+  color: var(--color-health-excellent);
 }
 
 .status-indicator .connecting {
-  color: #e6a23c;
+  color: var(--color-health-fair);
 }
 
 .button-group {
@@ -392,25 +447,25 @@ onMounted(async () => {
 
 .metric-name {
   font-size: 14px;
-  color: #606266;
+  color: var(--text-2);
 }
 
 .metric-value {
   font-size: 36px;
   font-weight: bold;
-  color: #303133;
+  color: var(--text-1);
   margin-bottom: 8px;
 }
 
 .metric-unit {
   font-size: 16px;
-  color: #909399;
+  color: var(--text-3);
   margin-left: 4px;
 }
 
 .metric-time {
   font-size: 12px;
-  color: #909399;
+  color: var(--text-3);
 }
 
 .chart-card,
@@ -427,5 +482,14 @@ onMounted(async () => {
 .chart-container {
   height: 400px;
   width: 100%;
+}
+
+.gauge-card {
+  margin-bottom: 20px;
+}
+
+.gauge-content {
+  display: flex;
+  justify-content: center;
 }
 </style>

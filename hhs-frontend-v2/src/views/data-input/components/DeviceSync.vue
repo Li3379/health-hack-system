@@ -4,6 +4,7 @@
       <div class="card-header">
         <el-icon><Connection /></el-icon>
         <span>穿戴设备同步</span>
+        <el-tag v-if="isMockData" size="small" type="warning" effect="plain" class="mock-badge">模拟数据</el-tag>
         <el-button text type="primary" size="small" class="history-btn" @click="openSyncHistory">
           查看同步历史
         </el-button>
@@ -358,7 +359,10 @@ const activeConfigPanel = ref('huawei')
 // Configuration wizard state
 const showConfigWizard = ref(false)
 
-// Computed
+// Mock data badge: fetch from backend config
+const mockEnabled = ref(false)
+const isMockData = computed(() => mockEnabled.value)
+
 const connectedCount = computed(() => {
   return devices.value.filter(d => d.status === 'connected').length
 })
@@ -664,14 +668,23 @@ const getDeviceColor = (platform: string) => {
   return PLATFORM_COLORS[platform] || 'var(--color-primary)'
 }
 
-onMounted(() => {
+onMounted(async () => {
   // Add network status listeners
   window.addEventListener('online', handleOnline)
   window.addEventListener('offline', handleOffline)
 
-  // Load devices and platform metadata
+  // Load devices, platform metadata, and config
   loadDevices()
   loadPlatformMetadata()
+
+  // Fetch mock data config from backend
+  try {
+    const res = await deviceApi.getConfig()
+    mockEnabled.value = res.data.mockEnabled
+  } catch {
+    // Silently default to false if config endpoint unavailable
+    mockEnabled.value = false
+  }
 })
 
 onUnmounted(() => {
@@ -695,6 +708,10 @@ onUnmounted(() => {
 
 .history-btn {
   margin-left: auto;
+}
+
+.mock-badge {
+  margin-left: 8px;
 }
 
 .offline-alert {

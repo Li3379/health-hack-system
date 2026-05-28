@@ -107,14 +107,9 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import {
-  ElMessage,
-  ElMessageBox,
-  type FormInstance,
-  type FormRules,
-  type UploadInstance
-} from 'element-plus'
+import { ElMessage, ElMessageBox, type FormInstance, type FormRules, type UploadInstance } from 'element-plus'
 import { useRouter } from 'vue-router'
+import { Upload, Document } from '@element-plus/icons-vue'
 import { screeningApi } from '@/api/screening'
 import type { ExaminationReportVO } from '@/types/api'
 

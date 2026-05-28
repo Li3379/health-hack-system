@@ -109,7 +109,7 @@
         <!-- Features -->
         <div class="features">
           <div class="feature-item">
-            <el-icon><Shield /></el-icon>
+            <el-icon><Key /></el-icon>
             <span>数据安全</span>
           </div>
           <div class="feature-item">
@@ -132,7 +132,7 @@
 <script setup lang="ts">
 import { ref, reactive } from 'vue'
 import { useAuthStore } from '@/stores/auth'
-import { User, Lock, Message } from '@element-plus/icons-vue'
+import { User, Lock, Message, Key, TrendCharts, ChatDotRound } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
 
 const authStore = useAuthStore()

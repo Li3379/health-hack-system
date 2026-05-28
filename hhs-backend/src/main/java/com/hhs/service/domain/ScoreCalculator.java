@@ -30,6 +30,7 @@ public class ScoreCalculator {
     private final RiskScorer riskScorer;
     private final ScreeningScorer screeningScorer;
     private final WellnessScorer wellnessScorer;
+    private final DimensionScoreCalculator dimensionScoreCalculator;
 
     /**
      * Calculate health score for a user
@@ -104,6 +105,7 @@ public class ScoreCalculator {
         vo.setScore(totalScore);
         vo.setLevel(getHealthLevel(totalScore));
         vo.setFactors(factors);
+        vo.setDimensionScores(dimensionScoreCalculator.calculate(userId));
         vo.setCalculatedAt(LocalDateTime.now());
 
         return vo;

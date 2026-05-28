@@ -27,6 +27,12 @@ public class HealthScoreVO {
     private Map<String, Object> factors;
 
     /**
+     * Dimension-level scores for history persistence
+     * Keys: cardiovascular, metabolic, weight, lifestyle; Values: 0-100
+     */
+    private Map<String, Integer> dimensionScores;
+
+    /**
      * Calculation method used: RULE_BASED, AI_BASED
      */
     private String calculationMethod;

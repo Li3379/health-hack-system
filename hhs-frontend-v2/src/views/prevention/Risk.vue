@@ -80,6 +80,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
+import { Plus } from '@element-plus/icons-vue'
 import { preventionApi } from '@/api/prevention'
 import { formatDateTime } from '@/utils/format'
 import type { RiskAssessmentVO } from '@/types/api'

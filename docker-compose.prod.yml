@@ -44,6 +44,7 @@ services:
   #   - IMAGE_TAG: Image version tag (default: latest)
   backend:
     image: ghcr.io/${OWNER:-li3379}/hhs-backend:${IMAGE_TAG:-latest}
+    ports: []  # Remove 8082 port mapping — backend only accessible via nginx
     restart: always
     environment:
       SPRING_PROFILES_ACTIVE: prod
