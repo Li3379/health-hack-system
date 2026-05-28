@@ -1,10 +1,15 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
-import { resolve } from 'path'
+import { resolve, dirname } from 'path'
+import { fileURLToPath } from 'url'
 import AutoImport from 'unplugin-auto-import/vite'
 import Components from 'unplugin-vue-components/vite'
 import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 import { visualizer } from 'rollup-plugin-visualizer'
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
+
+const analyze = process.env.ANALYZE === 'true'
 
 export default defineConfig({
   plugins: [
@@ -16,12 +21,13 @@ export default defineConfig({
     Components({
       resolvers: [ElementPlusResolver()]
     }),
-    process.env.ANALYZE === 'true' && visualizer({
-      open: true,
-      gzipSize: true,
-      brotliSize: true,
-      filename: 'dist/stats.html'
-    })
+    analyze &&
+      visualizer({
+        open: true,
+        gzipSize: true,
+        brotliSize: true,
+        filename: 'dist/stats.html'
+      })
   ].filter(Boolean),
   resolve: {
     alias: {
