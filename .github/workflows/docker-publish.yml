@@ -203,8 +203,8 @@ jobs:
           script: |
             cd ${{ secrets.ECS_DEPLOY_PATH }}
 
-            # Copy updated deploy script from repository
-            chmod +x scripts/deploy.sh
+            # Pull latest code (including updated deploy script)
+            git pull origin master
 
             # Run shared deployment script
             bash scripts/deploy.sh
