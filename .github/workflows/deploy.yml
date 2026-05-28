@@ -1,7 +1,7 @@
 # =============================================================================
 # HHS Deployment Workflow
 # =============================================================================
-# Deploys the HHS application to Alibaba Cloud ECS with environment protection.
+# Manual deployment to Alibaba Cloud ECS with environment protection.
 #
 # Trigger: Manual (workflow_dispatch) - no automatic triggers
 # Environment: production (requires approval from configured reviewers)
@@ -48,19 +48,44 @@ jobs:
         env:
           OWNER: ${{ steps.meta.outputs.owner_lc }}
           IMAGE_TAG: latest
-          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
-          GHCR_ACTOR: ${{ github.actor }}
-          HEALTH_HOST: http://${{ secrets.ECS_HOST }}
         with:
           host: ${{ secrets.ECS_HOST }}
           username: ${{ secrets.ECS_USER }}
           key: ${{ secrets.ECS_SSH_KEY }}
-          envs: OWNER,IMAGE_TAG,GHCR_TOKEN,GHCR_ACTOR,HEALTH_HOST
+          envs: OWNER,IMAGE_TAG
           script: |
             cd ${{ secrets.ECS_DEPLOY_PATH }}
 
-            # Copy updated deploy script from repository
-            chmod +x scripts/deploy.sh
+            # Remove development override file
+            rm -f docker-compose.override.yml
 
-            # Run shared deployment script
-            bash scripts/deploy.sh
+            # Pull latest code (skip if not a git repo)
+            if [ -d .git ]; then
+              git pull origin master
+              rm -f docker-compose.override.yml
+            fi
+
+            # Login to GHCR for pulling images
+            echo ${{ secrets.GHCR_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+            # Force pull latest images
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml pull --ignore-buildable
+
+            # Stop old containers and start new ones
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml down
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --force-recreate
+
+            # Cleanup old images
+            docker image prune -f
+
+            # Verify running containers
+            echo "=== Running containers ==="
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
+
+      - name: Health check
+        run: |
+          echo "Waiting for services to start..."
+          sleep 60
+          echo "Checking backend health..."
+          curl -sf http://${{ secrets.ECS_HOST }}/actuator/health || exit 1
+          echo "Deployment successful - backend is healthy"
