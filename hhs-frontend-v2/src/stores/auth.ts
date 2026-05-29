@@ -15,28 +15,20 @@ export const useAuthStore = defineStore('auth', () => {
 
   // 登录
   const login = async (data: LoginRequest) => {
-    try {
-      const res = await authApi.login(data)
-      token.value = res.data.token
-      user.value = res.data.user
-      storage.setToken(res.data.token)
-      storage.setUser(res.data.user)
-      ElMessage.success('登录成功')
-      router.push('/dashboard')
-    } catch (error) {
-      throw error
-    }
+    const res = await authApi.login(data)
+    token.value = res.data.token
+    user.value = res.data.user
+    storage.setToken(res.data.token)
+    storage.setUser(res.data.user)
+    ElMessage.success('登录成功')
+    router.push('/dashboard')
   }
 
   // 注册
   const register = async (data: RegisterRequest) => {
-    try {
-      await authApi.register(data)
-      ElMessage.success('注册成功，请登录')
-      router.push('/login')
-    } catch (error) {
-      throw error
-    }
+    await authApi.register(data)
+    ElMessage.success('注册成功，请登录')
+    router.push('/login')
   }
 
   // 登出
@@ -56,13 +48,9 @@ export const useAuthStore = defineStore('auth', () => {
 
   // 获取最新用户信息
   const fetchUserInfo = async () => {
-    try {
-      const res = await userApi.getProfile()
-      user.value = res.data.profile
-      storage.setUser(res.data.profile)
-    } catch (error) {
-      throw error
-    }
+    const res = await userApi.getProfile()
+    user.value = res.data.profile
+    storage.setUser(res.data.profile)
   }
 
   return {
