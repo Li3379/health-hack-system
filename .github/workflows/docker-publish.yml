@@ -246,7 +246,7 @@ jobs:
 
             # Force pull latest images
             echo "=== Pulling latest images ==="
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml pull --ignore-buildable
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml pull
 
             # Stop old containers and start new ones
             # Note: up -d returns non-zero when a dependency health check fails,
