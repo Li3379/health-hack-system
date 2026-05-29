@@ -1,0 +1,158 @@
+# =============================================================================
+# HHS Rollback Workflow
+# =============================================================================
+# Quickly rollback to a previous version by tag or commit SHA.
+#
+# Trigger: Manual (workflow_dispatch)
+#
+# Usage:
+#   1. Go to Actions > Rollback > Run workflow
+#   2. Enter the version to rollback to (e.g., v1.2.0 or sha-abc123)
+#   3. Confirm the rollback
+#
+# Rollback Strategy:
+#   - Uses pre-built Docker images from GHCR (no rebuild needed)
+#   - Images are tagged with both version tags and commit SHAs
+#   - Rollback completes in ~2 minutes vs ~15 minutes for full rebuild
+# =============================================================================
+
+name: Rollback
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to rollback to (tag name or sha-{commit})'
+        required: true
+        type: string
+        default: 'v1.2.0'
+      confirm:
+        description: 'Type "ROLLBACK" to confirm'
+        required: true
+        type: string
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate rollback confirmation
+        run: |
+          if [ "${{ inputs.confirm }}" != "ROLLBACK" ]; then
+            echo "ERROR: Rollback not confirmed. Type 'ROLLBACK' in the confirm field."
+            exit 1
+          fi
+          echo "Rollback confirmed for version: ${{ inputs.version }}"
+
+  rollback:
+    runs-on: ubuntu-latest
+    needs: [validate]
+    environment: production
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Extract metadata (lowercase owner)
+        id: meta
+        run: |
+          OWNER_LC=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          echo "owner_lc=$OWNER_LC" >> $GITHUB_OUTPUT
+
+      - name: Rollback to version
+        uses: appleboy/ssh-action@v1
+        env:
+          OWNER: ${{ steps.meta.outputs.owner_lc }}
+          VERSION: ${{ inputs.version }}
+        with:
+          host: ${{ secrets.ECS_HOST }}
+          username: ${{ secrets.ECS_USER }}
+          key: ${{ secrets.ECS_SSH_KEY }}
+          envs: OWNER,VERSION
+          script: |
+            set -euo pipefail
+
+            DEPLOY_DIR="${{ secrets.ECS_DEPLOY_PATH }}"
+            cd "$DEPLOY_DIR"
+
+            echo "=== Rolling back to version: $VERSION ==="
+
+            # Login to GHCR
+            echo ${{ secrets.GHCR_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+            # Determine image tags
+            if [[ "$VERSION" == sha-* ]]; then
+              # Rollback to specific commit
+              COMMIT_SHA="${VERSION#sha-}"
+              BACKEND_TAG="ghcr.io/$OWNER/hhs-backend:$VERSION"
+              FRONTEND_TAG="ghcr.io/$OWNER/hhs-frontend:$VERSION"
+            else
+              # Rollback to version tag - map to commit SHA
+              echo "Looking up commit for version tag: $VERSION"
+              COMMIT_SHA=$(git rev-list -n 1 "$VERSION" 2>/dev/null || echo "")
+              if [ -z "$COMMIT_SHA" ]; then
+                echo "ERROR: Could not find commit for version $VERSION"
+                exit 1
+              fi
+              BACKEND_TAG="ghcr.io/$OWNER/hhs-backend:sha-$COMMIT_SHA"
+              FRONTEND_TAG="ghcr.io/$OWNER/hhs-frontend:sha-$COMMIT_SHA"
+            fi
+
+            echo "=== Pulling images for commit: $COMMIT_SHA ==="
+            echo "Backend: $BACKEND_TAG"
+            echo "Frontend: $FRONTEND_TAG"
+
+            # Pull specific version images
+            docker pull "$BACKEND_TAG" || { echo "ERROR: Failed to pull backend image"; exit 1; }
+            docker pull "$FRONTEND_TAG" || { echo "ERROR: Failed to pull frontend image"; exit 1; }
+
+            # Tag as latest for docker-compose
+            docker tag "$BACKEND_TAG" "ghcr.io/$OWNER/hhs-backend:latest"
+            docker tag "$FRONTEND_TAG" "ghcr.io/$OWNER/hhs-frontend:latest"
+
+            # Checkout the correct version of docker-compose files
+            echo "=== Checking out docker-compose files for version ==="
+            git checkout "$COMMIT_SHA" -- docker-compose.yml docker-compose.prod.yml 2>/dev/null || echo "Using current docker-compose files"
+
+            # Recreate containers with rolled-back images
+            echo "=== Recreating containers ==="
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml down
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --force-recreate || ROLLBACK_FAILED=true
+
+            # Cleanup
+            docker image prune -f
+
+            # Wait and verify
+            echo "=== Waiting 20s for containers to stabilize ==="
+            sleep 20
+
+            echo "=== Container status ==="
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
+
+            echo "=== Backend health check ==="
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T backend wget --no-verbose --tries=1 --spider http://localhost:8082/actuator/health 2>/dev/null && echo "Backend health: OK" || echo "Backend health: FAILED"
+
+            if [ "${ROLLBACK_FAILED:-false}" = "true" ]; then
+              echo "ERROR: Rollback failed - containers did not start"
+              exit 1
+            fi
+
+            echo "=== Rollback to $VERSION completed successfully ==="
+
+      - name: Health check
+        run: |
+          echo "Waiting for services to start..."
+          for i in $(seq 1 6); do
+            echo "Health check attempt $i/6..."
+            if curl -sf http://${{ secrets.ECS_HOST }}/actuator/health; then
+              echo "Rollback successful - backend is healthy"
+              exit 0
+            fi
+            echo "Backend not ready, waiting 15s..."
+            sleep 15
+          done
+          echo "ERROR: Backend health check failed after rollback"
+          exit 1
