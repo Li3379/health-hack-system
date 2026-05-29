@@ -121,7 +121,8 @@ export const getScoreLevelLabel = (level: string): string => {
     EXCELLENT: '优秀',
     GOOD: '良好',
     FAIR: '一般',
-    POOR: '较差'
+    POOR: '较差',
+    NO_DATA: '暂无数据'
   }
   return map[level] || level
 }

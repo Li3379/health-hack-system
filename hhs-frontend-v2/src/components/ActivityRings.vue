@@ -19,8 +19,9 @@
       />
       <!-- Progress arcs -->
       <circle
-        v-for="ring in rings"
+        v-for="(ring, index) in rings"
         :key="'progress-' + ring.id"
+        :ref="(el) => { if (el) ringRefs[index] = el as SVGCircleElement }"
         :cx="center"
         :cy="center"
         :r="ring.radius"
@@ -65,7 +66,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted } from 'vue'
+import { computed, ref, onMounted, onUnmounted, watch } from 'vue'
+import { gsap, DUR, EASE } from '@/composables/useGsap'
 
 const props = withDefaults(defineProps<{
   exercisePercent: number
@@ -80,7 +82,6 @@ const viewBox = 200
 const center = viewBox / 2
 const strokeWidth = 12
 
-// Ring radii: outer=88, middle=68, inner=48  (gap of ~8px between strokes)
 const EXERCISE_RADIUS = 88
 const SLEEP_RADIUS = 68
 const HABITS_RADIUS = 48
@@ -91,13 +92,9 @@ const HABITS_COLOR = '#4CD964'
 
 const clamp = (v: number): number => Math.max(0, Math.min(100, Math.round(v)))
 
-// Trigger animation after mount
 const mounted = ref(false)
-onMounted(() => {
-  requestAnimationFrame(() => {
-    mounted.value = true
-  })
-})
+const ringRefs = ref<SVGCircleElement[]>([])
+let ringTweens: gsap.core.Tween[] = []
 
 const rings = computed(() => {
   const items = [
@@ -109,7 +106,6 @@ const rings = computed(() => {
   return items.map((item) => {
     const circumference = 2 * Math.PI * item.radius
     const pct = clamp(item.percent)
-    // When not yet mounted, offset = circumference (0% filled); after mount, animate to target
     const offset = mounted.value
       ? circumference * (1 - pct / 100)
       : circumference
@@ -121,6 +117,44 @@ const averagePercent = computed(() => {
   const vals = [props.exercisePercent, props.sleepPercent, props.habitsPercent]
   const avg = vals.reduce((sum, v) => sum + clamp(v), 0) / vals.length
   return Math.round(avg)
+})
+
+const animateRings = () => {
+  ringTweens.forEach(t => t.kill())
+  ringTweens = []
+
+  if (!mounted.value || !ringRefs.value.length) return
+
+  ringRefs.value.forEach((circle, i) => {
+    const ring = rings.value[i]
+    if (!ring) return
+    const targetOffset = ring.offset
+    const tween = gsap.fromTo(circle,
+      { attr: { 'stroke-dashoffset': ring.circumference } },
+      {
+        attr: { 'stroke-dashoffset': targetOffset },
+        duration: DUR.dramatic,
+        ease: EASE.power4,
+        delay: i * 0.15,
+      }
+    )
+    ringTweens.push(tween)
+  })
+}
+
+onMounted(() => {
+  requestAnimationFrame(() => {
+    mounted.value = true
+    animateRings()
+  })
+})
+
+watch(() => [props.exercisePercent, props.sleepPercent, props.habitsPercent], () => {
+  if (mounted.value) animateRings()
+})
+
+onUnmounted(() => {
+  ringTweens.forEach(t => t.kill())
 })
 </script>
 
@@ -137,7 +171,7 @@ const averagePercent = computed(() => {
 }
 
 .ring-progress {
-  transition: stroke-dashoffset 1.5s ease;
+  /* GSAP handles animation; no CSS transition needed */
 }
 
 .ring-percent-text {

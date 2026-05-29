@@ -45,7 +45,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted, watch } from 'vue'
+import { computed, ref, onMounted, onUnmounted, watch } from 'vue'
+import { gsap, DUR, EASE } from '@/composables/useGsap'
 
 interface Props {
   score: number
@@ -69,6 +70,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const displayScore = ref(0)
+let scoreTween: gsap.core.Tween | null = null
 
 const radius = computed(() => (props.size - props.strokeWidth) / 2)
 const circumference = computed(() => 2 * Math.PI * radius.value)
@@ -96,27 +98,25 @@ const dashOffset = computed(() => {
 })
 
 const animateScore = () => {
+  scoreTween?.kill()
   if (!props.animated) {
     displayScore.value = props.score
     return
   }
-  const duration = 1200
-  const startTime = Date.now()
-  const startScore = displayScore.value
-  const endScore = props.score
-
-  const animate = () => {
-    const elapsed = Date.now() - startTime
-    const progress = Math.min(elapsed / duration, 1)
-    const easeProgress = 1 - Math.pow(1 - progress, 3)
-    displayScore.value = Math.round(startScore + (endScore - startScore) * easeProgress)
-    if (progress < 1) requestAnimationFrame(animate)
-  }
-  requestAnimationFrame(animate)
+  const obj = { val: displayScore.value }
+  scoreTween = gsap.to(obj, {
+    val: props.score,
+    duration: DUR.dramatic,
+    ease: EASE.power4,
+    onUpdate() {
+      displayScore.value = Math.round(obj.val)
+    },
+  })
 }
 
 watch(() => props.score, () => { animateScore() })
 onMounted(() => { animateScore() })
+onUnmounted(() => { scoreTween?.kill() })
 </script>
 
 <style scoped>
@@ -173,18 +173,9 @@ onMounted(() => { animateScore() })
 }
 
 .progress-circle {
-  transition:
-    stroke-dashoffset 1.5s cubic-bezier(0.22, 1, 0.36, 1),
-    stroke 0.5s ease;
+  /* GSAP handles animation; keep stroke transition for color changes */
+  transition: stroke 0.5s ease;
   filter: drop-shadow(0 0 6px currentColor);
-}
-
-.progress-circle.animated {
-  animation: circle-entrance 1.6s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-@keyframes circle-entrance {
-  from { stroke-dashoffset: v-bind('circumference'); }
 }
 
 .center-content {
