@@ -226,6 +226,13 @@ jobs:
             echo "=== Running containers ==="
             docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
 
+            # Show backend logs if unhealthy
+            BACKEND_STATUS=$(docker inspect --format='{{.State.Status}}' hhs-backend-1 2>/dev/null || echo "not found")
+            if [ "$BACKEND_STATUS" != "running" ]; then
+              echo "=== Backend container logs (last 50 lines) ==="
+              docker compose -f docker-compose.yml -f docker-compose.prod.yml logs --tail=50 backend 2>/dev/null || echo "No logs available"
+            fi
+
       - name: Health check
         run: |
           echo "Waiting for services to start..."

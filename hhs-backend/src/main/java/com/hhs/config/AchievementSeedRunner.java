@@ -12,7 +12,8 @@ import java.util.List;
 
 /**
  * 成就种子数据初始化
- * 应用启动时检查成就表是否为空，若为空则插入默认成就
+ * 应用启动时检查成就表是否为空，若为空则插入默认成就。
+ * 如果表不存在（如数据库未初始化），则安全跳过。
  */
 @Slf4j
 @Component
@@ -23,9 +24,14 @@ public class AchievementSeedRunner implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
-        Long count = achievementMapper.selectCount(null);
-        if (count != null && count > 0) {
-            log.debug("Achievements table already has {} records, skipping seed", count);
+        try {
+            Long count = achievementMapper.selectCount(null);
+            if (count != null && count > 0) {
+                log.debug("Achievements table already has {} records, skipping seed", count);
+                return;
+            }
+        } catch (Exception e) {
+            log.warn("Achievement table not available, skipping seed: {}", e.getMessage());
             return;
         }
 
