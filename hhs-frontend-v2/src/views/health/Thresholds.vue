@@ -100,7 +100,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, nextTick } from 'vue'
+import { gsap, cleanupScrollTriggers, DUR, EASE } from '@/composables/useGsap'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
@@ -208,7 +209,20 @@ const handleDelete = async (row: UserThreshold) => {
 
 onMounted(() => {
   fetchThresholds()
+
+  nextTick(() => {
+    const tl = gsap.timeline({ defaults: { ease: EASE.out } })
+    tl.fromTo('.el-card',
+      { y: 20, autoAlpha: 0 },
+      { y: 0, autoAlpha: 1, duration: DUR.mid, clearProps: 'transform,autoAlpha,visibility,opacity' }
+    )
+    tl.fromTo('.header-actions',
+      { y: -10, autoAlpha: 0 },
+      { y: 0, autoAlpha: 1, duration: DUR.mid, clearProps: 'transform,autoAlpha,visibility,opacity' }
+    , '-=0.2')
+  })
 })
+onUnmounted(() => { cleanupScrollTriggers() })
 </script>
 
 <style scoped>

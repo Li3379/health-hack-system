@@ -229,7 +229,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, reactive } from 'vue'
+import { ref, computed, onMounted, reactive, onUnmounted, nextTick } from 'vue'
+import { gsap, cleanupScrollTriggers, DUR, EASE } from '@/composables/useGsap'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
 import { deviceApi, type PlatformConfigStatus, type AdminConfigRequest } from '@/api/device'
@@ -469,7 +470,20 @@ const getDefaultRedirectUri = (platform: string) => {
 
 onMounted(() => {
   loadConfigs()
+
+  nextTick(() => {
+    const tl = gsap.timeline({ defaults: { ease: EASE.out } })
+    tl.fromTo('.el-card',
+      { y: 20, autoAlpha: 0 },
+      { y: 0, autoAlpha: 1, duration: DUR.mid, clearProps: 'transform,autoAlpha,visibility,opacity' }
+    )
+    tl.fromTo('.encryption-alert',
+      { y: -8, autoAlpha: 0 },
+      { y: 0, autoAlpha: 1, duration: DUR.mid, clearProps: 'transform,autoAlpha,visibility,opacity' }
+    , '-=0.15')
+  })
 })
+onUnmounted(() => { cleanupScrollTriggers() })
 </script>
 
 <style scoped>

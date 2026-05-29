@@ -121,7 +121,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
+import { scrollReveal, cleanupScrollTriggers } from '@/composables/useGsap'
 import { ElMessage } from 'element-plus'
 import { Camera, Upload, Close } from '@element-plus/icons-vue'
 import type { UploadFile } from 'element-plus'
@@ -313,10 +314,15 @@ const getConfidenceClass = (confidence: number): string => {
 /**
  * 组件卸载时清理资源
  */
+onMounted(() => {
+  scrollReveal('.el-card', { y: 16 })
+})
+
 onUnmounted(() => {
   if (previewUrl.value) {
     URL.revokeObjectURL(previewUrl.value)
   }
+  cleanupScrollTriggers()
 })
 </script>
 

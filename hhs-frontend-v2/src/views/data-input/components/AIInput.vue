@@ -92,7 +92,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
+import { cleanupScrollTriggers } from '@/composables/useGsap'
 import { ElMessage } from 'element-plus'
 import { MagicStick } from '@element-plus/icons-vue'
 import { request } from '@/utils/request'
@@ -271,6 +272,7 @@ const getConfidenceColor = (confidence: number): string => {
 onMounted(() => {
   fetchRemainingCount()
 })
+onUnmounted(() => { cleanupScrollTriggers() })
 </script>
 
 <style scoped>

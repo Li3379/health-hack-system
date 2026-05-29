@@ -107,10 +107,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, nextTick } from 'vue'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { goalsApi, type HealthGoal } from '@/api/goals'
+import {
+  staggerReveal, progressAnimate, cleanupScrollTriggers,
+  tilt3D, buttonPress, hoverLift, rippleClick, DUR, EASE,
+} from '@/composables/useGsap'
 
 const loading = ref(false)
 const submitting = ref(false)
@@ -151,7 +155,41 @@ const handleCreate = async () => { if (!createFormRef.value) return; await creat
 const showProgressDialog = (g: HealthGoal) => { currentGoalId.value = g.id; progressForm.value = g.currentValue; progressForm.note = ''; progressVisible.value = true }
 const handleAddProgress = async () => { if (!progressFormRef.value || !currentGoalId.value) return; await progressFormRef.value.validate(async (v) => { if (!v) return; submittingProgress.value = true; try { await goalsApi.addProgress(currentGoalId.value!, { value: progressForm.value, note: progressForm.note || undefined }); ElMessage.success('进度更新成功'); progressVisible.value = false; fetchGoals() } catch (e) { ElMessage.error('更新进度失败') } finally { submittingProgress.value = false } }) }
 const handleDelete = async (id: number) => { try { await ElMessageBox.confirm('确定要删除这个目标吗？', '提示', { type: 'warning' }); await goalsApi.remove(id); ElMessage.success('删除成功'); fetchGoals() } catch (e) { if (e !== 'cancel') ElMessage.error('删除失败') } }
-onMounted(() => { fetchGoals() })
+onMounted(async () => {
+  await fetchGoals()
+  await nextTick()
+  // ── Goal cards: dramatic entrance with 3D ──
+  staggerReveal('.goal-card', {
+    y: 50,
+    scale: 0.85,
+    rotation: -3,
+    stagger: 0.1,
+    duration: DUR.slow,
+    ease: EASE.back,
+  })
+  tilt3D('.goal-card', { maxTilt: 10, scale: 1.02 })
+
+  // ── Interaction: hover lift on goal cards ──
+  hoverLift('.goal-card', { y: -6, scale: 1.02 })
+
+  // ── Interaction: press + ripple on action buttons ──
+  buttonPress('.goal-actions .el-button--primary')
+  rippleClick('.goal-card', { color: 'rgba(94, 234, 212, 0.15)' })
+
+  // Animate progress bars
+  setTimeout(() => {
+    document.querySelectorAll('.el-progress-bar__inner').forEach((el) => {
+      const style = (el as HTMLElement).style
+      const target = style.width
+      if (target && target !== '0%') {
+        style.width = '0%'
+        progressAnimate(el as HTMLElement, parseFloat(target))
+      }
+    })
+  }, 300)
+})
+
+onUnmounted(() => { cleanupScrollTriggers() })
 </script>
 
 <style scoped>

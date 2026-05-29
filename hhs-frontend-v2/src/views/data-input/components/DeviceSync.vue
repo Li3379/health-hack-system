@@ -318,6 +318,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { staggerReveal } from '@/composables/useGsap'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Connection, QuestionFilled } from '@element-plus/icons-vue'
 import { deviceApi } from '@/api/device'
@@ -668,9 +669,9 @@ const getDeviceColor = (platform: string) => {
 }
 
 onMounted(async () => {
-  // Add network status listeners
   window.addEventListener('online', handleOnline)
   window.addEventListener('offline', handleOffline)
+  staggerReveal('.device-card', { stagger: 0.06, y: 16 })
 
   // Load devices, platform metadata, and config
   loadDevices()

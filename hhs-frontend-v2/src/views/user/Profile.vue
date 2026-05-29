@@ -139,7 +139,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, nextTick } from 'vue'
+import { gsap, DUR, EASE } from '@/composables/useGsap'
 import {
   ElMessage,
   type FormInstance,
@@ -343,6 +344,20 @@ const fetchStats = async () => {
 onMounted(() => {
   fetchProfile()
   fetchStats()
+
+  nextTick(() => {
+    const tl = gsap.timeline({ defaults: { ease: EASE.out } })
+    // Stagger cards entrance
+    tl.fromTo('.el-card',
+      { y: 20, autoAlpha: 0, scale: 0.98 },
+      { y: 0, autoAlpha: 1, scale: 1, duration: DUR.mid, stagger: 0.1, clearProps: 'transform,autoAlpha,visibility,opacity' }
+    )
+    // Stat items in stats card
+    tl.fromTo('.stat-item',
+      { x: -12, autoAlpha: 0 },
+      { x: 0, autoAlpha: 1, duration: DUR.fast, stagger: 0.06, clearProps: 'transform,autoAlpha,visibility,opacity' }
+    , '-=0.15')
+  })
 })
 </script>
 

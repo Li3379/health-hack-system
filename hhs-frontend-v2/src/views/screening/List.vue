@@ -106,11 +106,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules, type UploadInstance } from 'element-plus'
 import { useRouter } from 'vue-router'
 import { Upload, Document } from '@element-plus/icons-vue'
 import { screeningApi } from '@/api/screening'
+import { staggerReveal, cleanupScrollTriggers } from '@/composables/useGsap'
 import type { ExaminationReportVO } from '@/types/api'
 
 const router = useRouter()
@@ -220,9 +221,12 @@ const handleDelete = async (id: number) => {
   }
 }
 
-onMounted(() => {
-  fetchReports()
+onMounted(async () => {
+  await fetchReports()
+  staggerReveal('.report-card', { stagger: 0.06, y: 24 })
 })
+
+onUnmounted(() => { cleanupScrollTriggers() })
 </script>
 
 <style scoped>

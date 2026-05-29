@@ -47,9 +47,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { Edit, Timer, Histogram, Sunrise, Moon, Sunny } from '@element-plus/icons-vue'
 import QuickInputDialog from './QuickInputDialog.vue'
+import { springPop } from '@/composables/useGsap'
 
 const emit = defineEmits<{
   (e: 'refresh'): void
@@ -77,6 +78,10 @@ const wellnessMetrics = [
   { key: 'energy', name: '精力', icon: Sunrise, unit: '', category: 'WELLNESS' },
   { key: 'exerciseMinutes', name: '运动', icon: Timer, unit: '分钟', category: 'WELLNESS' }
 ]
+
+onMounted(() => {
+  springPop('.button-grid .el-button', { stagger: 0.04, scale: 0 })
+})
 
 const openInputDialog = (metric: any) => {
   selectedMetric.value = metric

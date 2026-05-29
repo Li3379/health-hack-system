@@ -86,7 +86,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, onUnmounted } from 'vue'
+import { staggerReveal, cleanupScrollTriggers } from '@/composables/useGsap'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { Plus, Clock, Delete } from '@element-plus/icons-vue'
 import { remindersApi, type UserReminder } from '@/api/reminders'
@@ -195,9 +196,11 @@ const handleDelete = async (id: number) => {
   }
 }
 
-onMounted(() => {
-  fetchReminders()
+onMounted(async () => {
+  await fetchReminders()
+  staggerReveal('.reminder-card', { stagger: 0.06, y: 20 })
 })
+onUnmounted(() => { cleanupScrollTriggers() })
 </script>
 
 <style scoped>

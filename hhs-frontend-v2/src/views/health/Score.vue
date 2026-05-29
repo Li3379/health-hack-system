@@ -259,7 +259,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, shallowRef, onMounted, nextTick } from 'vue'
+import { ref, shallowRef, onMounted, onUnmounted, nextTick } from 'vue'
+import {
+  scrollReveal, countUp, cleanupScrollTriggers,
+  staggerReveal, tilt3D, parallax, glowPulse, scrollScale,
+  buttonPress, hoverLift, hoverShine, rippleClick,
+  gsap, DUR, EASE,
+} from '@/composables/useGsap'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Plus, Monitor, Loading } from '@element-plus/icons-vue'
@@ -612,8 +618,57 @@ onMounted(async () => {
   initRadarChart()
   initGaugeChart()
   await fetchHistory()
+
+  // ── Score card: dramatic entrance ──
+  const scoreTl = gsap.timeline({ defaults: { ease: EASE.expo } })
+  scoreTl
+    .fromTo('.score-card',
+      { y: 60, scale: 0.9, autoAlpha: 0 },
+      { y: 0, scale: 1, autoAlpha: 1, duration: DUR.dramatic, ease: EASE.back, clearProps: 'transform,autoAlpha,visibility,opacity' }
+    )
+    .fromTo('.score-main .score-circle, .score-main .score-info',
+      { y: 40, autoAlpha: 0 },
+      { y: 0, autoAlpha: 1, stagger: 0.15, duration: DUR.slow, ease: EASE.back, clearProps: 'transform,autoAlpha,visibility,opacity' },
+      '-=0.6'
+    )
+
+  // Count up score number
+  setTimeout(() => {
+    const scoreEl = document.querySelector('.score-number')
+    if (scoreEl) {
+      const num = parseInt(scoreEl.textContent?.trim() ?? '0', 10)
+      if (num > 0) {
+        countUp(scoreEl as HTMLElement, num, { duration: DUR.dramatic })
+        glowPulse(scoreEl as HTMLElement, { color: 'rgba(94, 234, 212, 0.3)', spread: 25 })
+      }
+    }
+  }, 600)
+
+  // ── Factors: stagger with 3D tilt ──
+  staggerReveal('.factor-item', { y: 40, scale: 0.9, scrollTrigger: true, stagger: 0.08, duration: DUR.slow, ease: EASE.back })
+  tilt3D('.factor-item', { maxTilt: 8, scale: 1.02 })
+
+  // ── Charts: scroll scale ──
+  scrollScale('.charts-row .el-card', { from: 0.85, to: 1 })
+  parallax('.charts-row .el-card', { speed: 0.1 })
+
+  // ── History card ──
+  scrollReveal('.history-card', { y: 30, scale: 0.95 })
+
+  // ── Interaction: hover lift on factor items ──
+  hoverLift('.factor-item', { y: -4, scale: 1.01 })
+
+  // ── Interaction: shine on score card ──
+  hoverShine('.score-card', { color: 'rgba(94, 234, 212, 0.12)' })
+
+  // ── Interaction: press + ripple on action buttons ──
+  buttonPress('.el-button--primary')
+  rippleClick('.el-button--primary', { color: 'rgba(255,255,255,0.3)' })
+
   initChart()
 })
+
+onUnmounted(() => { cleanupScrollTriggers() })
 </script>
 
 <style scoped>

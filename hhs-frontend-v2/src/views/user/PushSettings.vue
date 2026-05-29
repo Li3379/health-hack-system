@@ -141,7 +141,8 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { onMounted, onUnmounted } from 'vue'
+import { staggerReveal, cleanupScrollTriggers } from '@/composables/useGsap'
 import { usePushStore } from '@/stores/push'
 import { useRealtimeStore } from '@/stores/realtime'
 import { formatDateTime } from '@/utils/format'
@@ -156,7 +157,9 @@ onMounted(() => {
   pushStore.loadConfigs()
   pushStore.loadStats()
   pushStore.loadHistory()
+  staggerReveal('.el-card', { stagger: 0.08, y: 16 })
 })
+onUnmounted(() => { cleanupScrollTriggers() })
 
 function getChannelIcon(type: string) {
   const icons: Record<string, typeof Bell> = {

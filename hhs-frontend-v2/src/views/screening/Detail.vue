@@ -100,7 +100,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, nextTick } from 'vue'
+import { gsap, DUR, EASE } from '@/composables/useGsap'
 import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { Top, Bottom, Minus, Document } from '@element-plus/icons-vue'
@@ -176,6 +177,26 @@ const goBack = () => {
 onMounted(() => {
   fetchReportDetail()
   fetchLabResults()
+
+  nextTick(() => {
+    const tl = gsap.timeline({ defaults: { ease: EASE.out } })
+    tl.fromTo('.el-page-header',
+      { y: -12, autoAlpha: 0 },
+      { y: 0, autoAlpha: 1, duration: DUR.mid, clearProps: 'transform,autoAlpha,visibility,opacity' }
+    )
+    tl.fromTo('.detail-card',
+      { y: 20, autoAlpha: 0 },
+      { y: 0, autoAlpha: 1, duration: DUR.mid, clearProps: 'transform,autoAlpha,visibility,opacity' }
+    , '-=0.1')
+    tl.fromTo('.results-card',
+      { y: 20, autoAlpha: 0 },
+      { y: 0, autoAlpha: 1, duration: DUR.mid, clearProps: 'transform,autoAlpha,visibility,opacity' }
+    , '-=0.1')
+    tl.fromTo('.preview-card',
+      { y: 20, autoAlpha: 0 },
+      { y: 0, autoAlpha: 1, duration: DUR.mid, clearProps: 'transform,autoAlpha,visibility,opacity' }
+    , '-=0.1')
+  })
 })
 </script>
 
