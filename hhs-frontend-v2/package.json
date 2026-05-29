@@ -21,6 +21,7 @@
     "dompurify": "^3.3.3",
     "echarts": "^5.4.3",
     "element-plus": "^2.5.6",
+    "gsap": "^3.15.0",
     "marked": "^17.0.3",
     "pinia": "^2.1.7",
     "three": "^0.184.0",
