@@ -31,8 +31,10 @@ public class WebSocketConfig implements WebSocketConfigurer {
         WebSocketHandlerDecorator decoratedHandler = (WebSocketHandlerDecorator)
                 webSocketAuthInterceptor.decorate(healthWebSocketHandler);
 
-        // Split allowed origins by comma
-        String[] origins = allowedOrigins.split(",");
+        // Split allowed origins by comma, fallback to * if empty
+        String[] origins = (allowedOrigins == null || allowedOrigins.isBlank())
+                ? new String[]{"*"}
+                : allowedOrigins.split(",");
 
         // Register both endpoints for backward compatibility
         registry.addHandler(decoratedHandler, "/ws/alerts", "/ws/realtime")
