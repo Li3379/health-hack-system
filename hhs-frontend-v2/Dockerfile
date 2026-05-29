@@ -44,8 +44,6 @@ HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
 # Expose port 80
 EXPOSE 80
 
-# Run as non-root user
-USER nginx
-
-# Start nginx in foreground
+# nginx master runs as root (writes PID), workers drop privileges via nginx.conf user directive
+# Do NOT set USER nginx — it prevents the master process from writing /run/nginx.pid
 CMD ["nginx", "-g", "daemon off;"]
