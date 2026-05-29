@@ -1,7 +1,7 @@
 <template>
   <div class="dashboard">
     <!-- Welcome -->
-    <div class="welcome-section reveal">
+    <div class="welcome-section">
       <div class="welcome-text">
         <div class="eyebrow">DASHBOARD</div>
         <h1 class="welcome-title">欢迎回来，{{ authStore.user?.nickname || authStore.user?.username }}</h1>
@@ -32,7 +32,7 @@
       </template>
       <template #default>
         <div class="stats-grid">
-          <div v-for="(card, idx) in statCards" :key="idx" class="stat-card reveal" :style="{ animationDelay: `${idx * 0.08}s` }" @click="card.action">
+          <div v-for="(card, idx) in statCards" :key="idx" class="stat-card" @click="card.action">
             <div class="stat-icon" :style="{ background: card.iconBg }">
               <el-icon :size="22"><component :is="card.icon" /></el-icon>
             </div>
@@ -58,7 +58,7 @@
     <!-- Content Grid -->
     <div class="content-grid">
       <!-- Health Score -->
-      <div class="content-card reveal">
+      <div class="content-card">
         <div class="card-header">
           <span class="card-title">健康评分</span>
           <el-button text type="primary" @click="goToScore">
@@ -92,7 +92,7 @@
       </div>
 
       <!-- Recent Alerts -->
-      <div class="content-card reveal">
+      <div class="content-card">
         <div class="card-header">
           <span class="card-title">最近预警</span>
           <el-button text type="primary" @click="goToAlerts">
@@ -126,7 +126,7 @@
       </div>
 
       <!-- Activity Rings -->
-      <div class="content-card activity-card reveal">
+      <div class="content-card activity-card">
         <div class="card-header">
           <span class="card-title">今日活动</span>
         </div>
@@ -141,7 +141,7 @@
     </div>
 
     <!-- Quick Entry -->
-    <div class="actions-card reveal">
+    <div class="actions-card">
       <div class="card-header">
         <span class="card-title">快速入口</span>
       </div>
@@ -162,6 +162,12 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useAlertStore } from '@/stores/alert'
+import {
+  staggerReveal, countUp, cleanupScrollTriggers,
+  tilt3D, magneticHover, parallax, glowPulse,
+  buttonPress, hoverLift, hoverShine, rippleClick,
+  gsap, DUR, EASE,
+} from '@/composables/useGsap'
 import {
   TrendCharts, Bell, DataLine, Document, Plus, ChatDotRound,
   ArrowRight, CircleCheck, Top, Minus, Bottom, Upload, Monitor, Sunny
@@ -334,25 +340,111 @@ const getFactorLabel = (key: string): string => {
   return labels[key] || key
 }
 
-let revealObserver: IntersectionObserver | null = null
-
-onMounted(() => {
-  fetchHealthScore()
+onMounted(async () => {
+  await fetchHealthScore()
   fetchMetricCount()
   fetchAlerts()
   fetchTrends()
   alertStore.fetchUnreadCount()
 
-  // Scroll reveal
-  const obs = new IntersectionObserver((entries) => {
-    entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in-view'); obs.unobserve(e.target) } })
-  }, { threshold: 0.1 })
-  revealObserver = obs
-  document.querySelectorAll('.reveal').forEach(el => obs.observe(el))
+  // ── Hero entrance: welcome text ──
+  const heroTl = gsap.timeline({ defaults: { ease: EASE.expo } })
+  heroTl
+    .fromTo('.welcome-section .eyebrow',
+      { x: -40, autoAlpha: 0 },
+      { x: 0, autoAlpha: 1, duration: DUR.mid, clearProps: 'transform,autoAlpha,visibility,opacity' }
+    )
+    .fromTo('.welcome-title',
+      { y: 50, rotationX: -80, autoAlpha: 0 },
+      { y: 0, rotationX: 0, autoAlpha: 1, duration: DUR.dramatic, ease: EASE.back, clearProps: 'transform,autoAlpha,visibility,opacity' },
+      0.1
+    )
+    .fromTo('.welcome-sub',
+      { y: 30, autoAlpha: 0 },
+      { y: 0, autoAlpha: 1, duration: DUR.slow, clearProps: 'transform,autoAlpha,visibility,opacity' },
+      0.3
+    )
+    .fromTo('.quick-actions',
+      { scale: 0.8, autoAlpha: 0 },
+      { scale: 1, autoAlpha: 1, duration: DUR.mid, ease: EASE.back, clearProps: 'transform,autoAlpha,visibility,opacity' },
+      0.4
+    )
+
+  // ── Stat cards: dramatic stagger with 3D tilt ──
+  staggerReveal('.stat-card', {
+    y: 60,
+    scale: 0.85,
+    rotation: -3,
+    stagger: 0.1,
+    duration: DUR.slow,
+    ease: EASE.back,
+    delay: 0.3,
+  })
+
+  // Count up stat values with delay
+  setTimeout(() => {
+    document.querySelectorAll('.stat-value').forEach((el) => {
+      const num = parseFloat(el.textContent?.trim() ?? '')
+      if (!isNaN(num) && num > 0) countUp(el as HTMLElement, num, { decimals: 0, duration: DUR.dramatic })
+    })
+  }, 800)
+
+  // 3D tilt on stat cards
+  tilt3D('.stat-card', { maxTilt: 12, scale: 1.03 })
+
+  // ── Content cards: parallax + stagger ──
+  staggerReveal('.content-card', {
+    y: 40,
+    scale: 0.95,
+    scrollTrigger: true,
+    stagger: 0.15,
+    duration: DUR.slow,
+    ease: EASE.expo,
+  })
+
+  // Parallax depth on content cards
+  parallax('.content-card', { speed: 0.15 })
+
+  // ── Alert items: stagger from center ──
+  staggerReveal('.alert-item', {
+    x: -30,
+    y: 0,
+    scrollTrigger: true,
+    stagger: { amount: 0.4, from: 'start' },
+    duration: DUR.mid,
+  })
+
+  // ── Quick entry: spring pop (no scrollTrigger — always visible) ──
+  staggerReveal('.entry-item', {
+    y: 30,
+    scale: 0.8,
+    stagger: 0.08,
+    duration: DUR.mid,
+    ease: EASE.back,
+    delay: 0.5,
+  })
+  magneticHover('.entry-icon', { strength: 0.5, radius: 80 })
+
+  // ── Glow pulse on health score icon ──
+  const scoreIcon = document.querySelector('.stat-icon') as HTMLElement
+  if (scoreIcon) glowPulse(scoreIcon, { color: 'rgba(94, 234, 212, 0.35)', spread: 16 })
+
+  // ── Interaction: press feedback on buttons ──
+  buttonPress('.quick-actions .el-button')
+  buttonPress('.entry-item')
+
+  // ── Interaction: hover lift on stat cards ──
+  hoverLift('.stat-card', { y: -8, scale: 1.02 })
+
+  // ── Interaction: shine sweep on content cards ──
+  hoverShine('.content-card')
+
+  // ── Interaction: ripple on entry items ──
+  rippleClick('.entry-item', { color: 'rgba(94, 234, 212, 0.25)' })
 })
 
 onUnmounted(() => {
-  revealObserver?.disconnect()
+  cleanupScrollTriggers()
 })
 </script>
 

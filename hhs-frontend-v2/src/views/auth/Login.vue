@@ -82,11 +82,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { User, Lock, Monitor, ChatDotRound, TrendCharts } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
+import { gsap, magneticHover, buttonPress, hoverShine, rippleClick, DUR, EASE } from '@/composables/useGsap'
 
 const authStore = useAuthStore()
 const formRef = ref<FormInstance>()
@@ -111,6 +112,90 @@ const syncFromNative = () => {
   if (inputs[0]?.value) form.username = inputs[0].value
   if (inputs[1]?.value) form.password = inputs[1].value
 }
+
+onMounted(() => {
+  // ── Dramatic page entrance ──
+  const tl = gsap.timeline({ defaults: { ease: EASE.expo } })
+
+  // Logo: scale-in with rotation
+  tl.fromTo('.logo-container',
+    { scale: 0, rotation: -180, autoAlpha: 0 },
+    { scale: 1, rotation: 0, autoAlpha: 1, duration: DUR.dramatic, ease: EASE.back, clearProps: 'transform,autoAlpha,visibility,opacity' }
+  )
+
+  // Title: 3D flip reveal
+  tl.fromTo('.card-title',
+    { y: 50, rotationX: -90, autoAlpha: 0 },
+    { y: 0, rotationX: 0, autoAlpha: 1, duration: DUR.slow, ease: EASE.back, clearProps: 'transform,autoAlpha,visibility,opacity' },
+    '-=0.6'
+  )
+
+  // Subtitle: slide up
+  tl.fromTo('.card-subtitle',
+    { y: 30, autoAlpha: 0 },
+    { y: 0, autoAlpha: 1, duration: DUR.mid, clearProps: 'transform,autoAlpha,visibility,opacity' },
+    '-=0.3'
+  )
+
+  // Form fields: alternating left/right with stagger
+  tl.fromTo('.login-form .el-form-item',
+    { x: (i: number) => (i % 2 === 0 ? -60 : 60), autoAlpha: 0 },
+    { x: 0, autoAlpha: 1, stagger: 0.08, duration: DUR.mid, ease: EASE.back, clearProps: 'transform,autoAlpha,visibility,opacity' },
+    '-=0.2'
+  )
+
+  // Button: spring pop
+  tl.fromTo('.login-btn',
+    { scale: 0.5, autoAlpha: 0 },
+    { scale: 1, autoAlpha: 1, duration: DUR.mid, ease: EASE.back, clearProps: 'transform,autoAlpha,visibility,opacity' },
+    '-=0.1'
+  )
+
+  // Footer
+  tl.fromTo('.form-footer',
+    { autoAlpha: 0, y: 15 },
+    { autoAlpha: 1, y: 0, duration: DUR.fast, clearProps: 'transform,autoAlpha,visibility,opacity' },
+    '-=0.1'
+  )
+
+  // Feature chips: spring pop from random directions
+  tl.fromTo('.feature-chip',
+    { scale: 0, autoAlpha: 0 },
+    { scale: 1, autoAlpha: 1, stagger: 0.06, duration: DUR.mid, ease: EASE.back, clearProps: 'transform,autoAlpha,visibility,opacity' },
+    '-=0.1'
+  )
+
+  // Magnetic hover on login button
+  magneticHover('.login-btn', { strength: 0.3, radius: 120 })
+
+  // ── Interaction: button press feedback ──
+  buttonPress('.login-btn', { scale: 0.94 })
+
+  // ── Interaction: shine sweep on card ──
+  hoverShine('.login-card', { color: 'rgba(94, 234, 212, 0.12)' })
+
+  // ── Interaction: ripple on button click ──
+  rippleClick('.login-btn', { color: 'rgba(255,255,255,0.3)' })
+
+  // ── Interaction: input focus glow ──
+  document.querySelectorAll('.login-form .el-input__wrapper').forEach((input) => {
+    input.addEventListener('focus', () => {
+      gsap.to(input, { boxShadow: '0 0 0 3px rgba(94, 234, 212, 0.25)', duration: 0.3, ease: 'power2.out' })
+    })
+    input.addEventListener('blur', () => {
+      gsap.to(input, { boxShadow: 'none', duration: 0.3, ease: 'power2.out' })
+    })
+  })
+
+  // Floating background orbs animation
+  gsap.to('.bg-glow', {
+    backgroundPosition: '100% 100%',
+    duration: 20,
+    ease: EASE.none,
+    repeat: -1,
+    yoyo: true,
+  })
+})
 
 const handleLogin = async () => {
   if (!formRef.value) return
@@ -170,11 +255,6 @@ const handleLogin = async () => {
   width: 100%;
   max-width: 420px;
   padding: 20px;
-  animation: fadeInUp 0.8s var(--ease-cinema);
-}
-@keyframes fadeInUp {
-  from { opacity: 0; transform: translateY(24px); }
-  to { opacity: 1; transform: translateY(0); }
 }
 
 /* Login Card */

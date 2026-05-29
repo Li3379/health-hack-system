@@ -20,17 +20,17 @@
               xmlns="http://www.w3.org/2000/svg"
               class="logo-svg"
             >
-              <rect width="48" height="48" rx="12" fill="var(--color-primary)" fill-opacity="0.1" />
+              <rect width="48" height="48" rx="12" fill="var(--accent-cool)" fill-opacity="0.1" />
               <path
                 d="M24 10C16.27 10 10 16.27 10 24s6.27 14 14 14 14-6.27 14-14S31.73 10 24 10zm0 24c-5.51 0-10-4.49-10-10s4.49-10 10-10 10 4.49 10 10-4.49 10-10 10z"
-                fill="var(--color-primary)"
+                fill="var(--accent-cool)"
               />
               <path
                 d="M24 16c-4.41 0-8 3.59-8 8s3.59 8 8 8 8-3.59 8-8-3.59-8-8-8zm0 12c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4z"
-                fill="var(--color-primary)"
+                fill="var(--accent-cool)"
                 fill-opacity="0.6"
               />
-              <circle cx="24" cy="24" r="2.5" fill="var(--color-primary)" />
+              <circle cx="24" cy="24" r="2.5" fill="var(--accent-cool)" />
             </svg>
           </div>
           <h1 class="title">创建新账户</h1>
@@ -131,10 +131,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { User, Lock, Message, Key, TrendCharts, ChatDotRound } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
+import { gsap, magneticHover, buttonPress, hoverShine, rippleClick, DUR, EASE } from '@/composables/useGsap'
 
 const authStore = useAuthStore()
 const formRef = ref<FormInstance>()
@@ -170,6 +171,98 @@ const rules: FormRules = {
   ],
   email: [{ type: 'email', message: '邮箱格式不正确', trigger: 'blur' }]
 }
+
+onMounted(() => {
+  // ── Floating orbs with parallax depth ──
+  gsap.to('.orb-1', { x: 30, y: -30, scale: 1.05, duration: 10, yoyo: true, repeat: -1, ease: EASE.inOut })
+  gsap.to('.orb-2', { x: -20, y: 20, scale: 0.95, duration: 12, yoyo: true, repeat: -1, ease: EASE.inOut, delay: 2 })
+  gsap.to('.orb-3', { x: -30, y: -20, scale: 1.02, duration: 14, yoyo: true, repeat: -1, ease: EASE.inOut, delay: 4 })
+
+  // ── Dramatic entrance sequence ──
+  const tl = gsap.timeline({ defaults: { ease: EASE.expo } })
+
+  // Logo: spin-in
+  tl.fromTo('.logo-container',
+    { scale: 0, rotation: -360, autoAlpha: 0 },
+    { scale: 1, rotation: 0, autoAlpha: 1, duration: DUR.dramatic, ease: EASE.back, clearProps: 'transform,autoAlpha,visibility,opacity' }
+  )
+
+  // Title: 3D flip
+  tl.fromTo('.title',
+    { y: 60, rotationX: -90, autoAlpha: 0 },
+    { y: 0, rotationX: 0, autoAlpha: 1, duration: DUR.slow, ease: EASE.back, clearProps: 'transform,autoAlpha,visibility,opacity' },
+    '-=0.6'
+  )
+
+  // Subtitle
+  tl.fromTo('.subtitle',
+    { y: 30, autoAlpha: 0 },
+    { y: 0, autoAlpha: 1, duration: DUR.mid, clearProps: 'transform,autoAlpha,visibility,opacity' },
+    '-=0.3'
+  )
+
+  // Form fields: alternating slide with spring
+  tl.fromTo('.register-form .el-form-item',
+    { x: (i: number) => (i % 2 === 0 ? -50 : 50), autoAlpha: 0 },
+    { x: 0, autoAlpha: 1, stagger: 0.08, duration: DUR.mid, ease: EASE.back, clearProps: 'transform,autoAlpha,visibility,opacity' },
+    '-=0.2'
+  )
+
+  // Button: spring pop
+  tl.fromTo('.register-button',
+    { scale: 0.5, autoAlpha: 0 },
+    { scale: 1, autoAlpha: 1, duration: DUR.mid, ease: EASE.back, clearProps: 'transform,autoAlpha,visibility,opacity' },
+    '-=0.1'
+  )
+
+  tl.fromTo('.footer-links',
+    { autoAlpha: 0, y: 15 },
+    { autoAlpha: 1, y: 0, duration: DUR.fast, clearProps: 'transform,autoAlpha,visibility,opacity' },
+    '-=0.1'
+  )
+
+  // Features: spring pop from random
+  tl.fromTo('.feature-item',
+    { scale: 0, autoAlpha: 0 },
+    { scale: 1, autoAlpha: 1, stagger: 0.06, duration: DUR.mid, ease: EASE.back, clearProps: 'transform,autoAlpha,visibility,opacity' },
+    '-=0.1'
+  )
+
+  tl.fromTo('.copyright',
+    { autoAlpha: 0 },
+    { autoAlpha: 1, duration: DUR.fast, clearProps: 'autoAlpha,visibility,opacity' },
+    '-=0.1'
+  )
+
+  // ── Logo glow pulse ──
+  gsap.to('.logo-container', {
+    filter: 'drop-shadow(0 0 25px rgba(37, 99, 235, 0.4))',
+    duration: 1.5,
+    yoyo: true,
+    repeat: -1,
+    ease: EASE.inOut,
+  })
+
+  // ── Magnetic hover on button ──
+  magneticHover('.register-button', { strength: 0.3, radius: 120 })
+
+  // ── Interaction: button press + ripple ──
+  buttonPress('.register-button', { scale: 0.94 })
+  rippleClick('.register-button', { color: 'rgba(255,255,255,0.3)' })
+
+  // ── Interaction: shine on card ──
+  hoverShine('.register-card', { color: 'rgba(94, 234, 212, 0.1)' })
+
+  // ── Interaction: input focus glow ──
+  document.querySelectorAll('.register-form .el-input__wrapper').forEach((input) => {
+    input.addEventListener('focus', () => {
+      gsap.to(input, { boxShadow: '0 0 0 3px rgba(94, 234, 212, 0.25)', duration: 0.3, ease: 'power2.out' })
+    })
+    input.addEventListener('blur', () => {
+      gsap.to(input, { boxShadow: 'none', duration: 0.3, ease: 'power2.out' })
+    })
+  })
+})
 
 const handleRegister = async () => {
   if (!formRef.value) return
@@ -215,7 +308,6 @@ const handleRegister = async () => {
   border-radius: 50%;
   filter: blur(80px);
   opacity: 0.6;
-  animation: float 20s ease-in-out infinite;
 }
 
 .orb-1 {
@@ -224,7 +316,6 @@ const handleRegister = async () => {
   background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
   top: -200px;
   right: -100px;
-  animation-delay: 0s;
 }
 
 .orb-2 {
@@ -233,7 +324,6 @@ const handleRegister = async () => {
   background: linear-gradient(135deg, var(--color-success) 0%, #059669 100%);
   bottom: -150px;
   left: -100px;
-  animation-delay: -7s;
 }
 
 .orb-3 {
@@ -243,23 +333,6 @@ const handleRegister = async () => {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  animation-delay: -14s;
-}
-
-@keyframes float {
-  0%,
-  100% {
-    transform: translate(0, 0) scale(1);
-  }
-  25% {
-    transform: translate(30px, -30px) scale(1.05);
-  }
-  50% {
-    transform: translate(-20px, 20px) scale(0.95);
-  }
-  75% {
-    transform: translate(-30px, -20px) scale(1.02);
-  }
 }
 
 .grid-pattern {
@@ -278,18 +351,6 @@ const handleRegister = async () => {
   width: 100%;
   max-width: 440px;
   padding: 20px;
-  animation: fadeInUp 0.6s ease-out;
-}
-
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(30px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
 }
 
 /* Register Card */
@@ -320,17 +381,6 @@ const handleRegister = async () => {
   width: 72px;
   height: 72px;
   margin: 0 auto 20px;
-  animation: pulse-glow 3s ease-in-out infinite;
-}
-
-@keyframes pulse-glow {
-  0%,
-  100% {
-    filter: drop-shadow(0 0 0 transparent);
-  }
-  50% {
-    filter: drop-shadow(0 0 20px rgba(37, 99, 235, 0.3));
-  }
 }
 
 .logo-svg {
