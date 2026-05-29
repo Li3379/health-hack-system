@@ -72,7 +72,7 @@ public class SecurityConfig {
                                 "/error",
                                 "/ws/**" // WebSocket endpoint
                         ).permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/users/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/users/{id}").permitAll()
                         .requestMatchers("/actuator/**").authenticated()
                         .anyRequest().authenticated())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

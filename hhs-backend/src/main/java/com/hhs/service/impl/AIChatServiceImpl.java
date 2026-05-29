@@ -157,7 +157,7 @@ public class AIChatServiceImpl implements AIChatService {
     @Override
     @Transactional(timeout = 30)
     public AIChatResponse chat(Long userId, String sessionId, String question) {
-        log.info("AI对话请求: userId={}, sessionId={}, question={}",
+        log.debug("AI对话请求: userId={}, sessionId={}, question={}",
             userId, sessionId, question);
 
         // 1. 限流检查

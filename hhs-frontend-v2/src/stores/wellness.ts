@@ -19,7 +19,6 @@ export const useWellnessStore = defineStore('wellness', () => {
       const res = await wellnessApi.getSummary(days)
       summary.value = res.data
     } catch (error) {
-      console.error('Failed to fetch wellness summary:', error)
       ElMessage.error('获取保健数据摘要失败')
     } finally {
       loading.value = false
@@ -31,7 +30,7 @@ export const useWellnessStore = defineStore('wellness', () => {
       const res = await wellnessApi.getLatest()
       latestMetrics.value = res.data
     } catch (error) {
-      console.error('Failed to fetch latest wellness metrics:', error)
+      // latest metrics fetch failed
     }
   }
 
@@ -41,7 +40,6 @@ export const useWellnessStore = defineStore('wellness', () => {
       const res = await wellnessApi.getTrend(metricKey, startDate, endDate)
       trendData.value = res.data
     } catch (error) {
-      console.error('Failed to fetch wellness trend:', error)
       ElMessage.error('获取趋势数据失败')
     } finally {
       chartLoading.value = false
@@ -63,7 +61,6 @@ export const useWellnessStore = defineStore('wellness', () => {
       await fetchLatest()
       return true
     } catch (error) {
-      console.error('Failed to add wellness metric:', error)
       ElMessage.error('添加失败')
       return false
     }

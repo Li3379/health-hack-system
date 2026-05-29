@@ -295,7 +295,6 @@ const loadConfigs = async () => {
       encryptionKeyConfigured.value = readyRes.data.encryptionReady
     }
   } catch (error) {
-    console.error('Failed to load configs', error)
     ElMessage.error('加载配置失败')
   } finally {
     loading.value = false

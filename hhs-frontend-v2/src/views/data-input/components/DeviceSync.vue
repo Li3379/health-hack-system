@@ -403,7 +403,7 @@ const loadDevices = async () => {
       devices.value = res.data
     }
   } catch (error) {
-    console.error('加载设备列表失败', error)
+    // device list load failed
   }
 }
 
@@ -419,7 +419,7 @@ const loadPlatformMetadata = async () => {
       platformMetadata.value = map
     }
   } catch (error) {
-    console.error('加载平台元数据失败', error)
+    // platform metadata load failed
   }
 }
 
@@ -651,7 +651,6 @@ const loadSyncHistory = async (page = 1) => {
       historyTotal.value = res.data.total || 0
     }
   } catch (error) {
-    console.error('加载同步历史失败', error)
     ElMessage.error('加载同步历史失败')
   } finally {
     loadingHistory.value = false

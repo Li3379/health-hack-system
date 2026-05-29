@@ -339,7 +339,6 @@ const loadConfigStatus = async () => {
       configReady.value = readyRes.data
     }
   } catch (error) {
-    console.error('Failed to load config status', error)
     ElMessage.error('加载配置状态失败')
   } finally {
     loading.value = false

@@ -158,7 +158,7 @@ const fetchRemainingCount = async () => {
       remainingCount.value = res.data
     }
   } catch (error) {
-    console.error('获取剩余次数失败:', error)
+    // remaining count fetch failed
   }
 }
 

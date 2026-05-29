@@ -1,5 +1,7 @@
 package com.hhs.controller;
 
+import com.hhs.component.AuthRateLimiter;
+import com.hhs.common.constant.ErrorCode;
 import com.hhs.common.Result;
 import lombok.extern.slf4j.Slf4j;
 import com.hhs.dto.ChangePasswordRequest;
@@ -14,6 +16,7 @@ import com.hhs.vo.UserPublicProfileVO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -30,14 +33,20 @@ import org.springframework.web.bind.annotation.RestController;
 public class UserController {
 
     private final UserService userService;
+    private final AuthRateLimiter authRateLimiter;
 
-    public UserController(UserService userService) {
+    public UserController(UserService userService, AuthRateLimiter authRateLimiter) {
         this.userService = userService;
+        this.authRateLimiter = authRateLimiter;
     }
 
     @Operation(summary = "用户注册")
     @PostMapping("/auth/register")
-    public Result<Void> register(@RequestBody @Valid RegisterRequest request) {
+    public Result<Void> register(@RequestBody @Valid RegisterRequest request, HttpServletRequest httpRequest) {
+        String clientIp = httpRequest.getRemoteAddr();
+        if (!authRateLimiter.checkLimit(request.username(), clientIp)) {
+            return Result.failure(ErrorCode.AUTH_RATE_LIMITED);
+        }
         log.info("User registration request: username={}", request.username());
         userService.register(request);
         return Result.success();
@@ -45,9 +54,17 @@ public class UserController {
 
     @Operation(summary = "用户登录")
     @PostMapping("/auth/login")
-    public Result<AuthResponse> login(@RequestBody @Valid LoginRequest request) {
+    public Result<AuthResponse> login(@RequestBody @Valid LoginRequest request, HttpServletRequest httpRequest) {
+        String clientIp = httpRequest.getRemoteAddr();
+        if (!authRateLimiter.checkLimit(request.username(), clientIp)) {
+            return Result.failure(ErrorCode.AUTH_RATE_LIMITED);
+        }
         log.info("User login request: username={}", request.username());
-        return Result.success(userService.login(request));
+        Result<AuthResponse> result = Result.success(userService.login(request));
+        if (result.getCode() != 200) {
+            authRateLimiter.recordFailure(request.username(), clientIp);
+        }
+        return result;
     }
 
     @Operation(summary = "获取个人资料")

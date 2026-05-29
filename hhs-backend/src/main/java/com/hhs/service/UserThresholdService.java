@@ -25,26 +25,29 @@ public interface UserThresholdService {
     /**
      * Create a new user threshold
      *
+     * @param userId User ID (enforced ownership)
      * @param request User threshold request
      * @return Created user threshold
      */
-    UserThreshold create(UserThresholdRequest request);
+    UserThreshold create(Long userId, UserThresholdRequest request);
 
     /**
      * Update an existing user threshold
      *
      * @param id Threshold ID
+     * @param userId User ID (enforced ownership)
      * @param request User threshold request
      * @return Updated user threshold
      */
-    UserThreshold update(Long id, UserThresholdRequest request);
+    UserThreshold update(Long id, Long userId, UserThresholdRequest request);
 
     /**
      * Delete a user threshold
      *
      * @param id Threshold ID
+     * @param userId User ID (enforced ownership)
      */
-    void delete(Long id);
+    void delete(Long id, Long userId);
 
     /**
      * Get threshold by user ID

@@ -306,7 +306,7 @@ const fetchLatestMetrics = async () => {
     const res = await realtimeApi.getLatestMetrics()
     latestMetrics.value = res.data
   } catch (error) {
-    console.error('Failed to fetch latest metrics:', error)
+    // latest metrics fetch failed
   } finally {
     metricsLoading.value = false
   }

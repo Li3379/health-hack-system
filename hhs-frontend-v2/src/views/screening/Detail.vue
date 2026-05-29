@@ -159,7 +159,7 @@ const fetchLabResults = async () => {
     const res = await screeningApi.getLabResults(reportId)
     labResults.value = res.data
   } catch (error) {
-    console.error('Failed to fetch lab results:', error)
+    // lab results fetch failed
   }
 }
 
