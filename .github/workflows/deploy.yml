@@ -54,38 +54,87 @@ jobs:
           key: ${{ secrets.ECS_SSH_KEY }}
           envs: OWNER,IMAGE_TAG
           script: |
-            cd ${{ secrets.ECS_DEPLOY_PATH }}
+            set -euo pipefail
+
+            DEPLOY_DIR="${{ secrets.ECS_DEPLOY_PATH }}"
+
+            # Validate deploy path exists
+            echo "=== Validating deploy path: $DEPLOY_DIR ==="
+            if [ ! -d "$DEPLOY_DIR" ]; then
+              echo "ERROR: Deploy path '$DEPLOY_DIR' does not exist!"
+              echo "Searching for docker-compose.yml on server:"
+              find / -name "docker-compose.yml" -path "*/hhs/*" 2>/dev/null | head -5 || true
+              exit 1
+            fi
+
+            cd "$DEPLOY_DIR"
+            echo "=== Working directory: $(pwd) ==="
+            echo "=== Git status ==="
+            git status --short 2>/dev/null || echo "Not a git repository"
+            echo "=== Files present ==="
+            ls -la docker-compose*.yml 2>/dev/null || echo "No docker-compose files found!"
 
             # Remove development override file
             rm -f docker-compose.override.yml
 
-            # Pull latest code (skip if not a git repo)
+            # Pull latest code
             if [ -d .git ]; then
+              echo "=== Pulling latest code ==="
               git pull origin master
               rm -f docker-compose.override.yml
             fi
 
+            # Verify schema.sql exists for DB initialization
+            echo "=== Verifying schema.sql ==="
+            if [ -f "./hhs-backend/src/main/resources/sql/schema.sql" ]; then
+              echo "schema.sql found — will be auto-mounted to MySQL"
+            else
+              echo "WARNING: schema.sql not found at expected path"
+            fi
+
             # Login to GHCR for pulling images
+            echo "=== Logging in to GHCR ==="
             echo ${{ secrets.GHCR_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
             # Force pull latest images
+            echo "=== Pulling latest images ==="
             docker compose -f docker-compose.yml -f docker-compose.prod.yml pull --ignore-buildable
 
             # Stop old containers and start new ones
+            echo "=== Recreating containers ==="
             docker compose -f docker-compose.yml -f docker-compose.prod.yml down
             docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --force-recreate
 
             # Cleanup old images
             docker image prune -f
 
+            # Wait for containers to stabilize
+            echo "=== Waiting 20s for containers to stabilize ==="
+            sleep 20
+
             # Verify running containers
-            echo "=== Running containers ==="
+            echo "=== Container status ==="
             docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
+
+            # Show backend logs for debugging
+            echo "=== Backend startup logs (last 80 lines) ==="
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml logs --tail=80 backend 2>/dev/null || echo "No backend logs available"
+
+            # Check backend health directly inside Docker network
+            echo "=== Internal health check ==="
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T backend wget --no-verbose --tries=1 --spider http://localhost:8082/actuator/health 2>/dev/null && echo "Backend internal health: OK" || echo "Backend internal health: FAILED"
 
       - name: Health check
         run: |
           echo "Waiting for services to start..."
-          sleep 60
-          echo "Checking backend health..."
-          curl -sf http://${{ secrets.ECS_HOST }}/actuator/health || exit 1
-          echo "Deployment successful - backend is healthy"
+          for i in $(seq 1 6); do
+            echo "Health check attempt $i/6..."
+            if curl -sf http://${{ secrets.ECS_HOST }}/actuator/health; then
+              echo "Deployment successful - backend is healthy"
+              exit 0
+            fi
+            echo "Backend not ready, waiting 15s..."
+            sleep 15
+          done
+          echo "ERROR: Backend health check failed after 6 attempts (90s)"
+          exit 1
