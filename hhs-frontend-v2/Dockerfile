@@ -33,12 +33,19 @@ COPY nginx.conf /etc/nginx/nginx.conf
 # Copy build output from build stage
 COPY --from=build /app/dist /usr/share/nginx/html
 
+# Create non-root user and set permissions
+RUN chown -R nginx:nginx /var/cache/nginx /var/log/nginx /etc/nginx/conf.d /usr/share/nginx/html \
+    && chmod -R 755 /var/cache/nginx /var/log/nginx
+
 # Health check for container orchestration
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
     CMD wget --no-verbose --tries=1 --spider http://127.0.0.1/ || exit 1
 
 # Expose port 80
 EXPOSE 80
+
+# Run as non-root user
+USER nginx
 
 # Start nginx in foreground
 CMD ["nginx", "-g", "daemon off;"]

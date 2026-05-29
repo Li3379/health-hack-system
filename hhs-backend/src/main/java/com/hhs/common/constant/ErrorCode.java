@@ -27,6 +27,7 @@ public enum ErrorCode {
     AUTH_FAILED(401, "auth.failed", "认证失败", "Authentication failed"),
     AUTH_FORBIDDEN(403, "auth.forbidden", "权限不足", "Authorization failed"),
     AUTH_UNAUTHORIZED(401, "auth.unauthorized", "未授权", "Unauthorized"),
+    AUTH_RATE_LIMITED(429, "auth.rate_limited", "请求过于频繁，请稍后再试", "Too many attempts, please try again later"),
 
     // ========================================
     // User errors (USER_*)

@@ -30,7 +30,6 @@ export const useRealtimeStore = defineStore('realtime', () => {
   const connect = (token: string) => {
     // 防止重复连接
     if (ws.value && (ws.value.readyState === WebSocket.CONNECTING || ws.value.readyState === WebSocket.OPEN)) {
-      console.log('WebSocket already connected or connecting, skipping...')
       return
     }
 
@@ -40,8 +39,7 @@ export const useRealtimeStore = defineStore('realtime', () => {
     // 构建 WebSocket URL
     const wsBaseUrl = buildWebSocketBaseUrl()
     const wsUrl = `${wsBaseUrl}/ws/realtime?token=${token}`
-    console.log('Connecting to WebSocket:', wsUrl)
-    
+
     connecting.value = true
     errorMessage.value = null
     
@@ -52,21 +50,18 @@ export const useRealtimeStore = defineStore('realtime', () => {
         connected.value = true
         connecting.value = false
         errorMessage.value = null
-        console.log('WebSocket connected successfully')
       }
 
       ws.value.onmessage = event => {
         try {
           const data = JSON.parse(event.data)
-          console.log('WebSocket message received:', data.type || data)
           handleMessage(data)
-        } catch (error) {
-          console.error('Failed to parse WebSocket message:', error)
+        } catch {
+          // parse error silently
         }
       }
 
-      ws.value.onerror = error => {
-        console.error('WebSocket error:', error)
+      ws.value.onerror = () => {
         connecting.value = false
         errorMessage.value = 'WebSocket 连接错误'
       }
@@ -74,15 +69,13 @@ export const useRealtimeStore = defineStore('realtime', () => {
       ws.value.onclose = (event) => {
         connected.value = false
         connecting.value = false
-        console.log('WebSocket disconnected, code:', event.code, 'reason:', event.reason)
-        
+
         // 如果是非正常关闭，记录错误
         if (event.code !== 1000 && event.code !== 1001) {
           errorMessage.value = `连接已断开 (${event.code}: ${event.reason || '未知原因'})`
         }
       }
     } catch (error) {
-      console.error('Failed to create WebSocket:', error)
       connecting.value = false
       errorMessage.value = '创建 WebSocket 连接失败'
     }
@@ -100,10 +93,8 @@ export const useRealtimeStore = defineStore('realtime', () => {
       }
     } else if (data.type === 'pong') {
       // 心跳响应，忽略
-      console.debug('Received pong from server')
     } else if (data.type === 'alert') {
       // 预警消息
-      console.log('Received alert:', data.data)
     }
   }
 

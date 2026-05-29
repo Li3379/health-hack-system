@@ -135,7 +135,7 @@ const loadTodayStats = async () => {
       aiRecognizeCount.value = res.data.aiRecognizeCount
     }
   } catch (error) {
-    console.error('加载统计数据失败', error)
+    // stats load failed
   }
 }
 

@@ -40,7 +40,7 @@ export const useAiStore = defineStore('ai', () => {
       const res = await aiApi.getSessions()
       sessions.value = res.data
     } catch (error) {
-      console.error('加载会话列表失败:', error)
+      // session load failed
     } finally {
       sessionsLoading.value = false
     }
@@ -144,7 +144,7 @@ export const useAiStore = defineStore('ai', () => {
       const res = await aiApi.getRemainingCount()
       remainingCount.value = res.data
     } catch (error) {
-      console.error('获取剩余对话次数失败:', error)
+      // remaining count fetch failed
     }
   }
 

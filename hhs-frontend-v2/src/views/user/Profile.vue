@@ -310,7 +310,7 @@ const handleAvatarUpload = async (options: UploadRequestOptions) => {
     try {
       await authStore.fetchUserInfo()
     } catch (e) {
-      console.error('Failed to refresh user info:', e)
+      // refresh user info failed silently
     }
   } catch (error) {
     ElMessage.error('头像上传失败')

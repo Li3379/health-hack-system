@@ -77,7 +77,7 @@ const loadRecords = async () => {
 
     records.value = allRecords
   } catch (error) {
-    console.error('加载记录失败', error)
+    // records load failed
   } finally {
     loading.value = false
   }

@@ -28,7 +28,7 @@ export const usePushStore = defineStore('push', () => {
         configs.value = res.data
       }
     } catch (error) {
-      console.error('Failed to load push configs:', error)
+      // config load failed
     } finally {
       loading.value = false
     }
@@ -56,7 +56,6 @@ export const usePushStore = defineStore('push', () => {
         return false
       }
     } catch (error) {
-      console.error('Failed to save push config:', error)
       ElMessage.error('保存失败')
       return false
     }
@@ -77,7 +76,6 @@ export const usePushStore = defineStore('push', () => {
         return false
       }
     } catch (error) {
-      console.error('Failed to test push channel:', error)
       ElMessage.error('推送测试失败')
       return false
     } finally {
@@ -95,7 +93,7 @@ export const usePushStore = defineStore('push', () => {
         history.value = res.data
       }
     } catch (error) {
-      console.error('Failed to load push history:', error)
+      // history load failed
     }
   }
 
@@ -109,7 +107,7 @@ export const usePushStore = defineStore('push', () => {
         stats.value = res.data
       }
     } catch (error) {
-      console.error('Failed to load push stats:', error)
+      // stats load failed
     }
   }
 

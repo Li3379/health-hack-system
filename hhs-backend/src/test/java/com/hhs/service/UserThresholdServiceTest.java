@@ -100,7 +100,7 @@ class UserThresholdServiceTest {
         });
 
         // When: Create threshold
-        UserThreshold result = userThresholdService.create(testRequest);
+        UserThreshold result = userThresholdService.create(testUserId, testRequest);
 
         // Then: Verify result
         assertNotNull(result);
@@ -117,7 +117,7 @@ class UserThresholdServiceTest {
 
         // When & Then: Should throw exception
         BusinessException exception = assertThrows(BusinessException.class, () -> {
-            userThresholdService.create(testRequest);
+            userThresholdService.create(testUserId, testRequest);
         });
 
         assertTrue(exception.getMessage().contains("already exists") || exception.getMessage().contains("已存在"));
@@ -133,7 +133,7 @@ class UserThresholdServiceTest {
 
         // When: Update threshold
         testRequest.setWarningHigh(new BigDecimal("105"));
-        UserThreshold result = userThresholdService.update(1L, testRequest);
+        UserThreshold result = userThresholdService.update(1L, testUserId, testRequest);
 
         // Then: Verify update
         assertNotNull(result);
@@ -148,7 +148,7 @@ class UserThresholdServiceTest {
 
         // When & Then: Should throw exception
         BusinessException exception = assertThrows(BusinessException.class, () -> {
-            userThresholdService.update(999L, testRequest);
+            userThresholdService.update(999L, testUserId, testRequest);
         });
 
         assertTrue(exception.getMessage().contains("not found") || exception.getMessage().contains("不存在"));
@@ -161,6 +161,7 @@ class UserThresholdServiceTest {
         // Given: Existing threshold for different metric
         UserThreshold existingThreshold = new UserThreshold();
         existingThreshold.setId(1L);
+        existingThreshold.setUserId(testUserId);
         existingThreshold.setMetricKey("bloodPressure"); // Different metric
 
         UserThreshold otherThreshold = new UserThreshold();
@@ -176,7 +177,7 @@ class UserThresholdServiceTest {
 
         // Then: Should throw exception
         BusinessException exception = assertThrows(BusinessException.class, () -> {
-            userThresholdService.update(1L, testRequest);
+            userThresholdService.update(1L, testUserId, testRequest);
         });
 
         assertTrue(exception.getMessage().contains("already exists") || exception.getMessage().contains("已存在"));
@@ -190,7 +191,7 @@ class UserThresholdServiceTest {
         when(userThresholdMapper.deleteById((Long) any())).thenReturn(1);
 
         // When: Delete threshold
-        userThresholdService.delete(1L);
+        userThresholdService.delete(1L, testUserId);
 
         // Then: Verify deletion
         verify(userThresholdMapper, times(1)).selectById(1L);
@@ -204,7 +205,7 @@ class UserThresholdServiceTest {
         when(userThresholdMapper.selectById(999L)).thenReturn(null);
 
         // When: Delete non-existent threshold
-        userThresholdService.delete(999L);
+        userThresholdService.delete(999L, testUserId);
 
         // Then: Verify graceful handling
         verify(userThresholdMapper, times(1)).selectById(999L);
@@ -277,7 +278,7 @@ class UserThresholdServiceTest {
         });
 
         // When: Create threshold (service doesn't validate range, just stores)
-        UserThreshold result = userThresholdService.create(invalidRequest);
+        UserThreshold result = userThresholdService.create(testUserId, invalidRequest);
 
         // Then: Verify creation (range validation is handled elsewhere)
         assertNotNull(result);

@@ -135,7 +135,7 @@ export const useFloatingAiStore = defineStore('floatingAi', () => {
       const res = await aiApi.getRemainingCount()
       remainingCount.value = res.data
     } catch (error) {
-      console.error('获取剩余对话次数失败:', error)
+      // remaining count fetch failed
     }
   }
 

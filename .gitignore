@@ -131,3 +131,6 @@ nul
 docs/package-lock.json
 docs/superpowers/
 .gstack/
+
+# Docker Compose dev overrides (auto-loaded, may contain local secrets)
+docker-compose.override.yml

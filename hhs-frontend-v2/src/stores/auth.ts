@@ -24,7 +24,6 @@ export const useAuthStore = defineStore('auth', () => {
       ElMessage.success('登录成功')
       router.push('/dashboard')
     } catch (error) {
-      console.error('Login failed:', error)
       throw error
     }
   }
@@ -36,7 +35,6 @@ export const useAuthStore = defineStore('auth', () => {
       ElMessage.success('注册成功，请登录')
       router.push('/login')
     } catch (error) {
-      console.error('Register failed:', error)
       throw error
     }
   }
@@ -63,7 +61,6 @@ export const useAuthStore = defineStore('auth', () => {
       user.value = res.data.profile
       storage.setUser(res.data.profile)
     } catch (error) {
-      console.error('Failed to fetch user info:', error)
       throw error
     }
   }

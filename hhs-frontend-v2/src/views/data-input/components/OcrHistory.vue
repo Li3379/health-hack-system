@@ -163,7 +163,6 @@ const loadHistory = async () => {
       total.value = res.data.total || 0
     }
   } catch (error) {
-    console.error('加载OCR历史失败', error)
     ElMessage.error('加载历史记录失败')
   } finally {
     loading.value = false
@@ -186,7 +185,6 @@ const viewDetail = async (record: OcrHistoryItem) => {
       ElMessage.error(res.message || '获取详情失败')
     }
   } catch (error) {
-    console.error('获取OCR详情失败', error)
     ElMessage.error('获取详情失败')
   } finally {
     detailLoading.value = false
@@ -206,7 +204,6 @@ const handleDelete = async (recordId: number) => {
       ElMessage.error(res.message || '删除失败')
     }
   } catch (error) {
-    console.error('删除OCR记录失败', error)
     ElMessage.error('删除失败')
   }
 }

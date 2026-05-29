@@ -475,7 +475,7 @@ const regenerateReport = async () => {
     ElMessage.success('报告生成成功')
   } catch (error: any) {
     if (error.name === 'CanceledError' || error.name === 'AbortError') {
-      console.log('Report generation cancelled')
+      // report generation cancelled
     } else {
       ElMessage.error(error.response?.data?.message || '生成报告失败')
     }

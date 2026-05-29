@@ -13,7 +13,7 @@ export const useAlertStore = defineStore('alert', () => {
       const res = await alertApi.getUnreadCount()
       unreadCount.value = res.data
     } catch (error) {
-      console.error('Failed to fetch unread count:', error)
+      // unread count fetch failed
     }
   }
 
@@ -23,7 +23,7 @@ export const useAlertStore = defineStore('alert', () => {
       const res = await alertApi.getRecentAlerts(limit)
       recentAlerts.value = res.data
     } catch (error) {
-      console.error('Failed to fetch recent alerts:', error)
+      // recent alerts fetch failed
     }
   }
 
@@ -34,7 +34,7 @@ export const useAlertStore = defineStore('alert', () => {
       unreadCount.value = Math.max(0, unreadCount.value - 1)
       await fetchRecentAlerts()
     } catch (error) {
-      console.error('Failed to mark as read:', error)
+      // mark as read failed
     }
   }
 
@@ -45,7 +45,7 @@ export const useAlertStore = defineStore('alert', () => {
       unreadCount.value = 0
       await fetchRecentAlerts()
     } catch (error) {
-      console.error('Failed to mark all as read:', error)
+      // mark all as read failed
     }
   }
 
