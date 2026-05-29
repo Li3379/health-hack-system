@@ -77,10 +77,10 @@ jobs:
             # Remove development override file
             rm -f docker-compose.override.yml
 
-            # Pull latest code
+            # Pull latest code (non-fatal — images come from GHCR, not git)
             if [ -d .git ]; then
               echo "=== Pulling latest code ==="
-              git pull origin master
+              git pull origin master || echo "WARNING: git pull failed (images still pulled from GHCR)"
               rm -f docker-compose.override.yml
             fi
 
