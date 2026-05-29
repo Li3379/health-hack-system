@@ -117,7 +117,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { gsap, cleanupScrollTriggers, DUR, EASE } from '@/composables/useGsap'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { preventionApi } from '@/api/prevention'
 import type { HealthProfileRequest, HealthProfileVO } from '@/types/api'
@@ -237,7 +238,25 @@ const cancelEdit = () => {
 
 onMounted(() => {
   fetchProfile()
+
+  nextTick(() => {
+    const tl = gsap.timeline({ defaults: { ease: EASE.out } })
+    tl.fromTo('.el-card',
+      { y: 20, autoAlpha: 0 },
+      { y: 0, autoAlpha: 1, duration: DUR.mid, clearProps: 'transform,autoAlpha,visibility,opacity' }
+    )
+    tl.fromTo('.header-actions',
+      { y: -10, autoAlpha: 0 },
+      { y: 0, autoAlpha: 1, duration: DUR.mid, clearProps: 'transform,autoAlpha,visibility,opacity' }
+    , '-=0.2')
+    // Stagger form rows
+    tl.fromTo('.el-form .el-row',
+      { y: 12, autoAlpha: 0 },
+      { y: 0, autoAlpha: 1, duration: DUR.mid, stagger: 0.06, clearProps: 'transform,autoAlpha,visibility,opacity' }
+    , '-=0.15')
+  })
 })
+onUnmounted(() => { cleanupScrollTriggers() })
 </script>
 
 <style scoped>

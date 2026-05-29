@@ -90,10 +90,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { moodApi, type MoodEntry, type MoodInsights } from '@/api/mood'
 import { formatDate } from '@/utils/format'
+import {
+  springPop, staggerReveal, countUp, cleanupScrollTriggers,
+  tilt3D, magneticHover, buttonPress, hoverLift, rippleClick, DUR, EASE,
+} from '@/composables/useGsap'
 
 const submitting = ref(false)
 const insightsLoading = ref(false)
@@ -150,7 +154,53 @@ const handleSubmit = async () => {
 
 const handleDelete = async (id: number) => { try { await ElMessageBox.confirm('确定删除？', '提示', { type: 'warning' }); await moodApi.remove(id); ElMessage.success('删除成功'); fetchData() } catch (e) { if (e !== 'cancel') ElMessage.error('删除失败') } }
 
-onMounted(() => { fetchData() })
+onMounted(() => {
+  fetchData()
+
+  // ── Mood buttons: dramatic spring pop ──
+  springPop('.mood-btn', { stagger: 0.06, scale: 0 })
+  magneticHover('.mood-btn', { strength: 0.4, radius: 60 })
+
+  // ── Insight cards: stagger with 3D ──
+  staggerReveal('.insight-item', {
+    y: 30,
+    scale: 0.9,
+    stagger: 0.1,
+    duration: DUR.slow,
+    ease: EASE.back,
+  })
+  tilt3D('.insight-item', { maxTilt: 8, scale: 1.02 })
+
+  // ── Entry items: slide from right ──
+  staggerReveal('.entry-item', {
+    x: 40,
+    y: 0,
+    stagger: 0.06,
+    duration: DUR.mid,
+    ease: EASE.back,
+  })
+
+  // ── Count up insight values ──
+  setTimeout(() => {
+    document.querySelectorAll('.insight-value').forEach((el) => {
+      const num = parseFloat(el.textContent?.trim() ?? '')
+      if (!isNaN(num) && num > 0) countUp(el as HTMLElement, num, { decimals: 1, duration: DUR.dramatic })
+    })
+  }, 700)
+
+  // ── Interaction: mood button press feedback ──
+  buttonPress('.mood-btn', { scale: 0.88 })
+
+  // ── Interaction: hover lift on insight cards ──
+  hoverLift('.insight-item', { y: -4, scale: 1.01 })
+
+  // ── Interaction: ripple on mood buttons ──
+  rippleClick('.mood-btn', { color: 'rgba(94, 234, 212, 0.3)' })
+})
+
+onUnmounted(() => {
+  cleanupScrollTriggers()
+})
 </script>
 
 <style scoped>

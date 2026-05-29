@@ -142,7 +142,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, onUnmounted } from 'vue'
+import { scrollReveal, cleanupScrollTriggers, buttonPress } from '@/composables/useGsap'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
@@ -320,11 +321,32 @@ const handleDelete = async (row: HealthMetricVO) => {
 
 onMounted(() => {
   fetchMetrics()
-  // 检查是否有 add 参数，有则自动打开添加对话框
   if (route.query.action === 'add') {
     showAddDialog()
   }
+  scrollReveal('.el-card', { y: 16 })
+
+  // ── Interaction: press feedback on action buttons ──
+  buttonPress('.el-button--primary')
+
+  // ── Interaction: hover lift on table rows ──
+  const addRowInteractions = () => {
+    document.querySelectorAll('.el-table__row').forEach((row) => {
+      row.addEventListener('mouseenter', () => {
+        import('gsap').then(({ default: gsap }) => {
+          gsap.to(row, { backgroundColor: 'rgba(94, 234, 212, 0.04)', duration: 0.2 })
+        })
+      })
+      row.addEventListener('mouseleave', () => {
+        import('gsap').then(({ default: gsap }) => {
+          gsap.to(row, { backgroundColor: 'transparent', duration: 0.2 })
+        })
+      })
+    })
+  }
+  setTimeout(addRowInteractions, 500)
 })
+onUnmounted(() => { cleanupScrollTriggers() })
 </script>
 
 <style scoped>

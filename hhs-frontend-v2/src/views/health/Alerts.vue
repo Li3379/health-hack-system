@@ -127,7 +127,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { gsap, cleanupScrollTriggers, DUR, EASE } from '@/composables/useGsap'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { CircleCheck, Warning } from '@element-plus/icons-vue'
 import { useAlertStore } from '@/stores/alert'
@@ -244,7 +245,31 @@ const handleDelete = async (id: number) => {
 onMounted(() => {
   fetchAlerts()
   alertStore.fetchUnreadCount()
+
+  // Enhanced entrance animations
+  nextTick(() => {
+    const tl = gsap.timeline({ defaults: { ease: EASE.out } })
+
+    // Card entrance
+    tl.fromTo('.el-card',
+      { y: 20, autoAlpha: 0 },
+      { y: 0, autoAlpha: 1, duration: DUR.mid, clearProps: 'transform,autoAlpha,visibility,opacity' }
+    )
+
+    // Stat items stagger
+    tl.fromTo('.stat-item',
+      { y: 16, autoAlpha: 0, scale: 0.95 },
+      { y: 0, autoAlpha: 1, scale: 1, duration: DUR.mid, stagger: 0.08, clearProps: 'transform,autoAlpha,visibility,opacity' }
+    , '-=0.2')
+
+    // Filter bar
+    tl.fromTo('.filter-bar',
+      { y: 12, autoAlpha: 0 },
+      { y: 0, autoAlpha: 1, duration: DUR.mid, clearProps: 'transform,autoAlpha,visibility,opacity' }
+    , '-=0.15')
+  })
 })
+onUnmounted(() => { cleanupScrollTriggers() })
 </script>
 
 <style scoped>
@@ -263,7 +288,17 @@ onMounted(() => {
   padding: 24px 0;
   border-bottom: 1px solid var(--border);
 }
-.stat-item { text-align: center; }
+.stat-item {
+  text-align: center;
+  padding: 16px 8px;
+  border-radius: var(--radius-md, 12px);
+  transition: transform 0.25s var(--ease, ease), box-shadow 0.25s var(--ease, ease);
+  cursor: default;
+}
+.stat-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+}
 .stat-value {
   font: 700 36px/1.2 var(--font-ui);
   color: var(--accent-cool);

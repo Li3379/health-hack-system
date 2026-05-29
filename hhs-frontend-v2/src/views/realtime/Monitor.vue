@@ -172,6 +172,10 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, onUnmounted, nextTick, computed } from 'vue'
+import {
+  staggerReveal, cleanupScrollTriggers,
+  tilt3D, glowPulse, buttonPress, hoverLift, rippleClick, DUR, EASE,
+} from '@/composables/useGsap'
 import { ElMessage } from 'element-plus'
 import { Connection } from '@element-plus/icons-vue'
 import * as echarts from 'echarts/core'
@@ -371,6 +375,39 @@ onMounted(async () => {
   await fetchTrend()
   initChart()
 
+  // ── Metric cards: dramatic entrance with 3D ──
+  staggerReveal('.metric-card', {
+    y: 50,
+    scale: 0.85,
+    rotation: -3,
+    stagger: 0.1,
+    duration: DUR.slow,
+    ease: EASE.back,
+  })
+  tilt3D('.metric-card', { maxTilt: 12, scale: 1.03 })
+
+  // ── Other cards: scroll-driven ──
+  staggerReveal('.el-card:not(.metric-card)', {
+    y: 30,
+    scale: 0.95,
+    scrollTrigger: true,
+    stagger: 0.1,
+    duration: DUR.mid,
+    ease: EASE.expo,
+  })
+
+  // ── Glow pulse on heart rate card ──
+  const hrCard = document.querySelector('.metric-card') as HTMLElement
+  if (hrCard) glowPulse(hrCard, { color: 'rgba(94, 234, 212, 0.25)', spread: 15 })
+
+  // ── Interaction: hover lift on metric cards ──
+  hoverLift('.metric-card', { y: -6, scale: 1.02 })
+
+  // ── Interaction: press + ripple on buttons ──
+  buttonPress('.el-button--primary')
+  buttonPress('.el-button--danger')
+  rippleClick('.metric-card', { color: 'rgba(94, 234, 212, 0.15)' })
+
   // 启动心跳
   startPing()
 
@@ -383,6 +420,7 @@ onMounted(async () => {
 onUnmounted(() => {
   if (refreshInterval) clearInterval(refreshInterval)
   if (pingInterval) clearInterval(pingInterval)
+  cleanupScrollTriggers()
 })
 </script>
 

@@ -64,10 +64,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { screeningCompareApi, type ScreeningComparisonVO } from '@/api/screening-compare'
+import { staggerReveal, countUp } from '@/composables/useGsap'
 
 const route = useRoute()
 const router = useRouter()
@@ -92,7 +93,17 @@ const fetchComparison = async () => {
 
 const goBack = () => { router.back() }
 
-onMounted(() => { fetchComparison() })
+onMounted(async () => {
+  await fetchComparison()
+  await nextTick()
+  staggerReveal('.summary-item', { stagger: 0.1, y: 16, scale: 0.95 })
+  setTimeout(() => {
+    document.querySelectorAll('.summary-value').forEach((el) => {
+      const num = parseInt(el.textContent?.trim() ?? '0', 10)
+      if (num > 0) countUp(el as HTMLElement, num)
+    })
+  }, 400)
+})
 </script>
 
 <style scoped>

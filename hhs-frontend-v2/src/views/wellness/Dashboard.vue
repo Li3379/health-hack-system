@@ -190,7 +190,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, nextTick } from 'vue'
+import { ref, reactive, computed, onMounted, nextTick, onUnmounted } from 'vue'
+import {
+  staggerReveal, countUp, cleanupScrollTriggers,
+  tilt3D, parallax, scrollScale, magneticHover,
+  buttonPress, hoverLift, hoverShine, rippleClick,
+  DUR, EASE,
+} from '@/composables/useGsap'
 import {
   Plus, Moon, Star, Aim, Timer, Coffee, Sunny, Lightning,
   DataLine, Top, Bottom
@@ -392,16 +398,66 @@ const handleAddMetric = async () => {
 }
 
 onMounted(async () => {
-  // Fetch initial data
   await wellnessStore.fetchSummary(dateRange.value)
   await wellnessStore.fetchLatest()
 
-  // Wait for DOM and render charts
   await nextTick()
   await fetchSleepTrend()
   initSleepChart()
   await fetchActivityTrend()
   initActivityChart()
+
+  // ── Metric cards: dramatic stagger with 3D ──
+  staggerReveal('.metric-card', {
+    y: 50,
+    scale: 0.85,
+    rotation: -5,
+    stagger: 0.1,
+    duration: DUR.slow,
+    ease: EASE.back,
+  })
+  tilt3D('.metric-card', { maxTilt: 10, scale: 1.03 })
+
+  // ── Activity card: scroll scale ──
+  scrollScale('.activity-card', { from: 0.8, to: 1 })
+  parallax('.activity-card', { speed: 0.12 })
+
+  // ── Charts: stagger with parallax ──
+  staggerReveal('.charts-row .el-card', {
+    y: 40,
+    scale: 0.9,
+    scrollTrigger: true,
+    stagger: 0.12,
+    duration: DUR.slow,
+    ease: EASE.expo,
+  })
+  parallax('.charts-row .el-card', { speed: 0.08 })
+
+  // ── Count up values ──
+  setTimeout(() => {
+    document.querySelectorAll('.metric-value').forEach((el) => {
+      const text = el.textContent?.trim() ?? ''
+      const num = parseFloat(text)
+      if (!isNaN(num) && num > 0) countUp(el as HTMLElement, num, { decimals: 1, duration: DUR.dramatic })
+    })
+  }, 600)
+
+  // ── Magnetic hover on metric cards ──
+  magneticHover('.metric-card', { strength: 0.25, radius: 100 })
+
+  // ── Interaction: hover lift on metric cards ──
+  hoverLift('.metric-card', { y: -6, scale: 1.02 })
+
+  // ── Interaction: shine sweep on chart cards ──
+  hoverShine('.charts-row .el-card')
+
+  // ── Interaction: press + ripple on add button ──
+  buttonPress('.page-header .el-button')
+  rippleClick('.page-header .el-button', { color: 'rgba(255,255,255,0.3)' })
+})
+
+onUnmounted(() => {
+  cleanupScrollTriggers()
 })
 </script>
 

@@ -95,8 +95,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { DataLine, Sunny, Connection, MagicStick } from '@element-plus/icons-vue'
+import {
+  staggerReveal, countUp, cleanupScrollTriggers,
+  tilt3D, buttonPress, hoverLift, hoverShine, DUR, EASE,
+} from '@/composables/useGsap'
 import QuickInput from './components/QuickInput.vue'
 import AIInput from './components/AIInput.vue'
 import DeviceSync from './components/DeviceSync.vue'
@@ -147,9 +151,48 @@ const refreshData = () => {
   }
 }
 
-onMounted(() => {
-  loadTodayStats()
+onMounted(async () => {
+  await loadTodayStats()
+
+  // ── Overview cards: dramatic entrance ──
+  staggerReveal('.overview-card', {
+    y: 50,
+    scale: 0.85,
+    stagger: 0.1,
+    duration: DUR.slow,
+    ease: EASE.back,
+  })
+  tilt3D('.overview-card', { maxTilt: 10, scale: 1.03 })
+
+  // ── Content cards: scroll-driven ──
+  staggerReveal('.el-col > .el-card, .el-col > *', {
+    y: 30,
+    scale: 0.95,
+    scrollTrigger: true,
+    stagger: 0.1,
+    duration: DUR.mid,
+    ease: EASE.expo,
+  })
+
+  // ── Count up overview values ──
+  setTimeout(() => {
+    document.querySelectorAll('.overview-value').forEach((el) => {
+      const num = parseInt(el.textContent?.trim() ?? '0', 10)
+      if (num > 0) countUp(el as HTMLElement, num, { duration: DUR.dramatic })
+    })
+  }, 600)
+
+  // ── Interaction: hover lift on overview cards ──
+  hoverLift('.overview-card', { y: -6, scale: 1.02 })
+
+  // ── Interaction: shine sweep on content cards ──
+  hoverShine('.el-col > .el-card')
+
+  // ── Interaction: press feedback on tab buttons ──
+  buttonPress('.el-tabs__item')
 })
+
+onUnmounted(() => { cleanupScrollTriggers() })
 </script>
 
 <style scoped>

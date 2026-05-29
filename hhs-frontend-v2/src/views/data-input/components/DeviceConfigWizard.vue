@@ -280,7 +280,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
+import { gsap } from '@/composables/useGsap'
 import { ElMessage } from 'element-plus'
 import {
   Loading,
@@ -409,6 +410,43 @@ const getDataTypeName = (type: string) => {
   }
   return names[type] || type
 }
+
+// Step transition animation
+watch(currentStep, () => {
+  const panel = document.querySelector('.step-panel')
+  if (panel) {
+    gsap.fromTo(panel,
+      { opacity: 0, x: 20 },
+      { opacity: 1, x: 0, duration: 0.35, ease: 'power2.out', clearProps: 'transform,autoAlpha,visibility,opacity' }
+    )
+  }
+})
+
+// Platform card stagger on step 1
+watch(currentStep, (step) => {
+  if (step === 1) {
+    setTimeout(() => {
+      const cards = document.querySelectorAll('.platform-card')
+      if (cards.length) {
+        gsap.fromTo(cards,
+          { scale: 0.9, opacity: 0 },
+          { scale: 1, opacity: 1, duration: 0.35, ease: 'back.out(1.4)', stagger: 0.06, clearProps: 'transform,autoAlpha,visibility,opacity' }
+        )
+      }
+    }, 50)
+  }
+  if (step === 3) {
+    setTimeout(() => {
+      const icon = document.querySelector('.completion-success .el-icon, .completion-pending .el-icon')
+      if (icon) {
+        gsap.fromTo(icon,
+          { scale: 0, rotation: -90 },
+          { scale: 1, rotation: 0, duration: 0.5, ease: 'back.out(2)', clearProps: 'transform,autoAlpha,visibility,opacity' }
+        )
+      }
+    }, 50)
+  }
+})
 
 onMounted(() => {
   loadConfigStatus()

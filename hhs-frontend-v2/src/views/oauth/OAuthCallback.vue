@@ -87,7 +87,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { gsap } from '@/composables/useGsap'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
@@ -326,6 +327,16 @@ onMounted(() => {
   updateStep(1, '正在处理授权回调...')
   handleCallback()
 
+  // Animate step indicators
+  gsap.fromTo('.el-steps',
+    { autoAlpha: 0, y: -16 },
+    { autoAlpha: 1, y: 0, duration: 0.4, ease: 'power2.out', clearProps: 'transform,autoAlpha,visibility,opacity' }
+  )
+  gsap.fromTo('.step-content',
+    { autoAlpha: 0, y: 16 },
+    { autoAlpha: 1, y: 0, duration: 0.5, ease: 'power2.out', delay: 0.2, clearProps: 'transform,autoAlpha,visibility,opacity' }
+  )
+
   // Start timeout check
   timeoutCheck = setInterval(() => {
     const elapsed = Date.now() - startTime.value
@@ -335,8 +346,6 @@ onMounted(() => {
   }, 5000)
 })
 
-// Cleanup
-import { onUnmounted } from 'vue'
 onUnmounted(() => {
   if (timeoutCheck) {
     clearInterval(timeoutCheck)
