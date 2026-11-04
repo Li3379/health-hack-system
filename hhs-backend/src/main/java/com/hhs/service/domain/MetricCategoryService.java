@@ -2,17 +2,32 @@ package com.hhs.service.domain;
 
 import com.hhs.common.enums.MetricCategory;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
 
+import java.util.Optional;
 import java.util.Set;
 
 /**
  * Service for determining metric category based on metric key.
  * Maps metric keys to their default categories (HEALTH or WELLNESS).
+ * Prioritizes HealthMetricMetaRegistry authoritative dictionary with fallback to legacy sets.
  */
 @Slf4j
 @Component
 public class MetricCategoryService {
+
+    private final HealthMetricMetaRegistry registry;
+
+    public MetricCategoryService() {
+        this(null);
+    }
+
+    @Autowired
+    public MetricCategoryService(@Nullable HealthMetricMetaRegistry registry) {
+        this.registry = registry;
+    }
 
     /**
      * Medical/health metrics requiring clinical attention.
@@ -22,14 +37,20 @@ public class MetricCategoryService {
             "systolicBP",
             "diastolicBP",
             "glucose",
+            "bloodGlucose",
             "fastingGlucose",
             "postprandialGlucose",
             "bmi",
             "bodyTemperature",
+            "temperature",
             "weight",
             "bloodOxygen",
             "totalCholesterol",
-            "triglycerides"
+            "triglycerides",
+            "hdlCholesterol",
+            "ldlCholesterol",
+            "uricAcid",
+            "creatinine"
     );
 
     /**
@@ -57,6 +78,13 @@ public class MetricCategoryService {
             return MetricCategory.HEALTH;
         }
 
+        if (registry != null) {
+            Optional<MetricDefinition> def = registry.getDefinition(metricKey);
+            if (def.isPresent()) {
+                return def.get().category();
+            }
+        }
+
         if (HEALTH_METRICS.contains(metricKey)) {
             return MetricCategory.HEALTH;
         }
@@ -77,6 +105,15 @@ public class MetricCategoryService {
      * @return true if it's a recognized health metric
      */
     public boolean isHealthMetric(String metricKey) {
+        if (metricKey == null || metricKey.isBlank()) {
+            return false;
+        }
+        if (registry != null) {
+            Optional<MetricDefinition> def = registry.getDefinition(metricKey);
+            if (def.isPresent()) {
+                return def.get().category() == MetricCategory.HEALTH;
+            }
+        }
         return HEALTH_METRICS.contains(metricKey);
     }
 
@@ -87,6 +124,15 @@ public class MetricCategoryService {
      * @return true if it's a recognized wellness metric
      */
     public boolean isWellnessMetric(String metricKey) {
+        if (metricKey == null || metricKey.isBlank()) {
+            return false;
+        }
+        if (registry != null) {
+            Optional<MetricDefinition> def = registry.getDefinition(metricKey);
+            if (def.isPresent()) {
+                return def.get().category() == MetricCategory.WELLNESS;
+            }
+        }
         return WELLNESS_METRICS.contains(metricKey);
     }
 
@@ -97,6 +143,12 @@ public class MetricCategoryService {
      * @return true if the metric key is recognized
      */
     public boolean isRecognizedMetric(String metricKey) {
+        if (metricKey == null || metricKey.isBlank()) {
+            return false;
+        }
+        if (registry != null && registry.contains(metricKey)) {
+            return true;
+        }
         return HEALTH_METRICS.contains(metricKey) || WELLNESS_METRICS.contains(metricKey);
     }
 
