@@ -74,7 +74,17 @@ Plans:
   4. 血压录入支持高压与低压同屏协同录入与关联校验；检测到高压低于低压倒置时，给出原理解释并提供“一键对调高低压数值”按钮，点击后自动修正对调
   5. 仅当输入处于物理不可能生理极限（如体温 55°C、心率 0 或 400 bpm）时阻止提交，且输入框原样保留输入文本方便用户直接回退修改
 
-**Plans**: TBD
+**Plans:** 2 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 06-01-PLAN.md — 四梯度纯函数评估引擎 (metricValidation.ts) 与响应式组合函数 (useMetricValidation.ts)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 06-02-PLAN.md — 常态化参考卡片、危急确认模态弹窗与 QuickInputDialog 非破坏性录入重构
+
 **UI hint**: yes
 
 ### Phase 7: 全渠道校验对齐与跨端测试验证
