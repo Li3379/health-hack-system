@@ -658,12 +658,12 @@ export function useMetricValidation(
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **生活方式保健指标（如 steps, sleepDuration）是否需要 Tier 3 危急值？**
    - What we know: D-05 明确列出的危急值指标全为生理体征指标（血压、血糖、心率、体温、血氧）。
    - What's unclear: 运动步数 0 步或睡眠 2 小时是否需要模态确认？
-   - Recommendation: 保健指标（WELLNESS）不存在突发生命危险，不设 Tier 3 危急模态确认，仅保留 Tier 1 正常与 Tier 2 预警（如睡眠不足），避免过度打扰用户。
+   - RESOLVED: 保健指标（WELLNESS）不存在突发生命危险，不设 Tier 3 危急模态确认，仅保留 Tier 1 正常与 Tier 2 预警（如睡眠不足），避免过度打扰用户。所有 Panic Limits 严格收敛于 5 大生命健康指标。
 
 ---
 
