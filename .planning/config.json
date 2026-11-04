@@ -1,5 +1,8 @@
 {
   "mode": "yolo",
+  "git": {
+    "allow_default_branch_commits": true
+  },
   "granularity": "coarse",
   "parallelization": true,
   "commit_docs": true,

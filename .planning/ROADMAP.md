@@ -26,12 +26,12 @@
   3. 通过多格式 key 查询健康指标历史记录与告警规则，均能准确命中并返回统一的标准 key
   4. 针对 19+ 种指标边界与别名转换的单元测试全部通过，杜绝硬编码分散定义
 
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 04-01-PLAN.md — 权威元数据注册表 (HealthMetricMetaRegistry)、Key 归一化器 (MetricKeyNormalizer) 与元数据 GET 端点
+- [x] 04-01-PLAN.md — 权威元数据注册表 (HealthMetricMetaRegistry)、Key 归一化器 (MetricKeyNormalizer) 与元数据 GET 端点
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -85,7 +85,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 4. 后端统一指标元数据注册中心与 Key 归一化 | 0/2 | Not started | - |
+| 4. 后端统一指标元数据注册中心与 Key 归一化 | 1/2 | In Progress|  |
 | 5. 前端元数据 Store 与全站格式化防英文外露 | 0/0 | Not started | - |
 | 6. 前端非破坏性录入引导、四梯度宽容校验与友好反馈 | 0/0 | Not started | - |
 | 7. 全渠道校验对齐与跨端测试验证 | 0/0 | Not started | - |
