@@ -12,13 +12,13 @@
 
 - [x] **META-01**: 后端建立不可变的 `HealthMetricMetaRegistry` 领域服务，单点集中管理全系统 19+ 种健康与保健指标的标准 Key、中文名、单位、输入精度、步长、生理极限与临床正常参考范围
 - [x] **META-02**: 后端提供 `GET /api/metrics/metadata` REST 接口，支持全量指标元数据及分类查询，并配置 HTTP 客户端/服务端强缓存
-- [ ] **META-03**: 前端通过 Pinia 状态库 `useMetricMetaStore` 统一拉取并响应式共享指标元数据，内置本地静态离线兜底常量，彻底废除各组件私自硬编码的范围字典
+- [x] **META-03**: 前端通过 Pinia 状态库 `useMetricMetaStore` 统一拉取并响应式共享指标元数据，内置本地静态离线兜底常量，彻底废除各组件私自硬编码的范围字典
 
 ### KEY — Key 规范化与全站防英文外露 (Metric Key Normalization)
 
 - [x] **KEY-01**: 后端与前端分别实现 `MetricKeyNormalizer`，双向无缝兼容 `camelCase`（如 `heartRate`）、`snake_case`（如 `heart_rate`）、大写（如 `HEART_RATE`）以及历史别名（如 `bodyTemperature`、`spo2`）
 - [x] **KEY-02**: 后端 `HealthMetricRequest` 在反序列化阶段自动执行 Key 规范化，数据库查询与 Mapper 自动兼容别名匹配
-- [ ] **KEY-03**: 重构前端 `format.ts` 与各大页面（指标列表、预警中心、趋势图、实时监控），消除因缺少映射而向用户直接显示 `blood_glucose` 等原始英文代码的现象
+- [x] **KEY-03**: 重构前端 `format.ts` 与各大页面（指标列表、预警中心、趋势图、实时监控），消除因缺少映射而向用户直接显示 `blood_glucose` 等原始英文代码的现象
 
 ### GUIDE — 录入前预知引导与参考体系 (Pre-Input Guidance)
 
@@ -68,10 +68,10 @@
 |-------------|-------|--------|
 | META-01 | Phase 4 | Complete |
 | META-02 | Phase 4 | Complete |
-| META-03 | Phase 5 | Pending |
+| META-03 | Phase 5 | Complete |
 | KEY-01 | Phase 4 | Complete |
 | KEY-02 | Phase 4 | Complete |
-| KEY-03 | Phase 5 | Pending |
+| KEY-03 | Phase 5 | Complete |
 | GUIDE-01 | Phase 6 | Pending |
 | GUIDE-02 | Phase 6 | Pending |
 | GUIDE-03 | Phase 6 | Pending |
