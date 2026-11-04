@@ -1,14 +1,17 @@
 import { describe, it, expect } from 'vitest'
+import { setActivePinia, createPinia } from 'pinia'
 import {
   getMetricDisplayName,
   getMetricLabel,
   getMetricUnit,
+  getWellnessMetricUnit,
   formatDateTime,
   formatDate,
   formatTime,
   formatFileSize,
   formatNumber
 } from '@/utils/format'
+import { useMetricMetaStore } from '@/stores/metricMeta'
 
 describe('format utils', () => {
   describe('getMetricDisplayName & getMetricLabel', () => {
@@ -77,9 +80,11 @@ describe('format utils', () => {
       expect(getMetricDisplayName('cr')).toBe('肌酐')
     })
 
-    it('should support legacy uppercase SCREAMING_SNAKE_CASE', () => {
+    it('should support legacy uppercase and lowercase blood pressure formats', () => {
       expect(getMetricDisplayName('HEART_RATE')).toBe('心率')
       expect(getMetricDisplayName('BLOOD_PRESSURE')).toBe('血压')
+      expect(getMetricDisplayName('blood_pressure')).toBe('血压')
+      expect(getMetricDisplayName('bloodPressure')).toBe('血压')
       expect(getMetricDisplayName('BLOOD_GLUCOSE')).toBe('血糖')
       expect(getMetricDisplayName('BODY_TEMPERATURE')).toBe('体温')
       expect(getMetricDisplayName('BLOOD_OXYGEN')).toBe('血氧')
@@ -129,7 +134,7 @@ describe('format utils', () => {
       expect(getMetricUnit('waterIntake')).toBe('ml')
     })
 
-    it('should return correct units for aliases', () => {
+    it('should return correct units for aliases and legacy blood pressure keys', () => {
       expect(getMetricUnit('heart_rate')).toBe('次/分')
       expect(getMetricUnit('sbp')).toBe('mmHg')
       expect(getMetricUnit('dbp')).toBe('mmHg')
@@ -137,6 +142,37 @@ describe('format utils', () => {
       expect(getMetricUnit('spo2')).toBe('%')
       expect(getMetricUnit('glucose')).toBe('mmol/L')
       expect(getMetricUnit('BLOOD_PRESSURE')).toBe('mmHg')
+      expect(getMetricUnit('blood_pressure')).toBe('mmHg')
+      expect(getMetricUnit('bloodPressure')).toBe('mmHg')
+    })
+
+    it('should harmonize wellness water intake unit with authoritative registry', () => {
+      expect(getWellnessMetricUnit('waterIntake')).toBe('ml')
+      expect(getMetricUnit('waterIntake')).toBe('ml')
+    })
+
+    it('should dynamically read newly added metrics when Pinia store is active', () => {
+      setActivePinia(createPinia())
+      const store = useMetricMetaStore()
+      store.metadataMap.customDynamicMetric = {
+        canonicalKey: 'customDynamicMetric',
+        aliases: ['custom_dynamic_metric'],
+        displayName: '自定义动态指标',
+        category: 'HEALTH',
+        unit: '分',
+        precision: 0,
+        step: 1,
+        hardMin: 0,
+        hardMax: 100,
+        normalMin: 60,
+        normalMax: 100,
+        placeholder: '例如: 80',
+        guideHint: '测试动态指标说明'
+      }
+
+      expect(getMetricDisplayName('customDynamicMetric')).toBe('自定义动态指标')
+      expect(getMetricDisplayName('custom_dynamic_metric')).toBe('自定义动态指标')
+      expect(getMetricUnit('customDynamicMetric')).toBe('分')
     })
 
     it('should return empty string for unknown or empty keys', () => {
