@@ -1,4 +1,23 @@
 import dayjs from 'dayjs'
+import { FALLBACK_METRIC_META } from '@/constants/metricMeta'
+import { toCanonicalKey, formatUnknownKey } from '@/utils/metricNormalizer'
+
+// 遗留大写下划线格式备用字典 (用于极个别历史组件或静态配置保底)
+const LEGACY_UPPERCASE_MAP: Record<string, string> = {
+  HEART_RATE: '心率',
+  BLOOD_PRESSURE: '血压',
+  BLOOD_GLUCOSE: '血糖',
+  BODY_TEMPERATURE: '体温',
+  BLOOD_OXYGEN: '血氧'
+}
+
+const LEGACY_UPPERCASE_UNIT_MAP: Record<string, string> = {
+  HEART_RATE: '次/分',
+  BLOOD_PRESSURE: 'mmHg',
+  BLOOD_GLUCOSE: 'mmol/L',
+  BODY_TEMPERATURE: '°C',
+  BLOOD_OXYGEN: '%'
+}
 
 // 格式化日期时间
 export const formatDateTime = (date: string | Date, format = 'YYYY-MM-DD HH:mm:ss'): string => {
@@ -42,53 +61,69 @@ export const formatFileSize = (bytes: number): string => {
   return `${(bytes / Math.pow(k, i)).toFixed(2)} ${sizes[i]}`
 }
 
-// 获取指标显示名称
+/**
+ * 获取指标显示名称
+ * 透明集成 Key 归一化器与权威 23 项元数据字典
+ * 未知指标 key 自动执行首字母大写词组化转换，杜绝下划线暴露 (per D-03, D-05)
+ */
 export const getMetricDisplayName = (metricKey: string): string => {
-  const map: Record<string, string> = {
-    // 小驼峰格式 (camelCase) - 用于 Metrics.vue, Monitor.vue 等
-    heartRate: '心率',
-    systolicBP: '收缩压',
-    diastolicBP: '舒张压',
-    glucose: '血糖',
-    weight: '体重',
-    bmi: 'BMI',
-    temperature: '体温',
-    bloodOxygen: '血氧',
-
-    // 大写下划线格式 (SCREAMING_SNAKE_CASE) - 用于 Thresholds.vue 等
-    HEART_RATE: '心率',
-    BLOOD_PRESSURE: '血压',
-    BLOOD_GLUCOSE: '血糖',
-    BODY_TEMPERATURE: '体温',
-    BLOOD_OXYGEN: '血氧'
+  if (!metricKey || typeof metricKey !== 'string') {
+    return ''
   }
-  return map[metricKey] || metricKey
+
+  const trimmed = metricKey.trim()
+  if (!trimmed) {
+    return ''
+  }
+
+  // 1. 通过 Normalizer 归一化为权威 camelCase
+  const canonical = toCanonicalKey(trimmed)
+
+  // 2. 检索权威元数据静态字典
+  if (FALLBACK_METRIC_META[canonical]) {
+    return FALLBACK_METRIC_META[canonical].displayName
+  }
+
+  // 3. 兼容检查历史遗留大写下划线字典
+  if (LEGACY_UPPERCASE_MAP[trimmed] || LEGACY_UPPERCASE_MAP[canonical]) {
+    return LEGACY_UPPERCASE_MAP[trimmed] || LEGACY_UPPERCASE_MAP[canonical]
+  }
+
+  // 4. 未知/自定义 Key 优雅降级为可读 Title Case 词组 (例如 vo2_max -> Vo2 Max)
+  return formatUnknownKey(trimmed)
 }
 
 // 获取指标显示名称（别名）
 export const getMetricLabel = getMetricDisplayName
 
-// 获取指标单位
+/**
+ * 获取指标单位
+ * 经归一化后从权威元数据字典中查询标准单位，未知指标返回空字符串
+ */
 export const getMetricUnit = (metricKey: string): string => {
-  const map: Record<string, string> = {
-    // 小驼峰格式
-    heartRate: '次/分',
-    systolicBP: 'mmHg',
-    diastolicBP: 'mmHg',
-    glucose: 'mmol/L',
-    weight: 'kg',
-    bmi: '',
-    temperature: '°C',
-    bloodOxygen: '%',
-
-    // 大写下划线格式
-    HEART_RATE: '次/分',
-    BLOOD_PRESSURE: 'mmHg',
-    BLOOD_GLUCOSE: 'mmol/L',
-    BODY_TEMPERATURE: '°C',
-    BLOOD_OXYGEN: '%'
+  if (!metricKey || typeof metricKey !== 'string') {
+    return ''
   }
-  return map[metricKey] || ''
+
+  const trimmed = metricKey.trim()
+  if (!trimmed) {
+    return ''
+  }
+
+  // 1. 归一化为权威 camelCase
+  const canonical = toCanonicalKey(trimmed)
+
+  // 2. 检索权威元数据静态字典中的单位
+  if (FALLBACK_METRIC_META[canonical]) {
+    return FALLBACK_METRIC_META[canonical].unit
+  }
+
+  // 3. 兼容检查历史遗留大写下划线字典
+  if (LEGACY_UPPERCASE_UNIT_MAP[trimmed] || LEGACY_UPPERCASE_UNIT_MAP[canonical]) {
+    return LEGACY_UPPERCASE_UNIT_MAP[trimmed] || LEGACY_UPPERCASE_UNIT_MAP[canonical]
+  }
+
+  return ''
 }
 
 // 获取预警级别颜色

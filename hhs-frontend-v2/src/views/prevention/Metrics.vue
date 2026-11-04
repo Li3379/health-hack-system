@@ -15,7 +15,7 @@
       <el-table v-loading="loading" :data="metrics" stripe>
         <el-table-column prop="metricKey" label="指标类型" width="150">
           <template #default="{ row }">
-            {{ row.metricName || getMetricLabelLocal(row.metricKey) }}
+            {{ row.metricName || getMetricLabel(row.metricKey) }}
           </template>
         </el-table-column>
         <el-table-column prop="value" label="数值" width="120">
@@ -113,7 +113,7 @@ import { gsap, cleanupScrollTriggers, DUR, EASE } from '@/composables/useGsap'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { wellnessApi } from '@/api/wellness'
-import { formatDateTime, WELLNESS_METRICS } from '@/utils/format'
+import { formatDateTime, WELLNESS_METRICS, getMetricLabel } from '@/utils/format'
 import type { WellnessMetricVO, WellnessMetricRequest } from '@/types/api'
 
 const loading = ref(false)
@@ -230,11 +230,6 @@ const handleDelete = async (row: WellnessMetricVO) => {
       ElMessage.error('删除失败')
     }
   }
-}
-
-// Get metric label from WELLNESS_METRICS config
-const getMetricLabelLocal = (key: string): string => {
-  return WELLNESS_METRICS[key]?.label || key
 }
 
 // Format value display (especially for mood)
