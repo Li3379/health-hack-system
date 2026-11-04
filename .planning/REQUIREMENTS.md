@@ -17,7 +17,7 @@
 ### KEY — Key 规范化与全站防英文外露 (Metric Key Normalization)
 
 - [x] **KEY-01**: 后端与前端分别实现 `MetricKeyNormalizer`，双向无缝兼容 `camelCase`（如 `heartRate`）、`snake_case`（如 `heart_rate`）、大写（如 `HEART_RATE`）以及历史别名（如 `bodyTemperature`、`spo2`）
-- [ ] **KEY-02**: 后端 `HealthMetricRequest` 在反序列化阶段自动执行 Key 规范化，数据库查询与 Mapper 自动兼容别名匹配
+- [x] **KEY-02**: 后端 `HealthMetricRequest` 在反序列化阶段自动执行 Key 规范化，数据库查询与 Mapper 自动兼容别名匹配
 - [ ] **KEY-03**: 重构前端 `format.ts` 与各大页面（指标列表、预警中心、趋势图、实时监控），消除因缺少映射而向用户直接显示 `blood_glucose` 等原始英文代码的现象
 
 ### GUIDE — 录入前预知引导与参考体系 (Pre-Input Guidance)
@@ -70,7 +70,7 @@
 | META-02 | Phase 4 | Complete |
 | META-03 | Phase 5 | Pending |
 | KEY-01 | Phase 4 | Complete |
-| KEY-02 | Phase 4 | Pending |
+| KEY-02 | Phase 4 | Complete |
 | KEY-03 | Phase 5 | Pending |
 | GUIDE-01 | Phase 6 | Pending |
 | GUIDE-02 | Phase 6 | Pending |

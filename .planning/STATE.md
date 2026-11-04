@@ -4,17 +4,18 @@ milestone: v1.1
 milestone_name: 智能健康指标填报引导与友好校验
 current_phase: "Phase 4: 后端统一指标元数据注册中心与 Key 归一化"
 current_phase_name: 后端统一指标元数据注册中心与 Key 归一化
-status: executing
-stopped_at: Completed 04-key-01-PLAN.md
-last_updated: "2026-11-04T07:04:32.296Z"
+current_plan: 2
+status: verifying
+stopped_at: Completed 04-02-PLAN.md
+last_updated: "2026-11-04T07:41:30.920Z"
 last_activity: 2026-11-04
 last_activity_desc: Roadmap created for v1.1
-state_head: 4767a2bb4409b70e34a3d1e1f8c466b17417ff36
+state_head: 6373808ba6ee1ead8120f5e7ef0aa42e6e69a779
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 2
-  completed_plans: 1
+  completed_plans: 2
 ---
 
 # State: Health Hack System
@@ -22,7 +23,7 @@ progress:
 **Created:** 2026-05-28
 **Current Milestone:** v1.1 智能健康指标填报引导与友好校验
 **Current Phase:** Phase 4: 后端统一指标元数据注册中心与 Key 归一化
-**Status:** Ready to execute
+**Status:** Phase complete — ready for verification
 
 ## Project Reference
 
@@ -55,7 +56,7 @@ See: `.planning/PROJECT.md`
 Phase: 04-key (后端统一指标元数据注册中心与 Key 归一化)
 Current Plan: 2
 Total Plans in Phase: 2
-Status: executing
+Status: Phase complete — ready for verification
 Last activity: 2026-11-04 — Completed 04-key-01-PLAN.md
 
 ## Accumulated Context
@@ -79,8 +80,8 @@ Last activity: 2026-11-04 — Completed 04-key-01-PLAN.md
 
 ## Session
 
-**Last session:** 2026-11-04T07:04:32.277Z
-**Stopped at:** Completed 04-key-01-PLAN.md
+**Last session:** 2026-11-04T07:41:30.898Z
+**Stopped at:** Completed 04-02-PLAN.md
 **Resume file:** None
 
 ## Performance Metrics
@@ -88,9 +89,14 @@ Last activity: 2026-11-04 — Completed 04-key-01-PLAN.md
 | Plan | Duration | Tasks | Files |
 |------|----------|-------|-------|
 | Phase 04-key P01 | 18min | 2 tasks | 11 files |
+| Phase 04 P02 | 25min | 2 tasks | 8 files |
 
 ## Decisions
 
 - [Phase Phase 4: 后端统一指标元数据注册中心与 Key 归一化]: Standardized all authoritative metric keys to camelCase with protected acronyms and lenient passthrough
 - [Phase Phase 4: 后端统一指标元数据注册中心与 Key 归一化]: Constructed in-memory singleton HealthMetricMetaRegistry covering 23 health and wellness metrics
 - [Phase Phase 4: 后端统一指标元数据注册中心与 Key 归一化]: Configured public GET /api/metrics/metadata endpoint with 24-hour Cache-Control and ETag header support
+- [Phase Phase 4: 后端统一指标元数据注册中心与 Key 归一化]: Intercept physically impossible biological values via Jakarta Validation class-level constraint @ValidMetricRecord with strictly formatted guidance messages (D-07, D-08)
+- [Phase Phase 4: 后端统一指标元数据注册中心与 Key 归一化]: Permit pathological and critical illness data (e.g., 140 bpm, 195 mmHg, 18.0 mmol/L) to pass validation and persist safely
+- [Phase Phase 4: 后端统一指标元数据注册中心与 Key 归一化]: Expand single metric key filter to full alias set in service-layer queries via MyBatis-Plus LambdaQueryWrapper.in() (D-05)
+- [Phase Phase 4: 后端统一指标元数据注册中心与 Key 归一化]: Provide idempotent SQL migration script v1.1_normalize_metric_keys.sql for safe batch cleansing of historical records (D-06)
