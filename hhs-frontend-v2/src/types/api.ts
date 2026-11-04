@@ -419,3 +419,23 @@ export interface PlatformInfo {
   displayName: string
   configured: boolean
 }
+
+// 指标元数据相关
+export interface MetricDefinitionVO {
+  canonicalKey: string
+  aliases: string[]
+  displayName: string
+  category: 'HEALTH' | 'WELLNESS'
+  unit: string
+  precision: number
+  step: number
+  hardMin: number
+  hardMax: number
+  normalMin: number
+  normalMax: number
+  placeholder: string
+  guideHint: string
+}
+
+export type MetricMetaMap = Record<string, MetricDefinitionVO>
+
