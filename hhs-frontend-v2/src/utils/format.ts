@@ -1,11 +1,15 @@
 import dayjs from 'dayjs'
+import { getActivePinia } from 'pinia'
 import { FALLBACK_METRIC_META } from '@/constants/metricMeta'
 import { toCanonicalKey, formatUnknownKey } from '@/utils/metricNormalizer'
+import { useMetricMetaStore } from '@/stores/metricMeta'
 
-// 遗留大写下划线格式备用字典 (用于极个别历史组件或静态配置保底)
+// 遗留大写下划线及旧格式备用字典 (用于极个别历史组件或静态配置保底)
 const LEGACY_UPPERCASE_MAP: Record<string, string> = {
   HEART_RATE: '心率',
   BLOOD_PRESSURE: '血压',
+  blood_pressure: '血压',
+  bloodPressure: '血压',
   BLOOD_GLUCOSE: '血糖',
   BODY_TEMPERATURE: '体温',
   BLOOD_OXYGEN: '血氧'
@@ -14,6 +18,8 @@ const LEGACY_UPPERCASE_MAP: Record<string, string> = {
 const LEGACY_UPPERCASE_UNIT_MAP: Record<string, string> = {
   HEART_RATE: '次/分',
   BLOOD_PRESSURE: 'mmHg',
+  blood_pressure: 'mmHg',
+  bloodPressure: 'mmHg',
   BLOOD_GLUCOSE: 'mmol/L',
   BODY_TEMPERATURE: '°C',
   BLOOD_OXYGEN: '%'
@@ -76,20 +82,32 @@ export const getMetricDisplayName = (metricKey: string): string => {
     return ''
   }
 
-  // 1. 通过 Normalizer 归一化为权威 camelCase
+  // 1. 若 Pinia 已激活，优先从动态 Store 中查询（支持后端动态新增指标与别名覆盖）
+  if (getActivePinia()) {
+    try {
+      const dynamicDef = useMetricMetaStore().getDefinition(trimmed)
+      if (dynamicDef?.displayName) {
+        return dynamicDef.displayName
+      }
+    } catch {
+      // 容错处理
+    }
+  }
+
+  // 2. 通过 Normalizer 归一化为权威 camelCase
   const canonical = toCanonicalKey(trimmed)
 
-  // 2. 检索权威元数据静态字典
+  // 3. 检索权威元数据静态字典
   if (FALLBACK_METRIC_META[canonical]) {
     return FALLBACK_METRIC_META[canonical].displayName
   }
 
-  // 3. 兼容检查历史遗留大写下划线字典
+  // 4. 兼容检查历史遗留大写下划线字典
   if (LEGACY_UPPERCASE_MAP[trimmed] || LEGACY_UPPERCASE_MAP[canonical]) {
     return LEGACY_UPPERCASE_MAP[trimmed] || LEGACY_UPPERCASE_MAP[canonical]
   }
 
-  // 4. 未知/自定义 Key 优雅降级为可读 Title Case 词组 (例如 vo2_max -> Vo2 Max)
+  // 5. 未知/自定义 Key 优雅降级为可读 Title Case 词组 (例如 vo2_max -> Vo2 Max)
   return formatUnknownKey(trimmed)
 }
 
@@ -110,15 +128,27 @@ export const getMetricUnit = (metricKey: string): string => {
     return ''
   }
 
-  // 1. 归一化为权威 camelCase
+  // 1. 若 Pinia 已激活，优先从动态 Store 中查询单位
+  if (getActivePinia()) {
+    try {
+      const dynamicDef = useMetricMetaStore().getDefinition(trimmed)
+      if (dynamicDef?.unit !== undefined) {
+        return dynamicDef.unit
+      }
+    } catch {
+      // 容错处理
+    }
+  }
+
+  // 2. 归一化为权威 camelCase
   const canonical = toCanonicalKey(trimmed)
 
-  // 2. 检索权威元数据静态字典中的单位
+  // 3. 检索权威元数据静态字典中的单位
   if (FALLBACK_METRIC_META[canonical]) {
     return FALLBACK_METRIC_META[canonical].unit
   }
 
-  // 3. 兼容检查历史遗留大写下划线字典
+  // 4. 兼容检查历史遗留大写下划线字典
   if (LEGACY_UPPERCASE_UNIT_MAP[trimmed] || LEGACY_UPPERCASE_UNIT_MAP[canonical]) {
     return LEGACY_UPPERCASE_UNIT_MAP[trimmed] || LEGACY_UPPERCASE_UNIT_MAP[canonical]
   }
@@ -181,7 +211,7 @@ export const WELLNESS_METRICS: Record<
   sleepQuality: { label: '睡眠质量', unit: '分', icon: 'Star', color: '#8e44ad' },
   steps: { label: '步数', unit: '步', icon: 'Aim', color: '#3498db' },
   exerciseMinutes: { label: '运动时长', unit: '分钟', icon: 'Timer', color: '#2ecc71' },
-  waterIntake: { label: '饮水量', unit: '杯', icon: 'Coffee', color: '#00bcd4' },
+  waterIntake: { label: '饮水量', unit: 'ml', icon: 'Coffee', color: '#00bcd4' },
   mood: { label: '心情', unit: '分', icon: 'Sunny', color: '#f1c40f' },
   energy: { label: '精力', unit: '分', icon: 'Lightning', color: '#e74c3c' }
 }

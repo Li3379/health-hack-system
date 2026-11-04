@@ -57,25 +57,26 @@ export function toCanonicalKey(rawKey: string): string {
     return simplifiedMatch
   }
 
-  return rawKey
+  return trimmed
 }
 
 /**
  * 获取指标的所有已知别名列表（含标准 key 自身）
- * 未知 key 返回仅含自身的单元素数组
+ * 未知 key 返回仅含自身的单元素数组，空值返回空数组
  */
 export function getAliases(key: string): string[] {
-  if (!key || typeof key !== 'string') {
+  if (!key || typeof key !== 'string' || !key.trim()) {
     return []
   }
 
-  const canonicalKey = toCanonicalKey(key)
+  const trimmed = key.trim()
+  const canonicalKey = toCanonicalKey(trimmed)
   const aliases = CANONICAL_TO_ALIASES[canonicalKey]
   if (aliases && aliases.length > 0) {
     return [...aliases]
   }
 
-  return [key]
+  return [trimmed]
 }
 
 /**
@@ -112,7 +113,7 @@ export function formatUnknownKey(rawKey: string): string {
   // 3. 将单词拆分并转换为首字母大写
   const words = cleanSeparators.split(/\s+/).filter(Boolean)
   if (words.length === 0) {
-    return trimmed
+    return ''
   }
 
   return words

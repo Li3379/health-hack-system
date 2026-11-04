@@ -113,7 +113,7 @@ import { gsap, cleanupScrollTriggers, DUR, EASE } from '@/composables/useGsap'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { wellnessApi } from '@/api/wellness'
-import { formatDateTime, WELLNESS_METRICS, getMetricLabel } from '@/utils/format'
+import { formatDateTime, WELLNESS_METRICS, getMetricLabel, getMoodDescription } from '@/utils/format'
 import type { WellnessMetricVO, WellnessMetricRequest } from '@/types/api'
 
 const loading = ref(false)
@@ -235,9 +235,7 @@ const handleDelete = async (row: WellnessMetricVO) => {
 // Format value display (especially for mood)
 const formatValue = (key: string, value: number): string => {
   if (key === 'mood') {
-    const levels = ['很差', '较差', '一般', '较好', '很好']
-    const idx = Math.max(0, Math.min(4, Math.round(value) - 1))
-    return `${value} (${levels[idx]})`
+    return `${value} (${getMoodDescription(value)})`
   }
   return String(value)
 }

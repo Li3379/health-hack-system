@@ -33,8 +33,20 @@ export const useMetricMetaStore = defineStore('metricMeta', () => {
       return undefined
     }
 
-    const canonicalKey = toCanonicalKey(key)
-    return metadataMap.value[canonicalKey] || FALLBACK_METRIC_META[canonicalKey]
+    const trimmed = key.trim()
+    const canonicalKey = toCanonicalKey(trimmed)
+    if (metadataMap.value[canonicalKey]) {
+      return metadataMap.value[canonicalKey]
+    }
+
+    // 检查动态扩展指标的别名
+    for (const def of Object.values(metadataMap.value)) {
+      if (def.aliases && (def.aliases.includes(trimmed) || def.aliases.includes(canonicalKey))) {
+        return def
+      }
+    }
+
+    return FALLBACK_METRIC_META[canonicalKey]
   }
 
   /**
@@ -58,7 +70,9 @@ export const useMetricMetaStore = defineStore('metricMeta', () => {
       }
     } catch (error) {
       // 离线弱网静默降级至静态常量字典，无需抛出异常
-      console.warn('Metric metadata fetch failed, using fallback static metadata', error)
+      if (import.meta.env.DEV && !import.meta.env.VITEST) {
+        console.warn('Metric metadata fetch failed, using fallback static metadata', error)
+      }
     } finally {
       loading.value = false
     }

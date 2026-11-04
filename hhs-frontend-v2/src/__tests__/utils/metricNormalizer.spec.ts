@@ -66,8 +66,9 @@ describe('metricNormalizer', () => {
       expect(toCanonicalKey('WEIGHT')).toBe('weight')
     })
 
-    it('should pass through unrecognized custom keys unchanged', () => {
+    it('should pass through unrecognized custom keys unchanged and trimmed', () => {
       expect(toCanonicalKey('unknown_metric')).toBe('unknown_metric')
+      expect(toCanonicalKey('  unknown_metric  ')).toBe('unknown_metric')
       expect(toCanonicalKey('customScore')).toBe('customScore')
       expect(toCanonicalKey('vo2_max')).toBe('vo2_max')
     })
@@ -95,8 +96,10 @@ describe('metricNormalizer', () => {
       expect(bpAliases).toContain('systolic_bp')
     })
 
-    it('should return single-item array for unknown keys', () => {
+    it('should return single-item array for unknown keys and empty array for whitespace', () => {
       expect(getAliases('unknown_key')).toEqual(['unknown_key'])
+      expect(getAliases('   ')).toEqual([])
+      expect(getAliases('')).toEqual([])
     })
   })
 
@@ -132,9 +135,11 @@ describe('metricNormalizer', () => {
       expect(formatUnknownKey('deepSleepPercentage')).toBe('Deep Sleep Percentage')
     })
 
-    it('should handle empty or whitespace strings', () => {
+    it('should handle empty, whitespace, and separator-only strings', () => {
       expect(formatUnknownKey('')).toBe('')
       expect(formatUnknownKey('   ')).toBe('')
+      expect(formatUnknownKey('___')).toBe('')
+      expect(formatUnknownKey('---')).toBe('')
       // @ts-expect-error testing invalid input
       expect(formatUnknownKey(null)).toBe('')
     })
