@@ -58,7 +58,7 @@ Declared values (must be multiples of 4):
 
 | Token | Value | Usage |
 |-------|-------|-------|
-| xs | 4px | 图标微间距、胶囊徽章内边距 (`padding: 2px 4px`)、输入框下方 range-hint 边距 |
+| xs | 4px | 图标微间距、胶囊徽章内边距 (`padding: 4px 8px`)、输入框下方 range-hint 边距 |
 | sm | 8px | 紧凑元素间距、表单项垂直间隙、一键对调按钮内联外间距 |
 | md | 16px | 默认表单间距、卡片内容内边距 (`padding: 16px`)、网格列间距 (`gutter: 16`) |
 | lg | 24px | 对话框体垂直内边距 (`padding: 24px`)、模态弹窗区块分隔间隙 |
