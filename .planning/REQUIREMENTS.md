@@ -64,25 +64,23 @@
 
 ## Traceability
 
-*(To be populated by gsd-roadmapper)*
-
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| META-01 | — | Pending |
-| META-02 | — | Pending |
-| META-03 | — | Pending |
-| KEY-01 | — | Pending |
-| KEY-02 | — | Pending |
-| KEY-03 | — | Pending |
-| GUIDE-01 | — | Pending |
-| GUIDE-02 | — | Pending |
-| GUIDE-03 | — | Pending |
-| VAL-01 | — | Pending |
-| VAL-02 | — | Pending |
-| VAL-03 | — | Pending |
-| VAL-04 | — | Pending |
-| VAL-05 | — | Pending |
-| SYNC-01 | — | Pending |
+| META-01 | Phase 4 | Pending |
+| META-02 | Phase 4 | Pending |
+| META-03 | Phase 5 | Pending |
+| KEY-01 | Phase 4 | Pending |
+| KEY-02 | Phase 4 | Pending |
+| KEY-03 | Phase 5 | Pending |
+| GUIDE-01 | Phase 6 | Pending |
+| GUIDE-02 | Phase 6 | Pending |
+| GUIDE-03 | Phase 6 | Pending |
+| VAL-01 | Phase 6 | Pending |
+| VAL-02 | Phase 6 | Pending |
+| VAL-03 | Phase 6 | Pending |
+| VAL-04 | Phase 6 | Pending |
+| VAL-05 | Phase 6 | Pending |
+| SYNC-01 | Phase 7 | Pending |
 
 ---
 *Requirements defined: 2026-11-04 after research synthesis*

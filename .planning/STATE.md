@@ -3,10 +3,10 @@ gsd_state_version: "1.0"
 milestone: v1.1
 milestone_name: 智能健康指标填报引导与友好校验
 status: planning
-last_updated: "2026-11-04T02:18:13.615Z"
+last_updated: "2026-11-04T02:30:00.000Z"
 last_activity: 2026-11-04
 progress:
-  total_phases: 0
+  total_phases: 4
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -16,57 +16,55 @@ progress:
 # State: Health Hack System
 
 **Created:** 2026-05-28
-**Current Phase:** Complete
-**Status:** completed
+**Current Milestone:** v1.1 智能健康指标填报引导与友好校验
+**Current Phase:** Phase 4: 后端统一指标元数据注册中心与 Key 归一化
+**Status:** planning
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-05-29)
+See: `.planning/PROJECT.md`
 
-**Core value:** 平台核心价值是提供可靠、准确的健康评分和趋势分析 — 评分数据必须完整持久化，历史趋势图必须正确展示，部署过程必须稳定可靠。
-**Current focus:** WIP — AI floating ball refactoring, mood features, frontend polish
+**Core value:** 平台核心价值是提供可靠、准确的健康评分和趋势分析 — 评分数据必须完整持久化（包括维度评分），历史趋势图必须正确展示，部署过程必须稳定可靠。
+**Current focus:** v1.1 智能健康指标填报引导与友好校验 — 彻底解决健康指标填报时理解困难、缺乏引导、报错生硬及命名不一致问题，建立全链路预知引导、解释性友好反馈与统一校验字典。
+
+## Milestone Progress
+
+| Milestone | Status | Phases | Completed |
+|-----------|--------|--------|-----------|
+| v1.0 Optimization & Redeployment | done | 3/3 | 2026-05-29 |
+| v1.1 智能健康指标填报引导与友好校验 | in_progress | 0/4 | - |
 
 ## Phase Progress
 
 | Phase | Status | Plans | Progress |
 |-------|--------|-------|----------|
-| 1 — Score Persistence Bug Fix | done | 0/0 | 100% |
-| 2 — Deployment Pipeline Hardening | done | 0/0 | 100% |
-| 3 — Git Push & Deploy | done | 0/0 | 100% |
-
-## Active Work
-
-All 3 phases completed. CI/CD pipeline fully operational (Build & Deploy run 26562079956: success).
-ECS deployed and health check passing.
-
-Current WIP (unstaged, from checkpoint f8246a6):
-
-- AI floating ball refactoring (FloatingBubble +77 lines, FloatingChatPanel +243 lines)
-- AI Chat.vue major expansion (+1407 lines)
-- Mood API + controller additions (backend + frontend)
-- Auth pages polish (Login +6, Register +3)
-- MoodTracker improvements (+14)
-- vite.config.ts build analysis support
-- 3d-enhance.css tweaks
-
-## Blockers
-
-(none)
-
-## Notes
-
-- Git 仓库已连接远程 GitHub 仓库: Li3379/health-hack-system
-- 宝塔面板全权管理 ECS 环境
-- ECS deploy path 不是 git repo，docker-publish.yml 已内联部署逻辑
-- npm install (not npm ci) 用于跨平台兼容 (npm 10/Node 20 vs npm 11/Node 24)
-- vite.config.js 已删除，仅保留 vite.config.ts
-
----
-*State updated: 2026-05-29*
+| 1. Score Persistence Bug Fix | done | 0/0 | 100% |
+| 2. Deployment Pipeline Hardening | done | 0/0 | 100% |
+| 3. Git Push & Deploy | done | 0/0 | 100% |
+| 4. 后端统一指标元数据注册中心与 Key 归一化 | not_started | 0/0 | 0% |
+| 5. 前端元数据 Store 与全站格式化防英文外露 | not_started | 0/0 | 0% |
+| 6. 前端非破坏性录入引导、四梯度宽容校验与友好反馈 | not_started | 0/0 | 0% |
+| 7. 全渠道校验对齐与跨端测试验证 | not_started | 0/0 | 0% |
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-11-04 — Milestone v1.1 started
+Phase: Phase 4: 后端统一指标元数据注册中心与 Key 归一化
+Plan: Not planned yet
+Status: Ready for planning
+Last activity: 2026-11-04 — Roadmap created for v1.1
+
+## Accumulated Context
+
+### Key Decisions
+- 建立不可变 HealthMetricMetaRegistry 作为全系统唯一指标元数据权威源 (SSOT)
+- 采用四梯度校验模型（正常、警告、危急、硬限制），彻底废除破坏性失焦清空机制，急危重症允许二次确认保存
+- MetricKeyNormalizer 双向无缝兼容 camelCase, snake_case 与医学缩写别名，请求反序列化自动规范化
+- 前端通过 Pinia useMetricMetaStore 缓存与 format.ts 深度集成，防止英文 key 外露
+- AI 解析与 OCR 识别全渠道收敛至同一套元数据定义
+
+### Blockers
+(none)
+
+### Session Continuity
+- Previous: v1.0 milestone completed & deployed to ECS (run 26562079956: success).
+- Now: Roadmap defined for v1.1 (Phases 4-7, 15 requirements mapped). Next step: `/gsd:plan-phase 4`.

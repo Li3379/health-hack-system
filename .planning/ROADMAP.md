@@ -1,73 +1,70 @@
-# Roadmap: Health Hack System — Optimization & Redeployment
+# Roadmap: Health Hack System
 
-**Created:** 2026-05-28
-**Granularity:** Coarse (3 phases)
-**Status:** All phases completed
+## Milestones
 
----
+- ✅ **v1.0 Optimization & Redeployment** — Phases 1-3 (completed 2026-05-29)
+- 🚧 **v1.1 智能健康指标填报引导与友好校验** — Phases 4-7 (in progress)
 
-## Phase 1: Score Persistence Bug Fix ✅ COMPLETE
-**Goal:** 修复维度评分持久化 Bug（CR-03）和前端 DeviceSync 问题（WR-02）
-**Mode:** mvp
+## Phases
 
-**Requirements:** FIX-01, FIX-02, FIX-03, FIX-04, FIX-05, FIX-06
+- [ ] **Phase 4: 后端统一指标元数据注册中心与 Key 归一化** - 建立不可变 HealthMetricMetaRegistry 与 MetricKeyNormalizer，统一全系统 19+ 指标元数据与别名反序列化
+- [ ] **Phase 5: 前端元数据 Store 与全站格式化防英文外露** - 构建 Pinia useMetricMetaStore 与 format.ts 深度集成，全站杜绝原始英文 key 外露
+- [ ] **Phase 6: 前端非破坏性录入引导、四梯度宽容校验与友好反馈** - 彻底废除失焦抹除，实现四梯度宽容反馈、血压双向联动与危急值二次确认
+- [ ] **Phase 7: 全渠道校验对齐与跨端测试验证** - 统一 AI 解析与 OCR 识别校验引擎，跨渠道全链路测试闭环
 
-**Success Criteria (all met):**
-1. ✅ ScoreUpdatedEvent 包含四个维度评分字段，所有构造函数已更新
-2. ✅ 所有事件发布点传递维度评分
-3. ✅ 单元测试验证维度评分正确持久化到 health_score_history
-4. ✅ DeviceSync isMockData 基于实际数据源判断
-5. ✅ 后端单元测试全部通过 (`mvn clean verify -DskipITs`)
+## Phase Details
 
----
+### Phase 4: 后端统一指标元数据注册中心与 Key 归一化
+**Goal**: 为全系统建立不可变的指标元数据权威定义源（SSOT）与多格式 Key 规范化引擎，向所有客户端与下游服务提供一致的指标定义与入参兼容能力
+**Depends on**: Nothing (first phase of v1.1, builds on v1.0 foundation)
+**Requirements**: META-01, META-02, KEY-01, KEY-02
+**Success Criteria** (what must be TRUE):
+  1. 调用 `GET /api/metrics/metadata` 接口可获取全量 19+ 种指标的标准元数据（包含标准 key、中文名称、单位、精度、步长、参考范围与极限范围），并带有高效缓存响应头
+  2. 后端接收 `snake_case`（如 `heart_rate`）、`camelCase`（如 `heartRate`）、全大写及历史别名（如 `bodyTemperature`、`spo2`）的请求均能正确规范化为标准 key 并成功入库与持久化
+  3. 通过多格式 key 查询健康指标历史记录与告警规则，均能准确命中并返回统一的标准 key
+  4. 针对 19+ 种指标边界与别名转换的单元测试全部通过，杜绝硬编码分散定义
+**Plans**: TBD
 
-## Phase 2: Deployment Pipeline Hardening ✅ COMPLETE
-**Goal:** 修复部署管道中的安全、性能和可靠性问题
-**Mode:** mvp
+### Phase 5: 前端元数据 Store 与全站格式化防英文外露
+**Goal**: 建立前端响应式元数据状态管理与统一标签格式化能力，废除前端分散硬编码字典，彻底消除全系统界面上的英文代码外露缺陷
+**Depends on**: Phase 4
+**Requirements**: META-03, KEY-03
+**Success Criteria** (what must be TRUE):
+  1. 前端通过 `useMetricMetaStore` 成功从后端拉取并缓存全量指标元数据；在离线或弱网时无缝回退至内置静态兜底常量，应用无阻塞报错
+  2. 用户在指标列表、预警中心、趋势分析图表与实时监控卡片中，所有指标名称与单位均正确显示为本地化中文标签与标准单位，不再出现任何形如 `blood_glucose`、`heart_rate` 等原始英文 key
+  3. 各组件废除自建的硬编码范围与单位字典，统一由 store 提供响应式计算属性
+**Plans**: TBD
+**UI hint**: yes
 
-**Requirements:** DEPLOY-01, DEPLOY-02, DEPLOY-03, DEPLOY-04, DEPLOY-05
+### Phase 6: 前端非破坏性录入引导、四梯度宽容校验与友好反馈
+**Goal**: 重塑健康指标数据录入交互体验，实现基于元数据的预知引导、四梯度宽容校验与非破坏性友好解释反馈，保护用户录入劳动并确保危急生理数据顺畅留存
+**Depends on**: Phase 5
+**Requirements**: GUIDE-01, GUIDE-02, GUIDE-03, VAL-01, VAL-02, VAL-03, VAL-04, VAL-05
+**Success Criteria** (what must be TRUE):
+  1. 用户打开指标填报弹窗时，输入框占位符显式展示生理参考范围（如“参考范围：3.9 ~ 6.1 mmol/L”），输入组件自动绑定标准步长与精度，下方常态化展示健康参考标准解读卡片
+  2. 用户输入超出正常参考范围（如高血糖 12.0 mmol/L）并失焦时，输入值被完整保留绝不被清空；界面以友好黄色/橙色状态胶囊和解释性文案提示生理异常与测量建议，且允许用户正常点击保存入库
+  3. 输入达到严重危急值区间（如高压 190 mmHg）时，弹出友好解释性二次确认模态窗（提示防误触并提供就医急救指引），用户确认后仍可成功保存入库
+  4. 血压录入支持高压与低压同屏协同录入与关联校验；检测到高压低于低压倒置时，给出原理解释并提供“一键对调高低压数值”按钮，点击后自动修正对调
+  5. 仅当输入处于物理不可能生理极限（如体温 55°C、心率 0 或 400 bpm）时阻止提交，且输入框原样保留输入文本方便用户直接回退修改
+**Plans**: TBD
+**UI hint**: yes
 
-**Success Criteria (all met):**
-1. ✅ Docker 镜像构建前 CI 检查通过 (needs: [backend-ci, frontend-ci])
-2. ✅ Docker 构建启用层缓存 (GHA cache type=gha,mode=max)
-3. ✅ 生产环境后端端口不对外暴露 (ports: [])
-4. ✅ 部署健康检查使用重试循环 (scripts/deploy.sh: 5 retries × 15s)
-5. ✅ 部署逻辑不重复 — docker-publish.yml 内联脚本，ECS 非 git repo 兼容
+### Phase 7: 全渠道校验对齐与跨端测试验证
+**Goal**: 将 AI 智能文本解析与 OCR 报告识别对齐到权威元数据注册中心，完成手动填报、智能解析与多渠道采集的端到端一致性校验与回归测试闭环
+**Depends on**: Phase 6
+**Requirements**: SYNC-01
+**Success Criteria** (what must be TRUE):
+  1. AI 智能对话/文本解析 (`AiParseServiceImpl`) 与 OCR 体检报告识别 (`OcrServiceImpl`) 废除独立硬编码规则，完全消费 `HealthMetricMetaRegistry` 生成解析提示词与边界校验
+  2. AI 解析、OCR 识别提取出的指标数据与手动录入在指标命名、单位换算、四梯度状态判定规则上达到 100% 严格一致
+  3. 跨渠道（手动表单录入、OCR 上传解析、AI 文本抽取）全链路集成与端到端测试验证全部通过，无回归缺陷
+**Plans**: TBD
+**UI hint**: yes
 
----
+## Progress
 
-## Phase 3: Git Push & Deploy ✅ COMPLETE
-**Goal:** 推送代码到 GitHub 并验证 CI/CD 部署成功
-**Mode:** mvp
-
-**Requirements:** GIT-01, GIT-02, GIT-03, GIT-04
-
-**Success Criteria (all met):**
-1. ✅ Git 仓库已连接远程 GitHub 仓库 (Li3379/health-hack-system)
-2. ✅ 所有本地变更已提交并推送
-3. ✅ GitHub Actions CI/CD 流水线成功触发 (run 26562079956: success)
-4. ✅ Docker 镜像成功推送到 GHCR
-5. ✅ 阿里云 ECS 部署成功（健康检查通过）
-6. ✅ 后端 API 正常响应 (/actuator/health)
-
----
-
-## Phase Dependency Graph
-
-```
-Phase 1 (Bug Fix) ✅ → Phase 2 (Pipeline) ✅ → Phase 3 (Deploy) ✅
-```
-
-All phases completed successfully.
-
----
-
-## Next Steps (Future Work)
-
-- 数据库迁移策略 — 引入 Flyway/Liquibase
-- 前端单元测试补充
-- SSL/TLS 配置
-- 审查并提交 WIP 变更（AI 浮窗重构、心情功能等）
-
----
-*Roadmap created: 2026-05-28 | All phases completed: 2026-05-29*
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 4. 后端统一指标元数据注册中心与 Key 归一化 | 0/0 | Not started | - |
+| 5. 前端元数据 Store 与全站格式化防英文外露 | 0/0 | Not started | - |
+| 6. 前端非破坏性录入引导、四梯度宽容校验与友好反馈 | 0/0 | Not started | - |
+| 7. 全渠道校验对齐与跨端测试验证 | 0/0 | Not started | - |
