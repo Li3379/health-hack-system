@@ -21,12 +21,19 @@ public class HealthMetricMetaRegistry {
 
     private final Map<String, MetricDefinition> definitions = new LinkedHashMap<>();
 
-    @PostConstruct
-    public void init() {
-        registerCoreMetrics();
+    public HealthMetricMetaRegistry() {
+        registerAllMetrics();
     }
 
-    private void registerCoreMetrics() {
+    @PostConstruct
+    public void init() {
+        if (definitions.isEmpty()) {
+            registerAllMetrics();
+        }
+    }
+
+    private void registerAllMetrics() {
+        // HEALTH METRICS (16 items)
         register(new MetricDefinition(
                 "heartRate",
                 MetricKeyNormalizer.getAliases("heartRate"),
@@ -92,6 +99,38 @@ public class HealthMetricMetaRegistry {
         ));
 
         register(new MetricDefinition(
+                "fastingGlucose",
+                MetricKeyNormalizer.getAliases("fastingGlucose"),
+                "空腹血糖",
+                MetricCategory.HEALTH,
+                "mmol/L",
+                1,
+                new BigDecimal("0.1"),
+                new BigDecimal("1.0"),
+                new BigDecimal("33.3"),
+                new BigDecimal("3.9"),
+                new BigDecimal("6.1"),
+                "例如: 5.2",
+                "正常空腹参考值 3.9 ~ 6.1 mmol/L"
+        ));
+
+        register(new MetricDefinition(
+                "postprandialGlucose",
+                MetricKeyNormalizer.getAliases("postprandialGlucose"),
+                "餐后血糖",
+                MetricCategory.HEALTH,
+                "mmol/L",
+                1,
+                new BigDecimal("0.1"),
+                new BigDecimal("1.0"),
+                new BigDecimal("33.3"),
+                new BigDecimal("3.9"),
+                new BigDecimal("7.8"),
+                "例如: 6.8",
+                "餐后2小时参考值 3.9 ~ 7.8 mmol/L"
+        ));
+
+        register(new MetricDefinition(
                 "bodyTemperature",
                 MetricKeyNormalizer.getAliases("bodyTemperature"),
                 "体温",
@@ -105,6 +144,263 @@ public class HealthMetricMetaRegistry {
                 new BigDecimal("37.2"),
                 "例如: 36.5",
                 "正常腋温参考值 36.0 ~ 37.2 °C"
+        ));
+
+        register(new MetricDefinition(
+                "weight",
+                MetricKeyNormalizer.getAliases("weight"),
+                "体重",
+                MetricCategory.HEALTH,
+                "kg",
+                1,
+                new BigDecimal("0.1"),
+                new BigDecimal("1.0"),
+                new BigDecimal("500.0"),
+                new BigDecimal("40.0"),
+                new BigDecimal("120.0"),
+                "例如: 65.0",
+                "健康体重通常与身高相适应 (BMI 18.5 ~ 23.9)"
+        ));
+
+        register(new MetricDefinition(
+                "bmi",
+                MetricKeyNormalizer.getAliases("bmi"),
+                "BMI",
+                MetricCategory.HEALTH,
+                "kg/m²",
+                1,
+                new BigDecimal("0.1"),
+                new BigDecimal("5.0"),
+                new BigDecimal("70.0"),
+                new BigDecimal("18.5"),
+                new BigDecimal("23.9"),
+                "例如: 22.0",
+                "正常 BMI 参考值 18.5 ~ 23.9"
+        ));
+
+        register(new MetricDefinition(
+                "bloodOxygen",
+                MetricKeyNormalizer.getAliases("bloodOxygen"),
+                "血氧",
+                MetricCategory.HEALTH,
+                "%",
+                0,
+                new BigDecimal("1"),
+                new BigDecimal("50"),
+                new BigDecimal("100"),
+                new BigDecimal("95"),
+                new BigDecimal("100"),
+                "例如: 98",
+                "正常静息血氧 95 ~ 100%"
+        ));
+
+        register(new MetricDefinition(
+                "totalCholesterol",
+                MetricKeyNormalizer.getAliases("totalCholesterol"),
+                "总胆固醇",
+                MetricCategory.HEALTH,
+                "mmol/L",
+                2,
+                new BigDecimal("0.01"),
+                new BigDecimal("0.5"),
+                new BigDecimal("30.0"),
+                new BigDecimal("2.8"),
+                new BigDecimal("5.2"),
+                "例如: 4.50",
+                "理想参考值 < 5.20 mmol/L"
+        ));
+
+        register(new MetricDefinition(
+                "triglycerides",
+                MetricKeyNormalizer.getAliases("triglycerides"),
+                "甘油三酯",
+                MetricCategory.HEALTH,
+                "mmol/L",
+                2,
+                new BigDecimal("0.01"),
+                new BigDecimal("0.1"),
+                new BigDecimal("30.0"),
+                new BigDecimal("0.4"),
+                new BigDecimal("1.7"),
+                "例如: 1.20",
+                "理想参考值 < 1.70 mmol/L"
+        ));
+
+        register(new MetricDefinition(
+                "hdlCholesterol",
+                MetricKeyNormalizer.getAliases("hdlCholesterol"),
+                "高密度脂蛋白",
+                MetricCategory.HEALTH,
+                "mmol/L",
+                2,
+                new BigDecimal("0.01"),
+                new BigDecimal("0.1"),
+                new BigDecimal("10.0"),
+                new BigDecimal("1.0"),
+                new BigDecimal("2.2"),
+                "例如: 1.30",
+                "正常参考值 >= 1.00 mmol/L"
+        ));
+
+        register(new MetricDefinition(
+                "ldlCholesterol",
+                MetricKeyNormalizer.getAliases("ldlCholesterol"),
+                "低密度脂蛋白",
+                MetricCategory.HEALTH,
+                "mmol/L",
+                2,
+                new BigDecimal("0.01"),
+                new BigDecimal("0.1"),
+                new BigDecimal("15.0"),
+                new BigDecimal("1.3"),
+                new BigDecimal("3.4"),
+                "例如: 2.60",
+                "理想参考值 < 3.40 mmol/L"
+        ));
+
+        register(new MetricDefinition(
+                "uricAcid",
+                MetricKeyNormalizer.getAliases("uricAcid"),
+                "尿酸",
+                MetricCategory.HEALTH,
+                "μmol/L",
+                0,
+                new BigDecimal("1"),
+                new BigDecimal("20"),
+                new BigDecimal("1500"),
+                new BigDecimal("150"),
+                new BigDecimal("420"),
+                "例如: 320",
+                "正常参考值 150 ~ 420 μmol/L"
+        ));
+
+        register(new MetricDefinition(
+                "creatinine",
+                MetricKeyNormalizer.getAliases("creatinine"),
+                "肌酐",
+                MetricCategory.HEALTH,
+                "μmol/L",
+                0,
+                new BigDecimal("1"),
+                new BigDecimal("10"),
+                new BigDecimal("2000"),
+                new BigDecimal("44"),
+                new BigDecimal("133"),
+                "例如: 85",
+                "正常参考值 44 ~ 133 μmol/L"
+        ));
+
+        // WELLNESS METRICS (7 items)
+        register(new MetricDefinition(
+                "sleepDuration",
+                MetricKeyNormalizer.getAliases("sleepDuration"),
+                "睡眠时长",
+                MetricCategory.WELLNESS,
+                "小时",
+                1,
+                new BigDecimal("0.5"),
+                new BigDecimal("0.0"),
+                new BigDecimal("24.0"),
+                new BigDecimal("6.0"),
+                new BigDecimal("9.0"),
+                "例如: 7.5",
+                "推荐每晚睡眠 6.0 ~ 9.0 小时"
+        ));
+
+        register(new MetricDefinition(
+                "sleepQuality",
+                MetricKeyNormalizer.getAliases("sleepQuality"),
+                "睡眠质量",
+                MetricCategory.WELLNESS,
+                "级",
+                0,
+                new BigDecimal("1"),
+                new BigDecimal("1"),
+                new BigDecimal("5"),
+                new BigDecimal("3"),
+                new BigDecimal("5"),
+                "1~5",
+                "1: 很差, 3: 一般, 5: 很好"
+        ));
+
+        register(new MetricDefinition(
+                "steps",
+                MetricKeyNormalizer.getAliases("steps"),
+                "步数",
+                MetricCategory.WELLNESS,
+                "步",
+                0,
+                new BigDecimal("100"),
+                new BigDecimal("0"),
+                new BigDecimal("150000"),
+                new BigDecimal("6000"),
+                new BigDecimal("10000"),
+                "例如: 8000",
+                "推荐每日活动 6000 ~ 10000 步"
+        ));
+
+        register(new MetricDefinition(
+                "exerciseMinutes",
+                MetricKeyNormalizer.getAliases("exerciseMinutes"),
+                "运动时长",
+                MetricCategory.WELLNESS,
+                "分钟",
+                0,
+                new BigDecimal("5"),
+                new BigDecimal("0"),
+                new BigDecimal("1440"),
+                new BigDecimal("30"),
+                new BigDecimal("120"),
+                "例如: 45",
+                "推荐每日适度运动 30 ~ 60 分钟"
+        ));
+
+        register(new MetricDefinition(
+                "waterIntake",
+                MetricKeyNormalizer.getAliases("waterIntake"),
+                "饮水量",
+                MetricCategory.WELLNESS,
+                "ml",
+                0,
+                new BigDecimal("50"),
+                new BigDecimal("0"),
+                new BigDecimal("20000"),
+                new BigDecimal("1500"),
+                new BigDecimal("2500"),
+                "例如: 2000",
+                "推荐每日饮水 1500 ~ 2500 ml"
+        ));
+
+        register(new MetricDefinition(
+                "mood",
+                MetricKeyNormalizer.getAliases("mood"),
+                "心情",
+                MetricCategory.WELLNESS,
+                "级",
+                0,
+                new BigDecimal("1"),
+                new BigDecimal("1"),
+                new BigDecimal("5"),
+                new BigDecimal("3"),
+                new BigDecimal("5"),
+                "1~5",
+                "1: 极差, 3: 平静, 5: 极佳"
+        ));
+
+        register(new MetricDefinition(
+                "energy",
+                MetricKeyNormalizer.getAliases("energy"),
+                "精力",
+                MetricCategory.WELLNESS,
+                "级",
+                0,
+                new BigDecimal("1"),
+                new BigDecimal("1"),
+                new BigDecimal("5"),
+                new BigDecimal("3"),
+                new BigDecimal("5"),
+                "1~5",
+                "1: 疲惫, 3: 良好, 5: 充沛"
         ));
     }
 

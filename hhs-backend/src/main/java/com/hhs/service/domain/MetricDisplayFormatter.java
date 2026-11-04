@@ -1,23 +1,49 @@
 package com.hhs.service.domain;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
 
+import java.util.Optional;
+
 /**
- * Metric display name and unit formatter
- * Responsible for providing human-readable metric names and units
+ * Metric display name and unit formatter.
+ * Delegates to HealthMetricMetaRegistry for authoritative values, with fallback to legacy definitions.
  */
 @Slf4j
 @Component
 public class MetricDisplayFormatter {
 
+    private final HealthMetricMetaRegistry registry;
+
+    public MetricDisplayFormatter() {
+        this(null);
+    }
+
+    @Autowired
+    public MetricDisplayFormatter(@Nullable HealthMetricMetaRegistry registry) {
+        this.registry = registry;
+    }
+
     /**
-     * Get metric display name in Chinese
+     * Get metric display name in Chinese.
      *
      * @param metricKey the metric key
      * @return Chinese display name
      */
     public String getDisplayName(String metricKey) {
+        if (metricKey == null || metricKey.isBlank()) {
+            return metricKey;
+        }
+
+        if (registry != null) {
+            Optional<MetricDefinition> def = registry.getDefinition(metricKey);
+            if (def.isPresent()) {
+                return def.get().displayName();
+            }
+        }
+
         return switch (metricKey) {
             // Health metrics - 健康指标
             case "heartRate" -> "心率";
@@ -27,7 +53,7 @@ public class MetricDisplayFormatter {
             case "fastingGlucose" -> "空腹血糖";
             case "postprandialGlucose" -> "餐后血糖";
             case "bmi" -> "BMI";
-            case "temperature" -> "体温";
+            case "temperature", "bodyTemperature" -> "体温";
             case "weight" -> "体重";
             case "bloodOxygen" -> "血氧";
             case "totalCholesterol" -> "总胆固醇";
@@ -52,18 +78,29 @@ public class MetricDisplayFormatter {
     }
 
     /**
-     * Get metric unit
+     * Get metric unit.
      *
      * @param metricKey the metric key
      * @return unit string
      */
     public String getUnit(String metricKey) {
+        if (metricKey == null || metricKey.isBlank()) {
+            return "";
+        }
+
+        if (registry != null) {
+            Optional<MetricDefinition> def = registry.getDefinition(metricKey);
+            if (def.isPresent()) {
+                return def.get().unit();
+            }
+        }
+
         return switch (metricKey) {
             // Health metrics - 健康指标
             case "heartRate" -> "次/分";
             case "systolicBP", "diastolicBP" -> "mmHg";
             case "glucose", "fastingGlucose", "postprandialGlucose" -> "mmol/L";
-            case "temperature" -> "°C";
+            case "temperature", "bodyTemperature" -> "°C";
             case "weight" -> "kg";
             case "bmi" -> "";
             case "bloodOxygen" -> "%";
@@ -86,7 +123,7 @@ public class MetricDisplayFormatter {
     }
 
     /**
-     * Format alert message for exceeded threshold
+     * Format alert message for exceeded threshold.
      *
      * @param metricKey the metric key
      * @param value the current value
@@ -100,8 +137,6 @@ public class MetricDisplayFormatter {
                                      String alertType, String direction) {
         String displayName = getDisplayName(metricKey);
         String unit = getUnit(metricKey);
-        String severity = "CRITICAL".equals(alertType) ? "严重警告" : "警告";
-        String dirText = "HIGH".equals(direction) ? "过高" : "过低";
 
         if ("CRITICAL".equals(alertType)) {
             return String.format("您的%s数值为%.2f%s，%s严重警戒值%.2f%s，请立即关注！",
