@@ -1,90 +1,88 @@
-# Requirements: Health Hack System — Optimization & Redeployment
+# Requirements: HHS v1.1 智能健康指标填报引导与友好校验
 
-**Defined:** 2026-05-28
-**Core Value:** 平台核心价值是提供可靠、准确的健康评分和趋势分析
+**Defined:** 2026-11-04  
+**Milestone:** v1.1 智能健康指标填报引导与友好校验 (Intelligent Health Metric Input & Unified Validation)  
+**Core Value:** 彻底解决健康指标填报时理解困难、缺乏引导、报错生硬及命名不一致问题，建立全链路预知引导、解释性友好反馈与统一校验字典。
 
-## v1 Requirements
+---
 
-### Bug Fix — Score Persistence
+## v1.1 Requirements
 
-- [ ] **FIX-01**: ScoreUpdatedEvent 携带四个维度评分字段（cardiovascularScore、metabolicScore、weightScore、lifestyleScore）
-- [ ] **FIX-02**: ScoreUpdatedEventListener 将维度评分持久化到 health_score_history
-- [ ] **FIX-03**: HealthScoreServiceImpl 发布事件时传递维度评分
-- [ ] **FIX-04**: ScoreUpdatedEvent 的所有发布点更新以传递维度评分
-- [ ] **FIX-05**: ScoreHistoryServiceImplTest 更新以验证维度评分持久化
+### META — 统一指标元数据注册中心 (Single Source of Truth)
 
-### Bug Fix — Frontend
+- [ ] **META-01**: 后端建立不可变的 `HealthMetricMetaRegistry` 领域服务，单点集中管理全系统 19+ 种健康与保健指标的标准 Key、中文名、单位、输入精度、步长、生理极限与临床正常参考范围
+- [ ] **META-02**: 后端提供 `GET /api/metrics/metadata` REST 接口，支持全量指标元数据及分类查询，并配置 HTTP 客户端/服务端强缓存
+- [ ] **META-03**: 前端通过 Pinia 状态库 `useMetricMetaStore` 统一拉取并响应式共享指标元数据，内置本地静态离线兜底常量，彻底废除各组件私自硬编码的范围字典
 
-- [ ] **FIX-06**: DeviceSync isMockData 检查实际数据源而非硬编码 false
+### KEY — Key 规范化与全站防英文外露 (Metric Key Normalization)
 
-### Deployment Pipeline — CI/CD
+- [ ] **KEY-01**: 后端与前端分别实现 `MetricKeyNormalizer`，双向无缝兼容 `camelCase`（如 `heartRate`）、`snake_case`（如 `heart_rate`）、大写（如 `HEART_RATE`）以及历史别名（如 `bodyTemperature`、`spo2`）
+- [ ] **KEY-02**: 后端 `HealthMetricRequest` 在反序列化阶段自动执行 Key 规范化，数据库查询与 Mapper 自动兼容别名匹配
+- [ ] **KEY-03**: 重构前端 `format.ts` 与各大页面（指标列表、预警中心、趋势图、实时监控），消除因缺少映射而向用户直接显示 `blood_glucose` 等原始英文代码的现象
 
-- [ ] **DEPLOY-01**: docker-publish.yml deploy job 添加 CI 前置条件（needs build + integration test）
-- [ ] **DEPLOY-02**: 移除 no-cache: true，启用 Docker 层缓存
-- [ ] **DEPLOY-03**: docker-compose.prod.yml 不暴露后端 8082 端口
-- [ ] **DEPLOY-04**: 部署健康检查改用重试循环（最多 5 次，每次 15 秒间隔）
-- [ ] **DEPLOY-05**: 合并 docker-publish.yml 和 deploy.yml 的重复部署逻辑为共享脚本
+### GUIDE — 录入前预知引导与参考体系 (Pre-Input Guidance)
 
-### Git & Deployment
+- [ ] **GUIDE-01**: `QuickInputDialog.vue` 与各录入表单根据指标元数据动态绑定标准单位、推荐步长（step）与小数精度（precision），输入框占位符显式展示生理参考范围（如“参考范围：3.9 ~ 6.1 mmol/L”）
+- [ ] **GUIDE-02**: 在输入框下方或侧边常态化展示健康参考标准解读卡片（如正常指标参考值区间、常见测量场景注意事项）
+- [ ] **GUIDE-03**: 血压录入支持收缩压（高压）与舒张压（低压）同屏联动展示与双向关联校验
 
-- [ ] **GIT-01**: 初始化 Git 仓库并连接远程仓库
-- [ ] **GIT-02**: 提交所有本地代码变更
-- [ ] **GIT-03**: 推送到 GitHub master 触发 CI/CD 重新部署
-- [ ] **GIT-04**: 验证部署成功（后端健康检查 + 前端可访问）
+### VAL — 四梯度宽容校验与友好解释性反馈 (Four-Tier Validation & Friendly Feedback)
 
-## v2 Requirements
+- [ ] **VAL-01**: 彻底废除失焦清空输入框机制（移除 `form.value.value = undefined`），输入异常时保留用户键入原值，绝不强制抹除用户劳动
+- [ ] **VAL-02**: 建立“正常 → 异常警示（允许保存）→ 急危重症（二次确认后允许保存）→ 物理不可能极限（拦截）”的四梯度模型，严禁将高血压、高血糖等真实病理数据当作表单非法输入拦截
+- [ ] **VAL-03**: 当输入超出正常参考范围时，以非阻塞的友好黄色/橙色状态胶囊及解释性文案替代生硬的红色报错（说明可能原因、测量状态区别，或单位误换算提示）
+- [ ] **VAL-04**: 检测到收缩压低于舒张压等生理倒置情况时，给出清晰的逻辑解释，并提供“一键对调高低压数值”的便捷自纠按钮
+- [ ] **VAL-05**: 录入达到严重危急值区间时，弹出友好的二次确认模态窗（提示防误触，同时提供急救与就医建议），用户点击“确认录入”后仍允许正常保存入库
 
-Deferred to future release.
+### SYNC — 全渠道输入规则对齐 (Cross-Channel Consistency)
 
-### Database Migration
+- [ ] **SYNC-01**: 重构 `AiParseServiceImpl.java` 与 OCR 图片识别确认流程，底层完全接入权威元数据注册表，确保 AI 解析提示、识别校验与手动表单规则 100% 统一
 
-- **DB-01**: 建立 schema 版本管理机制（版本化 SQL 脚本目录）
-- **DB-02**: 评估引入 Flyway 或 Liquibase
+---
 
-### Testing
+## Future Requirements (v1.2+)
 
-- **TEST-01**: 补充前端单元测试（当前仅 1 个）
-- **TEST-02**: 补充维度评分相关的集成测试
+### Personalized Baseline
 
-### Security
+- **PERS-01**: 结合用户既往病史与个人偏好，支持自定义个性化基线控制目标（如老年人空腹血糖放宽至 7.0 mmol/L），并优先于群体标准在输入界面进行贴身提示
 
-- **SEC-01**: 清除 application-dev.yml 中的硬编码密码
-- **SEC-02**: 配置 SSL/TLS（通过宝塔面板或 nginx）
+### Smart Context
+
+- **CTXT-01**: 时间与场景自适应填报推荐（如早晨默认推荐空腹血糖与晨起血压，夜晚推荐今日步数与睡眠质量）
+
+---
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| 零停机部署 | 当前 docker compose 重启的短暂停机可接受 |
-| 小米健康 API 真实对接 | 当前 stub 实现足够，业务优先级低 |
-| SSL/TLS 配置 | 需要域名和证书，通过宝塔面板单独处理 |
-| 前端测试大幅补充 | 非本次优化优先级，后续迭代 |
+| 表单输入逐字调用大模型诊断 | 产生秒级网络延迟、高昂 Token 成本，确定性医学规则本地引擎毫秒级响应更优 |
+| 引入庞大的外部规则引擎（如 Drools） | 既有 Spring Boot + Element Plus 纯原生组合已完全满足需求，避免引入笨重外部依赖 |
+| 强制修改数据库历史所有记录 key | 采用服务层透明映射兼容存量数据，避免破坏既有外系统同步与离线日志 |
+
+---
 
 ## Traceability
 
+*(To be populated by gsd-roadmapper)*
+
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FIX-01 | Phase 1 | Pending |
-| FIX-02 | Phase 1 | Pending |
-| FIX-03 | Phase 1 | Pending |
-| FIX-04 | Phase 1 | Pending |
-| FIX-05 | Phase 1 | Pending |
-| FIX-06 | Phase 1 | Pending |
-| DEPLOY-01 | Phase 2 | Pending |
-| DEPLOY-02 | Phase 2 | Pending |
-| DEPLOY-03 | Phase 2 | Pending |
-| DEPLOY-04 | Phase 2 | Pending |
-| DEPLOY-05 | Phase 2 | Pending |
-| GIT-01 | Phase 3 | Pending |
-| GIT-02 | Phase 3 | Pending |
-| GIT-03 | Phase 3 | Pending |
-| GIT-04 | Phase 3 | Pending |
-
-**Coverage:**
-- v1 requirements: 14 total
-- Mapped to phases: 14
-- Unmapped: 0 ✓
+| META-01 | — | Pending |
+| META-02 | — | Pending |
+| META-03 | — | Pending |
+| KEY-01 | — | Pending |
+| KEY-02 | — | Pending |
+| KEY-03 | — | Pending |
+| GUIDE-01 | — | Pending |
+| GUIDE-02 | — | Pending |
+| GUIDE-03 | — | Pending |
+| VAL-01 | — | Pending |
+| VAL-02 | — | Pending |
+| VAL-03 | — | Pending |
+| VAL-04 | — | Pending |
+| VAL-05 | — | Pending |
+| SYNC-01 | — | Pending |
 
 ---
-*Requirements defined: 2026-05-28*
-*Last updated: 2026-05-28 after initial definition*
+*Requirements defined: 2026-11-04 after research synthesis*
