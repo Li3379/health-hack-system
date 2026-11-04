@@ -2,21 +2,27 @@ package com.hhs.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.hhs.common.constant.ErrorCode;
+import com.hhs.common.enums.MetricCategory;
 import com.hhs.domain.event.MetricRecordedEvent;
 import com.hhs.dto.HealthMetricRequest;
 import com.hhs.entity.HealthMetric;
+import com.hhs.entity.RealtimeMetric;
 import com.hhs.exception.BusinessException;
-import com.hhs.common.constant.ErrorCode;
 import com.hhs.mapper.HealthMetricMapper;
 import com.hhs.mapper.RealtimeMetricMapper;
 import com.hhs.service.HealthMetricService;
+import com.hhs.service.domain.HealthMetricMetaRegistry;
+import com.hhs.service.domain.MetricCategoryService;
+import com.hhs.service.domain.MetricDefinition;
+import com.hhs.service.domain.MetricDisplayFormatter;
+import com.hhs.service.domain.MetricKeyNormalizer;
 import com.hhs.vo.HealthMetricTrendVO;
 import com.hhs.vo.HealthMetricVO;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,20 +32,37 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class HealthMetricServiceImpl implements HealthMetricService {
 
     private final HealthMetricMapper healthMetricMapper;
     private final RealtimeMetricMapper realtimeMetricMapper;
     private final ApplicationEventPublisher eventPublisher;
-    private final com.hhs.service.domain.MetricDisplayFormatter metricDisplayFormatter;
-    private final com.hhs.service.domain.MetricCategoryService metricCategoryService;
+    private final MetricDisplayFormatter metricDisplayFormatter;
+    private final MetricCategoryService metricCategoryService;
+    private final HealthMetricMetaRegistry metricRegistry;
 
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+
+    @Autowired
+    public HealthMetricServiceImpl(
+            HealthMetricMapper healthMetricMapper,
+            RealtimeMetricMapper realtimeMetricMapper,
+            ApplicationEventPublisher eventPublisher,
+            MetricDisplayFormatter metricDisplayFormatter,
+            MetricCategoryService metricCategoryService,
+            @Autowired(required = false) HealthMetricMetaRegistry metricRegistry) {
+        this.healthMetricMapper = healthMetricMapper;
+        this.realtimeMetricMapper = realtimeMetricMapper;
+        this.eventPublisher = eventPublisher;
+        this.metricDisplayFormatter = metricDisplayFormatter;
+        this.metricCategoryService = metricCategoryService;
+        this.metricRegistry = metricRegistry != null ? metricRegistry : new HealthMetricMetaRegistry();
+    }
 
     /**
      * Add a new health metric record for a user
@@ -53,16 +76,19 @@ public class HealthMetricServiceImpl implements HealthMetricService {
     @Transactional(timeout = 30)
     @CacheEvict(value = {"metrics:latest", "metrics:latest:all"}, allEntries = true)
     public HealthMetricVO add(Long userId, HealthMetricRequest request) {
+        String canonicalKey = MetricKeyNormalizer.toCanonicalKey(request.getMetricKey());
+        request.setMetricKey(canonicalKey);
+
         // Auto-correct unit based on metric key
-        String normalizedUnit = normalizeUnit(request.getMetricKey(), request.getUnit());
+        String normalizedUnit = normalizeUnit(canonicalKey, request.getUnit());
 
         // Auto-assign category based on metric key
-        com.hhs.common.enums.MetricCategory category = metricCategoryService.determineCategory(request.getMetricKey());
+        MetricCategory category = metricCategoryService.determineCategory(canonicalKey);
 
         HealthMetric e = new HealthMetric();
         e.setUserId(userId);
         e.setProfileId(null);
-        e.setMetricKey(request.getMetricKey());
+        e.setMetricKey(canonicalKey);
         e.setValue(request.getValue());
         e.setUnit(normalizedUnit);
         e.setRecordDate(request.getRecordDate());
@@ -71,7 +97,7 @@ public class HealthMetricServiceImpl implements HealthMetricService {
         healthMetricMapper.insert(e);
 
         // Publish event for alert generation and cache invalidation
-        com.hhs.entity.RealtimeMetric realtimeMetric = toRealtimeMetric(e);
+        RealtimeMetric realtimeMetric = toRealtimeMetric(e);
         eventPublisher.publishEvent(new MetricRecordedEvent(userId, realtimeMetric));
 
         log.info("Metric recorded for user: {}, key: {}, value: {}, category: {}", userId, e.getMetricKey(), e.getValue(), category);
@@ -82,7 +108,10 @@ public class HealthMetricServiceImpl implements HealthMetricService {
      * Normalize unit based on metric key - ensures consistent units
      */
     private String normalizeUnit(String metricKey, String providedUnit) {
-        String standardUnit = metricDisplayFormatter.getUnit(metricKey);
+        String standardUnit = metricRegistry.getDefinition(metricKey)
+                .map(MetricDefinition::unit)
+                .filter(u -> !u.isBlank())
+                .orElseGet(() -> metricDisplayFormatter.getUnit(metricKey));
         if (providedUnit == null || providedUnit.isBlank()) {
             return standardUnit;
         }
@@ -95,8 +124,8 @@ public class HealthMetricServiceImpl implements HealthMetricService {
     }
 
     // Helper method to convert HealthMetric to RealtimeMetric for event publishing
-    private com.hhs.entity.RealtimeMetric toRealtimeMetric(HealthMetric metric) {
-        com.hhs.entity.RealtimeMetric rt = new com.hhs.entity.RealtimeMetric();
+    private RealtimeMetric toRealtimeMetric(HealthMetric metric) {
+        RealtimeMetric rt = new RealtimeMetric();
         rt.setUserId(metric.getUserId());
         rt.setMetricKey(metric.getMetricKey());
         rt.setValue(metric.getValue());
@@ -121,7 +150,12 @@ public class HealthMetricServiceImpl implements HealthMetricService {
         LambdaQueryWrapper<HealthMetric> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(HealthMetric::getUserId, userId);
         if (metricKey != null && !metricKey.isBlank()) {
-            wrapper.eq(HealthMetric::getMetricKey, metricKey);
+            Set<String> aliases = MetricKeyNormalizer.getAliases(metricKey);
+            if (aliases.size() > 1) {
+                wrapper.in(HealthMetric::getMetricKey, aliases);
+            } else {
+                wrapper.eq(HealthMetric::getMetricKey, metricKey);
+            }
         }
         if (startDate != null) {
             wrapper.ge(HealthMetric::getRecordDate, startDate);
@@ -157,7 +191,9 @@ public class HealthMetricServiceImpl implements HealthMetricService {
             dates.add(v.recordDate());
             values.add(v.value());
         }
-        String type = metricKey != null && !metricKey.isBlank() ? metricKey : list.get(0).metricKey();
+        String type = metricKey != null && !metricKey.isBlank()
+                ? MetricKeyNormalizer.toCanonicalKey(metricKey)
+                : MetricKeyNormalizer.toCanonicalKey(list.get(0).metricKey());
         return List.of(new HealthMetricTrendVO(type, dates, values));
     }
 
@@ -233,7 +269,12 @@ public class HealthMetricServiceImpl implements HealthMetricService {
 
         // Filter by metric key if provided
         if (metricKey != null && !metricKey.isBlank()) {
-            wrapper.eq(HealthMetric::getMetricKey, metricKey);
+            Set<String> aliases = MetricKeyNormalizer.getAliases(metricKey);
+            if (aliases.size() > 1) {
+                wrapper.in(HealthMetric::getMetricKey, aliases);
+            } else {
+                wrapper.eq(HealthMetric::getMetricKey, metricKey);
+            }
         }
 
         // Filter by date range if provided
@@ -272,15 +313,19 @@ public class HealthMetricServiceImpl implements HealthMetricService {
     @Transactional(timeout = 30)
     public HealthMetric create(HealthMetricRequest request) {
         log.info("Creating metric for user: {}", request.getUserId());
+        String canonicalKey = MetricKeyNormalizer.toCanonicalKey(request.getMetricKey());
+        request.setMetricKey(canonicalKey);
+
         // Auto-correct unit based on metric key
-        String normalizedUnit = normalizeUnit(request.getMetricKey(), request.getUnit());
+        String normalizedUnit = normalizeUnit(canonicalKey, request.getUnit());
 
         // Auto-assign category based on metric key
-        com.hhs.common.enums.MetricCategory category = metricCategoryService.determineCategory(request.getMetricKey());
+        MetricCategory category = metricCategoryService.determineCategory(canonicalKey);
 
         HealthMetric metric = new HealthMetric();
         BeanUtils.copyProperties(request, metric, "profileId");
         metric.setProfileId(null);
+        metric.setMetricKey(canonicalKey);
         metric.setUnit(normalizedUnit);
         metric.setTrend(request.getTrend() != null ? request.getTrend() : "NORMAL");
         metric.setCategory(category);
@@ -289,7 +334,7 @@ public class HealthMetricServiceImpl implements HealthMetricService {
         healthMetricMapper.insert(metric);
 
         // 同时写入实时指标表，供健康评分使用
-        com.hhs.entity.RealtimeMetric realtimeMetric = toRealtimeMetric(metric);
+        RealtimeMetric realtimeMetric = toRealtimeMetric(metric);
         realtimeMetricMapper.insert(realtimeMetric);
 
         // Publish event for alert generation and cache invalidation
@@ -316,14 +361,17 @@ public class HealthMetricServiceImpl implements HealthMetricService {
             throw new BusinessException(ErrorCode.HEALTH_METRIC_NOT_FOUND);
         }
 
+        String canonicalKey = MetricKeyNormalizer.toCanonicalKey(request.getMetricKey());
+        request.setMetricKey(canonicalKey);
+
         // Auto-correct unit based on metric key
-        String normalizedUnit = normalizeUnit(request.getMetricKey(), request.getUnit());
+        String normalizedUnit = normalizeUnit(canonicalKey, request.getUnit());
 
         // Auto-assign category based on metric key
-        com.hhs.common.enums.MetricCategory category = metricCategoryService.determineCategory(request.getMetricKey());
+        MetricCategory category = metricCategoryService.determineCategory(canonicalKey);
 
         // Update fields from request (userId should not be changed)
-        metric.setMetricKey(request.getMetricKey());
+        metric.setMetricKey(canonicalKey);
         metric.setValue(request.getValue());
         metric.setUnit(normalizedUnit);
         metric.setRecordDate(request.getRecordDate());
@@ -335,9 +383,9 @@ public class HealthMetricServiceImpl implements HealthMetricService {
         // 同时更新实时指标表
         LocalDateTime startTime = metric.getRecordDate().atStartOfDay();
         LocalDateTime endTime = startTime.plusDays(1);
-        com.hhs.entity.RealtimeMetric rt = new com.hhs.entity.RealtimeMetric();
+        RealtimeMetric rt = new RealtimeMetric();
         rt.setUserId(metric.getUserId());
-        rt.setMetricKey(metric.getMetricKey());
+        rt.setMetricKey(canonicalKey);
         rt.setValue(metric.getValue());
         rt.setUnit(metric.getUnit());
         rt.setSource("manual");
