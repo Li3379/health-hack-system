@@ -48,7 +48,15 @@ Plans:
   2. 用户在指标列表、预警中心、趋势分析图表与实时监控卡片中，所有指标名称与单位均正确显示为本地化中文标签与标准单位，不再出现任何形如 `blood_glucose`、`heart_rate` 等原始英文 key
   3. 各组件废除自建的硬编码范围与单位字典，统一由 store 提供响应式计算属性
 
-**Plans**: TBD
+**Plans:** 2 plans
+
+Plans:
+**Wave 1**
+- [ ] 05-01-PLAN.md — 权威元数据静态常量 (FALLBACK_METRIC_META)、Key 归一化器 (metricNormalizer) 与 Pinia Store (useMetricMetaStore)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [ ] 05-02-PLAN.md — 重构 format.ts 标签与单位解析防英文外露、清理 prevention/Metrics 私有字典并完成全量单测覆盖
+
 **UI hint**: yes
 
 ### Phase 6: 前端非破坏性录入引导、四梯度宽容校验与友好反馈
@@ -86,6 +94,6 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 4. 后端统一指标元数据注册中心与 Key 归一化 | 2/2 | Complete    | 2026-11-04 |
-| 5. 前端元数据 Store 与全站格式化防英文外露 | 0/0 | Not started | - |
+| 5. 前端元数据 Store 与全站格式化防英文外露 | 0/2 | Not started | - |
 | 6. 前端非破坏性录入引导、四梯度宽容校验与友好反馈 | 0/0 | Not started | - |
 | 7. 全渠道校验对齐与跨端测试验证 | 0/0 | Not started | - |
