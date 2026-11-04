@@ -28,6 +28,9 @@ public class SecurityHeadersConfig {
             // Prevent clickjacking - deny all iframe embedding
             .frameOptions(HeadersConfigurer.FrameOptionsConfig::deny)
 
+            // Allow controllers and endpoints to set custom Cache-Control headers
+            .cacheControl(cache -> cache.disable())
+
             // Prevent MIME type sniffing
             .contentTypeOptions(contentTypeOptions -> {})
 

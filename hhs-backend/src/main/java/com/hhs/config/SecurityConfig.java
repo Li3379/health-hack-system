@@ -71,7 +71,8 @@ public class SecurityConfig {
                                 "/actuator/health",
                                 "/actuator/info",
                                 "/error",
-                                "/ws/**" // WebSocket endpoint
+                                "/ws/**", // WebSocket endpoint
+                                "/api/metrics/metadata" // Public metric metadata dictionary
                         ).permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/users/{id}").permitAll()
                         .requestMatchers("/actuator/**").authenticated()
