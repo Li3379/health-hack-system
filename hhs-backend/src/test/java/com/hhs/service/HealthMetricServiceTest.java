@@ -110,7 +110,7 @@ class HealthMetricServiceTest {
 
         // Then: Verify result
         assertNotNull(result);
-        assertEquals("heart_rate", result.metricKey());
+        assertEquals("heartRate", result.metricKey());
         assertEquals(new BigDecimal("75.0"), result.value());
         verify(healthMetricMapper, times(1)).insert(any(HealthMetric.class));
         verify(eventPublisher, times(1)).publishEvent(any(MetricRecordedEvent.class));
@@ -223,7 +223,7 @@ class HealthMetricServiceTest {
         // Then: Verify trend
         assertNotNull(result);
         assertEquals(1, result.size());
-        assertEquals("heart_rate", result.get(0).metricKey());
+        assertEquals("heartRate", result.get(0).metricKey());
     }
 
     @Test
