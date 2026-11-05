@@ -8,10 +8,13 @@
 ## Phase Boundary
 
 本阶段解决全系统各数据录入渠道（手动表单录入、AI 智能对话/文本解析、OCR 体检报告识别）规则不一致与独立硬编码的割裂问题。核心交付物包括：
-1. **重构 `AiParseServiceImpl.java`**：废除类内写死的 `PARSE_SYSTEM_PROMPT` 指标对照表与私有 `METRIC_RANGES` 范围表，改为直接消费 `HealthMetricMetaRegistry` 动态构建 AI 系统提示词，统一 Key 规范化与数值边界校验（SYNC-01）；
-2. **重构 `OcrServiceImpl.java`**：废除私有 `METRIC_KEY_MAP`、`DEFAULT_UNITS`、`REFERENCE_RANGES`，全面对接 `HealthMetricMetaRegistry` 与 `MetricKeyNormalizer`；对于体检化验单专属的血常规指标（血红蛋白、白细胞、红细胞、血小板等），建立清晰的扩展字典架构并协同工作；
-3. **全渠道指标状态与异常判定统一**：AI 文本抽取与 OCR 报告提取结果与手动录入端四梯度模型（正常、预警偏差、急危重症）完全对齐，并在最终入库时统一受到 `@ValidMetricRecord` 物理极限校验器的严格保护；
-4. **跨渠道端到端集成测试与跨端回归**：构建针对手动表单录入、AI 文本抽取、OCR 图像识别三端的端到端集成测试套件，验证指标命名、单位换算、四梯度状态判定规则达到 100% 严格一致。
+1. **前端手动录入全页面对齐 (UI & Input Sync)**：
+   - 重构 `src/views/health/Metrics.vue`（健康指标管理页）添加/编辑弹窗：接入 `useMetricMetaStore` 动态指标列表与元数据，支持血压收缩压/舒张压协同双字段录入与一键对调，接入四梯度非破坏性校验与 `ReferenceGuideCard`、`CriticalConfirmDialog`，废除硬编码的 7 个 `el-option` 与 `metricUnitMap`；
+   - 重构 `src/views/prevention/Metrics.vue` 及 `src/views/wellness/Dashboard.vue`（保健指标管理页）添加弹窗：接入权威元数据 Store，保留心情（mood）星级评分，其他数值型生活指标自动匹配单位/精度/步长，接入四梯度校验与常态化参考卡片，废除私有 `WELLNESS_METRICS` 字典；
+2. **重构 `AiParseServiceImpl.java`**：废除类内写死的 `PARSE_SYSTEM_PROMPT` 指标对照表与私有 `METRIC_RANGES` 范围表，改为直接消费 `HealthMetricMetaRegistry` 动态构建 AI 系统提示词，统一 Key 规范化与数值边界校验（SYNC-01）；
+3. **重构 `OcrServiceImpl.java`**：废除私有 `METRIC_KEY_MAP`、`DEFAULT_UNITS`、`REFERENCE_RANGES`，全面对接 `HealthMetricMetaRegistry` 与 `MetricKeyNormalizer`；对于体检化验单专属的血常规指标（血红蛋白、白细胞、红细胞、血小板等），建立清晰的扩展字典架构并协同工作；
+4. **全渠道指标状态与异常判定统一**：AI 文本抽取与 OCR 报告提取结果与手动录入端四梯度模型（正常、预警偏差、急危重症）完全对齐，并在最终入库时统一受到 `@ValidMetricRecord` 物理极限校验器的严格保护；
+5. **跨渠道端到端集成测试与跨端回归**：构建针对手动表单录入、AI 文本抽取、OCR 图像识别三端的端到端集成测试套件，验证指标命名、单位换算、四梯度状态判定规则达到 100% 严格一致。
 
 </domain>
 
@@ -35,6 +38,12 @@
 - **D-04 (统一血压拆分与规范化 Key 保证):**
   - AI 解析与 OCR 识别中提取到“血压”组合数据时，继续严格执行拆分为 `systolicBP` 与 `diastolicBP` 的标准约定；
   - 彻底杜绝下游数据库存入非法的 `bloodPressure` 混合 key，确保与 Phase 4/5/6 确立的小驼峰标准 Key 保持 100% 统一。
+
+### 5. 前端各管理页手动录入弹窗全面对齐 (GUIDE-01, GUIDE-02, VAL-01~05, SYNC-01)
+- **D-05 (全页面统一对齐 Phase 6 规范):**
+  - `health/Metrics.vue`（健康指标管理页）弹窗：全面改用 `useMetricMetaStore` 动态指标列表，废除 7 个写死 `el-option` 和 `metricUnitMap`；接入 `useMetricValidation`、`ReferenceGuideCard`、`CriticalConfirmDialog`，血压支持高低压双字段联动与一键对调，非破坏性失焦保护；
+  - `prevention/Metrics.vue` 与 `wellness/Dashboard.vue`（保健生活管理页）弹窗：彻底废除私有 `WELLNESS_METRICS` 字典与硬编码精度，接入元数据 Store；保留心情（mood）星级评分，其他数值型生活指标接入四梯度宽容校验与常态化参考卡片；
+  - 无论新增还是编辑模式，输入异常均不抹除用户输入，急危重症二次确认后仍可保存入库。
 
 ### Claude's Discretion
 - `AiParseServiceImpl.java` 动态提示词的字符串模板缓存设计（初始化时预生成，避免每次解析重复拼接）；
