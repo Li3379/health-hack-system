@@ -2,16 +2,17 @@
   <el-dialog
     v-model="visible"
     :title="(definition?.displayName || metric?.name || '指标') + '录入'"
-    width="520px"
+    width="560px"
     destroy-on-close
+    append-to-body
     class="quick-input-dialog"
   >
-    <el-form ref="formRef" :model="form" :rules="rules" label-width="100px" status-icon>
+    <el-form ref="formRef" :model="form" :rules="rules" label-position="top" status-icon>
       <!-- 血压双字段同屏并列协同排版 (GUIDE-03) -->
       <template v-if="isBloodPressure">
         <el-row :gutter="16">
           <el-col :span="12">
-            <el-form-item label="收缩压 (高压)" prop="value" label-width="110px">
+            <el-form-item label="收缩压 (高压)" prop="value">
               <el-input-number
                 v-model="form.value"
                 :precision="0"
@@ -31,7 +32,7 @@
           </el-col>
 
           <el-col :span="12">
-            <el-form-item label="舒张压 (低压)" prop="diastolicValue" label-width="110px">
+            <el-form-item label="舒张压 (低压)" prop="diastolicValue">
               <el-input-number
                 v-model="form.diastolicValue"
                 :precision="0"

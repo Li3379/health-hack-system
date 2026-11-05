@@ -40,10 +40,10 @@
         </div>
       </div>
     </div>
-
-    <!-- 快捷录入弹窗 -->
-    <QuickInputDialog v-model="dialogVisible" :metric="selectedMetric" @success="handleSuccess" />
   </el-card>
+
+  <!-- 快捷录入弹窗 (平铺于全局 body，不嵌在卡片组件内) -->
+  <QuickInputDialog v-model="dialogVisible" :metric="selectedMetric" @success="handleSuccess" />
 </template>
 
 <script setup lang="ts">
