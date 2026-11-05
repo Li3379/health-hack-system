@@ -50,9 +50,9 @@
 
 ### WELL — 保健生活指标录入对齐 (Wellness Metric Input Alignment)
 
-- [ ] **WELL-01**: `src/views/prevention/Metrics.vue` 与 `src/views/wellness/Dashboard.vue` 统一接入权威元数据 Store，废除私有 `WELLNESS_METRICS` 硬编码字典与固定 `precision=2/1`
-- [ ] **WELL-02**: 保健指标录入保留心情（mood）特有的 1-5 星级打分机制，其他数值型指标（喝水、睡眠、步数、卡路里等）自动匹配推荐步长与精度，并展示常态化参考解读卡片
-- [ ] **WELL-03**: 保健指标录入接入四梯度宽容校验与非破坏性失焦保护，避免生硬红色报错与强制清空，支持异常数值顺利留存
+- [x] **WELL-01**: `src/views/prevention/Metrics.vue` 与 `src/views/wellness/Dashboard.vue` 统一接入权威元数据 Store，废除私有 `WELLNESS_METRICS` 硬编码字典与固定 `precision=2/1`
+- [x] **WELL-02**: 保健指标录入保留心情（mood）特有的 1-5 星级打分机制，其他数值型指标（喝水、睡眠、步数、卡路里等）自动匹配推荐步长与精度，并展示常态化参考解读卡片
+- [x] **WELL-03**: 保健指标录入接入四梯度宽容校验与非破坏性失焦保护，避免生硬红色报错与强制清空，支持异常数值顺利留存
 
 ### REUSE — 通用表单复用与编辑一致性 (Reusable Input Form & UX Cohesion)
 
@@ -105,9 +105,9 @@
 | HEALTH-01 | Phase 8 | Complete |
 | HEALTH-02 | Phase 8 | Complete |
 | HEALTH-03 | Phase 8 | Complete |
-| WELL-01 | Phase 9 | Pending |
-| WELL-02 | Phase 9 | Pending |
-| WELL-03 | Phase 9 | Pending |
+| WELL-01 | Phase 9 | Complete |
+| WELL-02 | Phase 9 | Complete |
+| WELL-03 | Phase 9 | Complete |
 | REUSE-01 | Phase 10 | Pending |
 | REUSE-02 | Phase 10 | Pending |
 
