@@ -9,6 +9,8 @@ import com.hhs.dto.WellnessMetricRequest;
 import com.hhs.entity.OcrHealthRecord;
 import com.hhs.exception.BusinessException;
 import com.hhs.mapper.*;
+import com.hhs.service.domain.HealthMetricMetaRegistry;
+import com.hhs.service.domain.LabRoutineMetricRegistry;
 import com.hhs.service.impl.OcrServiceImpl;
 import com.hhs.vo.HealthMetricVO;
 import com.hhs.vo.OcrHealthResultVO;
@@ -70,6 +72,12 @@ class OcrServiceTest {
 
     @Spy
     private ObjectMapper objectMapper = new ObjectMapper();
+
+    @Spy
+    private HealthMetricMetaRegistry metaRegistry = new HealthMetricMetaRegistry();
+
+    @Spy
+    private LabRoutineMetricRegistry labRegistry = new LabRoutineMetricRegistry();
 
     @InjectMocks
     private OcrServiceImpl ocrService;
@@ -598,7 +606,8 @@ class OcrServiceTest {
         // Then: 验证血压解析为收缩压和舒张压
         assertNotNull(result);
         assertEquals("success", result.getStatus());
-        // 注意：当前实现需要改进才能正确解析血压格式
+        assertTrue(result.getMetrics().stream().anyMatch(m -> "systolicBP".equals(m.getMetricKey())));
+        assertTrue(result.getMetrics().stream().anyMatch(m -> "diastolicBP".equals(m.getMetricKey())));
     }
 
     @Test
@@ -783,5 +792,43 @@ class OcrServiceTest {
         });
 
         assertTrue(exception.getMessage().contains("无权"));
+    }
+
+    @Test
+    @DisplayName("测试7.1：OCR识别对接核心元数据注册中心与化验单血常规扩展字典")
+    void testRecognizeReportWithMetaRegistry() throws Exception {
+        MockMultipartFile file = new MockMultipartFile(
+            "file", "report.jpg", "image/jpeg", "test image content".getBytes()
+        );
+
+        String ocrText = """
+            血糖 5.6 mmol/L
+            收缩压 120 mmHg
+            舒张压 80 mmHg
+            血红蛋白 145 g/L
+            白细胞 6.5 10^9/L
+            红细胞 4.8 10^12/L
+            血小板 220 10^9/L
+            """;
+        when(baiduOcrClient.recognize(any())).thenReturn(Optional.of(ocrText));
+
+        OcrHealthResultVO result = ocrService.recognizeReport(testUserId, file);
+
+        assertNotNull(result);
+        assertEquals("success", result.getStatus());
+        List<OcrHealthResultVO.RecognizedMetric> metrics = result.getMetrics();
+        assertNotNull(metrics);
+        assertEquals(7, metrics.size());
+
+        // 验证核心指标标准化为 bloodGlucose, systolicBP, diastolicBP
+        assertTrue(metrics.stream().anyMatch(m -> "bloodGlucose".equals(m.getMetricKey())));
+        assertTrue(metrics.stream().anyMatch(m -> "systolicBP".equals(m.getMetricKey())));
+        assertTrue(metrics.stream().anyMatch(m -> "diastolicBP".equals(m.getMetricKey())));
+
+        // 验证化验单专属指标
+        assertTrue(metrics.stream().anyMatch(m -> "hemoglobin".equals(m.getMetricKey()) && "g/L".equals(m.getUnit())));
+        assertTrue(metrics.stream().anyMatch(m -> "wbc".equals(m.getMetricKey()) && "10^9/L".equals(m.getUnit())));
+        assertTrue(metrics.stream().anyMatch(m -> "rbc".equals(m.getMetricKey()) && "10^12/L".equals(m.getUnit())));
+        assertTrue(metrics.stream().anyMatch(m -> "platelet".equals(m.getMetricKey()) && "10^9/L".equals(m.getUnit())));
     }
 }
