@@ -386,6 +386,7 @@ const criticalMetricUnit = computed(() => {
 })
 
 const handleSubmit = async () => {
+  if (submitting.value) return
   if (!formRef.value) return
 
   await formRef.value.validate(async valid => {
@@ -401,6 +402,7 @@ const handleSubmit = async () => {
 }
 
 const executeSave = async () => {
+  if (submitting.value) return
   submitting.value = true
   try {
     const canonicalKey = definition.value?.canonicalKey || form.metricKey
@@ -436,7 +438,7 @@ const handleDelete = async (row: WellnessMetricVO) => {
     ElMessage.success('删除成功')
     fetchMetrics()
   } catch (error) {
-    if (error !== 'cancel') {
+    if (error !== 'cancel' && error !== 'close') {
       ElMessage.error('删除失败')
     }
   }

@@ -65,6 +65,20 @@ describe('metricValidation', () => {
       expect(o2Critical?.tier).toBe('CRITICAL')
       expect(o2Critical?.isCritical).toBe(true)
       expect(o2Critical?.canSave).toBe(true)
+
+      // Sleep duration: < 3.0 or > 16.0 hours is critical panic
+      const sleepDef = FALLBACK_METRIC_META.sleepDuration
+      const sleepCritical = evaluateMetricValue(2.0, sleepDef)
+      expect(sleepCritical?.tier).toBe('CRITICAL')
+      expect(sleepCritical?.isCritical).toBe(true)
+      expect(sleepCritical?.canSave).toBe(true)
+
+      // Water intake: > 5000 ml is critical panic
+      const waterDef = FALLBACK_METRIC_META.waterIntake
+      const waterCritical = evaluateMetricValue(6000, waterDef)
+      expect(waterCritical?.tier).toBe('CRITICAL')
+      expect(waterCritical?.isCritical).toBe(true)
+      expect(waterCritical?.canSave).toBe(true)
     })
 
     it('Tier 4 (Hard Biological Bounds): should block save when exceeding human survival limits without wiping the value', () => {

@@ -24,7 +24,9 @@ export const PANIC_LIMITS: Record<string, { min?: number; max?: number }> = {
   postprandialGlucose: { min: 2.8, max: 16.7 },
   heartRate: { min: 45, max: 140 },
   bodyTemperature: { min: 35.0, max: 39.5 },
-  bloodOxygen: { min: 90 } // 血氧 <= 90% 即为危急重症低氧血症
+  bloodOxygen: { min: 90 }, // 血氧 <= 90% 即为危急重症低氧血症
+  sleepDuration: { min: 3.0, max: 16.0 },
+  waterIntake: { max: 5000 }
 }
 
 /**
