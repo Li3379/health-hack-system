@@ -203,7 +203,7 @@ describe('prevention/Metrics.vue and wellness/Dashboard.vue dynamic metadata ali
     vi.clearAllMocks()
   })
 
-  it('SYNC-01: prevention/Metrics.vue should dynamically bind wellness metrics, mood rating, and non-destructive validation', async () => {
+  it('WELL-01 & WELL-02 & WELL-03: prevention/Metrics.vue should dynamically bind wellness metrics, mood rating, and four-tier validation with critical modal', async () => {
     const wrapper = mount(PreventionMetrics, {
       global: {
         stubs: globalStubs,
@@ -253,7 +253,21 @@ describe('prevention/Metrics.vue and wellness/Dashboard.vue dynamic metadata ali
     expect(vm.isSaveBlocked).toBe(true)
     expect(vm.form.value).toBe(200000)
 
+    // Test Tier 3 Panic limit: waterIntake 6000ml
+    vm.form.metricKey = 'waterIntake'
+    vm.handleMetricKeyChange('waterIntake')
+    vm.form.value = 6000
+    await flushPromises()
+
+    expect(vm.hasCritical).toBe(true)
+    expect(vm.criticalDialogVisible).toBe(false)
+    await vm.handleSubmit()
+    await flushPromises()
+    expect(vm.criticalDialogVisible).toBe(true)
+
     // Valid steps submission
+    vm.form.metricKey = 'steps'
+    vm.handleMetricKeyChange('steps')
     vm.form.value = 8000
     await flushPromises()
     expect(vm.isSaveBlocked).toBe(false)
@@ -267,7 +281,7 @@ describe('prevention/Metrics.vue and wellness/Dashboard.vue dynamic metadata ali
     )
   })
 
-  it('SYNC-01: wellness/Dashboard.vue should dynamically bind wellness metrics and non-destructively validate inputs', async () => {
+  it('WELL-01 & WELL-02 & WELL-03: wellness/Dashboard.vue should dynamically bind wellness metrics, mood rating, and non-destructively validate inputs', async () => {
     const wrapper = mount(WellnessDashboard, {
       global: {
         stubs: globalStubs,
@@ -294,6 +308,15 @@ describe('prevention/Metrics.vue and wellness/Dashboard.vue dynamic metadata ali
     expect(vm.addForm.unit).toBe('ml')
     expect(vm.addPrecision).toBe(0)
     expect(vm.addStep).toBe(50)
+
+    // Test Tier 3 Panic limit
+    vm.addForm.value = 6000
+    await flushPromises()
+    expect(vm.hasAddCritical).toBe(true)
+    expect(vm.addCriticalDialogVisible).toBe(false)
+    await vm.handleAddMetric()
+    await flushPromises()
+    expect(vm.addCriticalDialogVisible).toBe(true)
 
     // Tier 4 hard limit
     vm.addForm.value = 50000
