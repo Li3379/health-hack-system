@@ -477,7 +477,8 @@ const rules: FormRules = {
 
 // 指标切换时动态读取单位 (HEALTH-01)
 const handleMetricKeyChange = (value: string) => {
-  const def = metricMetaStore.getDefinition(value)
+  const key = value === 'bloodPressure' ? 'systolicBP' : value
+  const def = metricMetaStore.getDefinition(key)
   form.unit = def?.unit || ''
 }
 
@@ -681,6 +682,7 @@ const handleDelete = async (row: HealthMetricVO) => {
 }
 
 onMounted(() => {
+  metricMetaStore.fetchMetadata()
   fetchMetrics()
 })
 </script>

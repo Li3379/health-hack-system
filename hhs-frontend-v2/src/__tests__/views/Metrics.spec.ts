@@ -41,6 +41,16 @@ vi.mock('@/api/health', () => ({
   }
 }))
 
+vi.mock('@/api/metric-meta', () => ({
+  metricMetaApi: {
+    getMetadata: vi.fn().mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: {}
+    })
+  }
+}))
+
 vi.mock('vue-router', async importOriginal => {
   const actual = await importOriginal<typeof import('vue-router')>()
   return {
