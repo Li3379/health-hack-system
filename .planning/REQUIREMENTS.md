@@ -22,17 +22,17 @@
 
 ### GUIDE — 录入前预知引导与参考体系 (Pre-Input Guidance)
 
-- [ ] **GUIDE-01**: `QuickInputDialog.vue` 与各录入表单根据指标元数据动态绑定标准单位、推荐步长（step）与小数精度（precision），输入框占位符显式展示生理参考范围（如“参考范围：3.9 ~ 6.1 mmol/L”）
-- [ ] **GUIDE-02**: 在输入框下方或侧边常态化展示健康参考标准解读卡片（如正常指标参考值区间、常见测量场景注意事项）
-- [ ] **GUIDE-03**: 血压录入支持收缩压（高压）与舒张压（低压）同屏联动展示与双向关联校验
+- [x] **GUIDE-01**: `QuickInputDialog.vue` 与各录入表单根据指标元数据动态绑定标准单位、推荐步长（step）与小数精度（precision），输入框占位符显式展示生理参考范围（如“参考范围：3.9 ~ 6.1 mmol/L”）
+- [x] **GUIDE-02**: 在输入框下方或侧边常态化展示健康参考标准解读卡片（如正常指标参考值区间、常见测量场景注意事项）
+- [x] **GUIDE-03**: 血压录入支持收缩压（高压）与舒张压（低压）同屏联动展示与双向关联校验
 
 ### VAL — 四梯度宽容校验与友好解释性反馈 (Four-Tier Validation & Friendly Feedback)
 
-- [ ] **VAL-01**: 彻底废除失焦清空输入框机制（移除 `form.value.value = undefined`），输入异常时保留用户键入原值，绝不强制抹除用户劳动
-- [ ] **VAL-02**: 建立“正常 → 异常警示（允许保存）→ 急危重症（二次确认后允许保存）→ 物理不可能极限（拦截）”的四梯度模型，严禁将高血压、高血糖等真实病理数据当作表单非法输入拦截
-- [ ] **VAL-03**: 当输入超出正常参考范围时，以非阻塞的友好黄色/橙色状态胶囊及解释性文案替代生硬的红色报错（说明可能原因、测量状态区别，或单位误换算提示）
-- [ ] **VAL-04**: 检测到收缩压低于舒张压等生理倒置情况时，给出清晰的逻辑解释，并提供“一键对调高低压数值”的便捷自纠按钮
-- [ ] **VAL-05**: 录入达到严重危急值区间时，弹出友好的二次确认模态窗（提示防误触，同时提供急救与就医建议），用户点击“确认录入”后仍允许正常保存入库
+- [x] **VAL-01**: 彻底废除失焦清空输入框机制（移除 `form.value.value = undefined`），输入异常时保留用户键入原值，绝不强制抹除用户劳动
+- [x] **VAL-02**: 建立“正常 → 异常警示（允许保存）→ 急危重症（二次确认后允许保存）→ 物理不可能极限（拦截）”的四梯度模型，严禁将高血压、高血糖等真实病理数据当作表单非法输入拦截
+- [x] **VAL-03**: 当输入超出正常参考范围时，以非阻塞的友好黄色/橙色状态胶囊及解释性文案替代生硬的红色报错（说明可能原因、测量状态区别，或单位误换算提示）
+- [x] **VAL-04**: 检测到收缩压低于舒张压等生理倒置情况时，给出清晰的逻辑解释，并提供“一键对调高低压数值”的便捷自纠按钮
+- [x] **VAL-05**: 录入达到严重危急值区间时，弹出友好的二次确认模态窗（提示防误触，同时提供急救与就医建议），用户点击“确认录入”后仍允许正常保存入库
 
 ### SYNC — 全渠道输入规则对齐 (Cross-Channel Consistency)
 
@@ -72,14 +72,14 @@
 | KEY-01 | Phase 4 | Complete |
 | KEY-02 | Phase 4 | Complete |
 | KEY-03 | Phase 5 | Complete |
-| GUIDE-01 | Phase 6 | Pending |
-| GUIDE-02 | Phase 6 | Pending |
-| GUIDE-03 | Phase 6 | Pending |
-| VAL-01 | Phase 6 | Pending |
-| VAL-02 | Phase 6 | Pending |
-| VAL-03 | Phase 6 | Pending |
-| VAL-04 | Phase 6 | Pending |
-| VAL-05 | Phase 6 | Pending |
+| GUIDE-01 | Phase 6 | Complete |
+| GUIDE-02 | Phase 6 | Complete |
+| GUIDE-03 | Phase 6 | Complete |
+| VAL-01 | Phase 6 | Complete |
+| VAL-02 | Phase 6 | Complete |
+| VAL-03 | Phase 6 | Complete |
+| VAL-04 | Phase 6 | Complete |
+| VAL-05 | Phase 6 | Complete |
 | SYNC-01 | Phase 7 | Pending |
 
 ---

@@ -9,7 +9,7 @@
 
 - [x] **Phase 4: 后端统一指标元数据注册中心与 Key 归一化** - 建立不可变 HealthMetricMetaRegistry 与 MetricKeyNormalizer，统一全系统 19+ 指标元数据与别名反序列化 (completed 2026-11-04)
 - [x] **Phase 5: 前端元数据 Store 与全站格式化防英文外露** - 构建 Pinia useMetricMetaStore 与 format.ts 深度集成，全站杜绝原始英文 key 外露 (completed 2026-11-04)
-- [ ] **Phase 6: 前端非破坏性录入引导、四梯度宽容校验与友好反馈** - 彻底废除失焦抹除，实现四梯度宽容反馈、血压双向联动与危急值二次确认
+- [x] **Phase 6: 前端非破坏性录入引导、四梯度宽容校验与友好反馈** - 彻底废除失焦抹除，实现四梯度宽容反馈、血压双向联动与危急值二次确认 (completed 2026-11-05)
 - [ ] **Phase 7: 全渠道校验对齐与跨端测试验证** - 统一 AI 解析与 OCR 识别校验引擎，跨渠道全链路测试闭环
 
 ## Phase Details
@@ -74,16 +74,16 @@ Plans:
   4. 血压录入支持高压与低压同屏协同录入与关联校验；检测到高压低于低压倒置时，给出原理解释并提供“一键对调高低压数值”按钮，点击后自动修正对调
   5. 仅当输入处于物理不可能生理极限（如体温 55°C、心率 0 或 400 bpm）时阻止提交，且输入框原样保留输入文本方便用户直接回退修改
 
-**Plans:** 2 plans
+**Plans:** 2/2 plans complete
 
 Plans:
 **Wave 1**
 
-- [ ] 06-01-PLAN.md — 四梯度纯函数评估引擎 (metricValidation.ts) 与响应式组合函数 (useMetricValidation.ts)
+- [x] 06-01-PLAN.md — 四梯度纯函数评估引擎 (metricValidation.ts) 与响应式组合函数 (useMetricValidation.ts)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 06-02-PLAN.md — 常态化参考卡片、危急确认模态弹窗与 QuickInputDialog 非破坏性录入重构
+- [x] 06-02-PLAN.md — 常态化参考卡片、危急确认模态弹窗与 QuickInputDialog 非破坏性录入重构
 
 **UI hint**: yes
 
@@ -107,5 +107,5 @@ Plans:
 |-------|----------------|--------|-----------|
 | 4. 后端统一指标元数据注册中心与 Key 归一化 | 2/2 | Complete    | 2026-11-04 |
 | 5. 前端元数据 Store 与全站格式化防英文外露 | 2/2 | Complete    | 2026-11-04 |
-| 6. 前端非破坏性录入引导、四梯度宽容校验与友好反馈 | 0/0 | Not started | - |
+| 6. 前端非破坏性录入引导、四梯度宽容校验与友好反馈 | 2/2 | Complete    | 2026-11-05 |
 | 7. 全渠道校验对齐与跨端测试验证 | 0/0 | Not started | - |
