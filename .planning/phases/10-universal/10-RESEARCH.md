@@ -754,12 +754,11 @@ const handleEdit = (row: HealthMetricVO) => {
 |---|-------|---------|---------------|
 | A1 | 数据库历史记录中血压是以收缩压和舒张压分开的独立行存储 | Architecture Patterns | 极低。已通过查看 `HealthMetricVO`、`healthApi` 接口实现以及 Phase 8 测试用例确认。 |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **`QuickInputDialog.vue` 如何做到 100% 向后兼容？**
+   - RESOLVED: 保留 `QuickInputDialog.vue`，在内部重导出或薄封装 `UniversalMetricDialog`，确保已有代码与测试文件零破坏零报错，兼顾向后兼容与架构收敛。
    - What we know: `QuickInput.vue` 和 `QuickInputDialog.spec.ts` 均直接导入了该文件。
-   - What's unclear: 是否应该将其完全删除还是保留重导出。
-   - Recommendation: 保留 `QuickInputDialog.vue`，在内部重导出 `UniversalMetricDialog`，确保已有代码和测试零报错。(RESOLVED: 已决定采用重导出架构，兼顾向后兼容与重构解耦)
 
 ## Environment Availability
 
