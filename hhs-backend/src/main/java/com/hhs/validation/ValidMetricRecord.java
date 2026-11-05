@@ -10,8 +10,9 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Custom class-level validation annotation for health metric requests.
- * Intercepts physically impossible biological values at the request level.
+ * Custom class-level validation annotation for health and wellness metric requests.
+ * Intercepts physically impossible biological values across all ingestion DTOs (manual, AI, OCR)
+ * via {@link com.hhs.service.domain.MetricValueProvider}.
  */
 @Target({ElementType.TYPE})
 @Retention(RetentionPolicy.RUNTIME)
