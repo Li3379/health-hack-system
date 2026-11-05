@@ -1,0 +1,48 @@
+{
+  "contract": "1.0.0",
+  "flavor": "core",
+  "milestone": "v1.2 — 全站健康与保健指标录入标准化与体验对齐",
+  "phases": [
+    {
+      "number": "4",
+      "name": "后端统一指标元数据注册中心与 Key 归一化",
+      "status": "complete"
+    },
+    {
+      "number": "5",
+      "name": "前端元数据 Store 与全站格式化防英文外露",
+      "status": "complete"
+    },
+    {
+      "number": "6",
+      "name": "前端非破坏性录入引导、四梯度宽容校验与友好反馈",
+      "status": "complete"
+    },
+    {
+      "number": "7",
+      "name": "全渠道校验对齐与跨端测试验证",
+      "status": "complete"
+    },
+    {
+      "number": "8",
+      "name": "健康指标管理页录入与编辑对齐",
+      "status": "complete"
+    },
+    {
+      "number": "9",
+      "name": "保健指标管理页录入对齐",
+      "status": "complete"
+    },
+    {
+      "number": "10",
+      "name": "指标录入通用交互组件封装与全站验证",
+      "status": "complete"
+    }
+  ],
+  "next": {
+    "command": "/gsd:new-milestone",
+    "label": "Start a new milestone",
+    "reason": "All phases complete — start a new milestone"
+  },
+  "updated_at": "2026-11-05T13:23:41.940Z"
+}

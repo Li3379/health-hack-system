@@ -4,7 +4,7 @@
 
 - ✅ **v1.0 Optimization & Redeployment** — Phases 1-3 (completed 2026-05-29)
 - ✅ **v1.1 智能健康指标填报引导与友好校验** — Phases 4-7 (completed 2026-11-05)
-- 🚧 **v1.2 全站健康与保健指标录入标准化与体验对齐** — Phases 8-10 (in progress)
+- ✅ **v1.2 全站健康与保健指标录入标准化与体验对齐** — [Phases 8-10](milestones/v1.2-ROADMAP.md) (completed 2026-11-05)
 
 ## Phases
 

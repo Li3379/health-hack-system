@@ -8,15 +8,9 @@ HHS 是一个健康管理平台，集成 AI 智能分析、实时健康追踪、
 
 平台核心价值是提供可靠、准确的健康评分和趋势分析 — 评分数据必须完整持久化（包括维度评分），历史趋势图必须正确展示，部署过程必须稳定可靠。
 
-## Current Milestone: v1.1 智能健康指标填报引导与友好校验 (Intelligent Metric Input & Validation)
+## Current Milestone: v1.2 全站健康与保健指标录入标准化与体验对齐 (Shipped: 2026-11-05)
 
-**Goal:** 彻底解决健康指标填报时理解困难、缺乏引导、报错生硬及命名不一致问题，建立全链路预知引导、解释性友好反馈与统一校验字典。
-
-**Target features:**
-- 指标录入前生理范围与单位预提示（占位符、引导提示语、输入范围限制）
-- 智能/解释性错误反馈（根据输入值差异提供解释与合理建议，替代生硬红色报错）
-- 前后端统一的指标范围字典（收敛分散定义，提供统一 API 供各端消费）
-- metric_key 命名与显示映射修正（兼容 camelCase 与 snake_case，杜绝英文 key 外露）
+**Goal:** 全站四大入口（快捷录入、健康管理、预防保健、生活方式仪表盘）指标录入组件通用封装与收敛，消除重复代码，实现四梯度宽容生理校验、血压协同对调与编辑模式自适应流转的一致性闭环。
 
 ## Requirements
 
@@ -39,15 +33,19 @@ HHS 是一个健康管理平台，集成 AI 智能分析、实时健康追踪、
 - ✓ 健康检查重试循环 — scripts/deploy.sh 5 次重试，每次 15 秒
 - ✓ 部署逻辑不重复 — docker-publish.yml 内联脚本，ECS 非 git repo 兼容
 - ✓ 代码推送并触发 CI/CD 重新部署 — 已推送，Build & Deploy 成功 (run 26562079956)
+- ✓ **INPUT-GUIDE**: 指标录入前生理范围、推荐步长与精度动态绑定，输入框占位符显式提示 — v1.1/v1.2
+- ✓ **FRIENDLY-FEEDBACK**: 四梯度宽容校验与非破坏性保留（失焦绝不清空），危急值防误触二次确认 — v1.1/v1.2
+- ✓ **UNIFIED-METRIC-META**: 后端不可变 HealthMetricMetaRegistry 与前端 useMetricMetaStore 权威元数据字典 (23 项) — v1.1/v1.2
+- ✓ **KEY-NORMALIZATION**: MetricKeyNormalizer 双向兼容 camelCase/snake_case/大写与医学别名，全站防英文 key 外露 — v1.1/v1.2
+- ✓ **REUSABLE-INPUT-DIALOG**: UniversalMetricDialog 通用弹窗封装，全站消除 1,750+ 行重复代码，支持自适应 API 路由 — v1.2
+- ✓ 前端单元测试体系扩充 — 覆盖率提升至 13 个测试套件、90 项自动化测试用例，生产构建零报错 — v1.2
 
-### Active
+### Active (Next Milestone Candidates - v1.3)
 
-- [ ] **INPUT-GUIDE**: 指标录入前生理范围、合理阈值与单位预提示与前置引导
-- [ ] **FRIENDLY-FEEDBACK**: 智能/解释性校验反馈机制，提供差异化提示与建议而非直接红色报错
-- [ ] **UNIFIED-METRIC-META**: 前后端统一的指标元数据与范围定义源（收敛 AiParse / Dialog / DTO 差异）
-- [ ] **KEY-NORMALIZATION**: 统一 metric_key 驼峰与下划线映射，修复前端界面英文 key 显示缺陷
-- [ ] 数据库迁移策略：建立 schema 版本管理机制
-- [ ] 前端单元测试补充 — 仅有 1 个单元测试
+- [ ] **AI-REPORT-DEEP-ALIGN**: AI 对话解析与 OCR 化验报告识别深度对齐到全量权威元数据注册表
+- [ ] **BASELINE-PERSONALIZATION**: 针对特定病史用户的个性化生理基线动态调整与偏离提醒
+- [ ] **CONTEXT-SMART-INPUT**: 基于时间段与生活场景的智能快捷录入指标推荐
+- [ ] 数据库迁移策略：建立 Flyway/Liquibase schema 版本管理机制
 
 ### WIP (Unstaged Changes)
 
