@@ -43,13 +43,13 @@
   </el-card>
 
   <!-- 快捷录入弹窗 (平铺于全局 body，不嵌在卡片组件内) -->
-  <QuickInputDialog v-model="dialogVisible" :metric="selectedMetric" @success="handleSuccess" />
+  <UniversalMetricDialog v-model="dialogVisible" :metric="selectedMetric" @success="handleSuccess" />
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { Edit, Timer, Histogram, Sunrise, Moon, Sunny } from '@element-plus/icons-vue'
-import QuickInputDialog from './QuickInputDialog.vue'
+import UniversalMetricDialog from '@/components/metric/UniversalMetricDialog.vue'
 import { springPop } from '@/composables/useGsap'
 
 const emit = defineEmits<{
