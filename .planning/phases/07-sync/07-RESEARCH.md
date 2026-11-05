@@ -609,12 +609,12 @@ public class OcrServiceImpl implements OcrService {
 |---|-------|---------|---------------|
 | A1 | 化验单血常规专属指标（血红蛋白、白细胞、红细胞、血小板）在用户确认入库时，作为 `HEALTH` 类别存储于 `health_metric` 表 [ASSUMED] | Standard Stack / Architecture Patterns | 若需存储于独立的 `lab_result` 表，需调整确认持久化服务调用。但目前系统现有 `OcrServiceImpl.saveMetric` 也是将其作为 `HEALTH` 存储于 `healthMetricService.add()`，且 `health_metric` 表支持任意合法的 canonicalKey，风险极低。 |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **OCR 确认入库化验单指标（如白细胞、红细胞）是否参与实时预警与健康评分？**
+   - RESOLVED: 保持当前行为，在 `MetricRecordValidator` 中放行未注册指标或通过 `LabRoutineMetricRegistry` 校验其生理极限，评分计算引擎对未注册指标默认旁路放行，不影响核心评分。
    - What we know: `HealthMetricServiceImpl.add()` 会发出 `MetricRecordedEvent`，下游 `AlertService` 会尝试匹配阈值规则。由于这 4 项属于化验扩展指标，目前 `HealthMetricMetaRegistry` 未注册其基线规则。
-   - What's unclear: 是否需要为其配置专有的用户预警规则。
-   - Recommendation: 保持当前行为，在 `MetricRecordValidator` 中放行未注册指标或通过 `LabRoutineMetricRegistry` 校验其生理极限，评分计算引擎对未注册指标默认旁路放行，不影响核心评分。
+   - Resolution: 经确认，专属血常规指标当前仅用于体检报告展示与异常记录，下游评分与实时预警引擎对未配置基线的指标默认旁路放行，维持当前行为。
 
 ## Environment Availability
 
