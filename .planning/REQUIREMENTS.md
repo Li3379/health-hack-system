@@ -92,40 +92,46 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FIX-01 | TBD | Pending |
-| FIX-02 | TBD | Pending |
-| FIX-03 | TBD | Pending |
-| FIX-04 | TBD | Pending |
-| FIX-05 | TBD | Pending |
-| THR-01 | TBD | Pending |
-| THR-02 | TBD | Pending |
-| THR-03 | TBD | Pending |
-| THR-04 | TBD | Pending |
-| THR-05 | TBD | Pending |
-| THR-06 | TBD | Pending |
-| THR-07 | TBD | Pending |
-| THR-08 | TBD | Pending |
-| PRF-01 | TBD | Pending |
-| PRF-02 | TBD | Pending |
-| PRF-03 | TBD | Pending |
-| PRF-04 | TBD | Pending |
-| PRF-05 | TBD | Pending |
-| PRF-06 | TBD | Pending |
-| PRF-07 | TBD | Pending |
-| PRF-08 | TBD | Pending |
-| ERR-01 | TBD | Pending |
-| ERR-02 | TBD | Pending |
-| ERR-03 | TBD | Pending |
-| ERR-04 | TBD | Pending |
-| ERR-05 | TBD | Pending |
-| ERR-06 | TBD | Pending |
-| ERR-07 | TBD | Pending |
-| ERR-08 | TBD | Pending |
+| FIX-01 | Phase 12 | Pending |
+| FIX-02 | Phase 12 | Pending |
+| FIX-03 | Phase 12 | Pending |
+| FIX-04 | Phase 12 | Pending |
+| FIX-05 | Phase 12 | Pending |
+| THR-01 | Phase 12 | Pending |
+| THR-02 | Phase 12 | Pending |
+| THR-03 | Phase 12 | Pending |
+| THR-04 | Phase 12 | Pending |
+| THR-05 | Phase 12 | Pending |
+| THR-06 | Phase 12 | Pending |
+| THR-07 | Phase 12 | Pending |
+| THR-08 | Phase 12 | Pending |
+| PRF-01 | Phase 13 | Pending |
+| PRF-02 | Phase 13 | Pending |
+| PRF-03 | Phase 13 | Pending |
+| PRF-04 | Phase 13 | Pending |
+| PRF-05 | Phase 13 | Pending |
+| PRF-06 | Phase 13 | Pending |
+| PRF-07 | Phase 13 | Pending |
+| PRF-08 | Phase 13 | Pending |
+| ERR-01 | Phase 11 | Pending |
+| ERR-02 | Phase 11 | Pending |
+| ERR-03 | Phase 14 | Pending |
+| ERR-04 | Phase 11 | Pending |
+| ERR-05 | Phase 14 | Pending |
+| ERR-06 | Phase 11 | Pending |
+| ERR-07 | Phase 14 | Pending |
+| ERR-08 | Phase 14 | Pending |
 
 **Coverage:**
 - v1.3 requirements: 29 total
-- Mapped to phases: 0 (pending roadmap)
-- Unmapped: 29
+- Mapped to phases: 29
+- Unmapped: 0
+
+**Phase distribution:**
+- Phase 11 全站统一友好错误反馈地基: ERR-01, ERR-02, ERR-04, ERR-06 (4)
+- Phase 12 阈值配置向导化与告警正确性修复: FIX-01..05, THR-01..08 (13)
+- Phase 13 健康档案完善引导（非阻塞）: PRF-01..08 (8)
+- Phase 14 全站收尾排查与回归验证: ERR-03, ERR-05, ERR-07, ERR-08 (4)
 
 ---
 *Requirements defined: 2026-11-05 after v1.3 research synthesis*

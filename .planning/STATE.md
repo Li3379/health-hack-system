@@ -3,10 +3,10 @@ gsd_state_version: "1.0"
 milestone: v1.3
 milestone_name: 引导式配置与友好错误反馈
 status: planning
-last_updated: "2026-11-05T13:54:53.869Z"
+last_updated: "2026-11-05T00:00:00.000Z"
 last_activity: 2026-11-05
 progress:
-  total_phases: 0
+  total_phases: 4
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -17,8 +17,8 @@ progress:
 
 **Created:** 2026-05-28
 **Current Milestone:** v1.3 引导式配置与友好错误反馈
-**Current Phase:** Not started (defining requirements)
-**Status:** Defining requirements
+**Current Phase:** 11 (全站统一友好错误反馈地基) — ready to plan
+**Status:** Ready to plan
 
 ## Project Reference
 
@@ -34,8 +34,18 @@ See: `.planning/PROJECT.md`
 | v1.0 Optimization & Redeployment | done | 3/3 | 2026-05-29 |
 | v1.1 智能健康指标填报引导与友好校验 | done | 4/4 | 2026-11-05 |
 | v1.2 全站健康与保健指标录入标准化与体验对齐 | done | 3/3 | 2026-11-05 |
+| v1.3 引导式配置与友好错误反馈 | planned | 0/4 | — |
 
 ## Phase Progress
+
+| Phase | Status | Plans | Progress |
+|-------|--------|-------|----------|
+| 11. 全站统一友好错误反馈地基 | ready to plan | 0/0 | 0% |
+| 12. 阈值配置向导化与告警正确性修复 | not started | 0/0 | 0% |
+| 13. 健康档案完善引导（非阻塞） | not started | 0/0 | 0% |
+| 14. 全站收尾排查与回归验证 | not started | 0/0 | 0% |
+
+### Completed Phases (v1.0 – v1.2)
 
 | Phase | Status | Plans | Progress |
 |-------|--------|-------|----------|
@@ -52,39 +62,43 @@ See: `.planning/PROJECT.md`
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-11-05 — Milestone v1.3 started
+Phase: 11 of 14 (全站统一友好错误反馈地基)
+Plan: 0 of 0 in current phase
+Status: Ready to plan
+Last activity: 2026-11-05 — v1.3 roadmap created (Phases 11-14, 29/29 requirements mapped)
+
+Progress: [░░░░░░░░░░] 0%
 
 ## Accumulated Context
 
 ### Key Decisions
 
+- 错误处理改为"翻译而非展示"：`request.ts` 只抛类型化 `ApiError`，由调用方或统一层决定呈现 — v1.3 Phase 11
+- 错误反馈地基必须先于所有页面级错误迁移落地，否则重复 toast 会被逐页重新引入 — v1.3 排序约束
+- 健康档案引导采非阻塞式（徽标/横幅/可稍后提醒），不做路由门禁、不新增必填字段 — v1.3 Phase 13
+- 阈值推荐值来自元数据注册表 + 告警种子规则派生，不新建阈值模板表 — v1.3 Phase 12
+- 阈值 key 规范化（写入路径）与存量数据修复必须与向导同阶段且先行，否则向导只会制造更多失效阈值行 — v1.3 Phase 12
 - 建立不可变 HealthMetricMetaRegistry 作为全系统唯一指标元数据权威源 (SSOT)
-- 采用四梯度校验模型（正常、警告、危急、硬限制），彻底废除破坏性失焦清空机制，急危重症允许二次确认保存
-- MetricKeyNormalizer 双向无缝兼容 camelCase, snake_case 与医学缩写别名，请求反序列化自动规范化
-- 前端通过 Pinia useMetricMetaStore 缓存与 format.ts 深度集成，防止英文 key 外露
-- AI 解析与 OCR 识别全渠道收敛至同一套元数据定义
-- 提炼 UniversalMetricDialog 统一通用弹窗组件，消灭全站 1,750+ 行重复弹窗表单代码 (D-01, D-03)
-- 组件内部实现自适应 API 路由，依据不可变 category 属性精准自动分流持久化接口 (D-02, REUSE-02)
-- 全站 13 个自动化测试文件、90 项测试用例全部绿灯通过，生产构建零报错 (D-04)
-- AI 解析与 OCR 识别全渠道收敛至同一套元数据定义
+- 采用四梯度校验模型（正常、警告、危急、硬限制），废除破坏性失焦清空，急危重症允许二次确认保存
+- 提炼 UniversalMetricDialog 统一通用弹窗组件，消灭全站 1,750+ 行重复弹窗表单代码
 
 ### Blockers
 
-(none)
+- Phase 12 开工前需先审计存量 `user_threshold` / `alert_rule` 的别名分布与非法次序，才能编写修复脚本
+- Phase 12 的 `ThresholdRangeChecker` 修复会改变告警产出（原先漏报的告警将开始上报），需 UAT 条目
+- Phase 13 的风险评估 BLOCKED / DEGRADED 语义属产品行为变更，需显式产品确认
 
 ### Session Continuity
 
 - Previous: v1.2 milestone completed (Phases 8-10, 7/7 requirements), frontend 90 tests green.
-- Now: v1.3 milestone started; research complete at `.planning/research/`. Next step: define requirements then roadmap.
+- Now: v1.3 roadmap created — 4 phases (11-14), 29/29 requirements mapped, no orphans.
+- Next step: `/gsd-discuss-phase 11` then `/gsd-plan-phase 11`.
 
 ## Session
 
-**Last session:** 2026-11-05T13:54:53Z
-**Stopped at:** v1.3 milestone initialization
-**Resume file:** .planning/research/SUMMARY.md
+**Last session:** 2026-11-05
+**Stopped at:** v1.3 roadmap creation
+**Resume file:** .planning/ROADMAP.md
 
 ## Performance Metrics
 
@@ -95,14 +109,14 @@ Last activity: 2026-11-05 — Milestone v1.3 started
 
 ## Decisions
 
-- [Phase Phase 4: 后端统一指标元数据注册中心与 Key 归一化]: Standardized all authoritative metric keys to camelCase with protected acronyms and lenient passthrough
-- [Phase Phase 4: 后端统一指标元数据注册中心与 Key 归一化]: Constructed in-memory singleton HealthMetricMetaRegistry covering 23 health and wellness metrics
-- [Phase Phase 4: 后端统一指标元数据注册中心与 Key 归一化]: Configured public GET /api/metrics/metadata endpoint with 24-hour Cache-Control and ETag header support
-- [Phase Phase 4: 后端统一指标元数据注册中心与 Key 归一化]: Intercept physically impossible biological values via Jakarta Validation class-level constraint @ValidMetricRecord with strictly formatted guidance messages (D-07, D-08)
-- [Phase Phase 4: 后端统一指标元数据注册中心与 Key 归一化]: Permit pathological and critical illness data (e.g., 140 bpm, 195 mmHg, 18.0 mmol/L) to pass validation and persist safely
-- [Phase Phase 4: 后端统一指标元数据注册中心与 Key 归一化]: Expand single metric key filter to full alias set in service-layer queries via MyBatis-Plus LambdaQueryWrapper.in() (D-05)
-- [Phase Phase 4: 后端统一指标元数据注册中心与 Key 归一化]: Provide idempotent SQL migration script v1.1_normalize_metric_keys.sql for safe batch cleansing of historical records (D-06)
+- [Phase 4]: All authoritative metric keys standardized to camelCase with protected acronyms and lenient passthrough
+- [Phase 4]: In-memory singleton HealthMetricMetaRegistry covering 23 health and wellness metrics
+- [Phase 4]: Public `GET /api/metrics/metadata` with 24-hour Cache-Control and ETag support
+- [Phase 4]: Physical-impossible values intercepted via `@ValidMetricRecord` class-level constraint
+- [Phase 4]: Service-layer queries expand single key filter to full alias set via `LambdaQueryWrapper.in()`
+- [Phase 4]: Idempotent SQL migration script `v1.1_normalize_metric_keys.sql` for historical records
 
 ## Operator Next Steps
 
-- Define v1.3 requirements and roadmap (in progress), then `/gsd-discuss-phase 11`
+- `/gsd-discuss-phase 11` — gather context for the unified friendly error foundation
+- `/gsd-plan-phase 11` — produce PLAN.md for Phase 11
