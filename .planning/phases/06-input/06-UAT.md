@@ -1,9 +1,9 @@
 ---
-status: testing
+status: complete
 phase: 06-input
 source: [06-VERIFICATION.md]
 started: 2026-11-05T08:52:00Z
-updated: 2026-11-05T08:52:00Z
+updated: 2026-11-05T09:05:00Z
 ---
 
 ## Current Test
@@ -16,7 +16,7 @@ expected: |
   3. 输入偏高数值时，绿色/橙黄状态胶囊平滑渐变过渡，非阻塞提示明确且保存按钮可用；
   4. 血压倒置时，黄色警示横幅与“对调高低压数值”按钮即时呈现，点击一键对调平滑交换数值；
   5. 危急值触发 CriticalConfirmDialog 模态窗，警示图标与 120 急救建议排版醒目，点击“返回核对修改”或“确认录入无误并保存”交互正常。
-awaiting: user response
+result: pass
 
 ## Tests
 
@@ -27,15 +27,17 @@ expected: |
   3. 输入偏高数值时，绿色/橙黄状态胶囊平滑渐变过渡，非阻塞提示明确且保存按钮可用；
   4. 血压倒置时，黄色警示横幅与“对调高低压数值”按钮即时呈现，点击一键对调平滑交换数值；
   5. 危急值触发 CriticalConfirmDialog 模态窗，警示图标与 120 急救建议排版醒目，点击“返回核对修改”或“确认录入无误并保存”交互正常。
-result: [pending]
+result: pass
 
 ## Summary
 
 total: 1
-passed: 0
+passed: 1
 issues: 0
-pending: 1
+pending: 0
 skipped: 0
 blocked: 0
 
 ## Gaps
+
+None. All UAT visual tests passed.
