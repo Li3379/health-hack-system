@@ -252,9 +252,9 @@ const handleMetricKeyChange = (key: string) => {
   const def = metricMetaStore.getDefinition(key)
   form.unit = def?.unit || ''
   if (key === 'mood') {
-    if (!form.value || form.value < 1 || form.value > 5) {
-      form.value = 3
-    }
+    form.value = 3
+  } else {
+    form.value = undefined as any
   }
   formRef.value?.clearValidate('value')
 }
@@ -386,7 +386,6 @@ const criticalMetricUnit = computed(() => {
 })
 
 const handleSubmit = async () => {
-  if (submitting.value) return
   if (!formRef.value) return
 
   await formRef.value.validate(async valid => {
