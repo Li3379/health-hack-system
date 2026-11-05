@@ -44,9 +44,9 @@
 
 ### HEALTH — 健康指标录入对齐 (Health Metric Input Alignment)
 
-- [ ] **HEALTH-01**: `src/views/health/Metrics.vue` 弹窗重构为动态从 `useMetricMetaStore` 获取指标列表、单位、精度、步长与参考范围占位符，彻底废除硬编码的 7 项 `el-option` 与 `metricUnitMap` 私有字典
-- [ ] **HEALTH-02**: `src/views/health/Metrics.vue` 实现血压收缩压与舒张压协同双字段录入、倒置警示检测与一键对调能力，支持在列表页中统一录入与编辑
-- [ ] **HEALTH-03**: `src/views/health/Metrics.vue` 接入四梯度纯函数医学校验引擎与非破坏性失焦保护，超出正常范围展示状态胶囊与解释性文案，危急值触发二次确认弹窗，物理极限拦截但不抹除输入
+- [x] **HEALTH-01**: `src/views/health/Metrics.vue` 弹窗重构为动态从 `useMetricMetaStore` 获取指标列表、单位、精度、步长与参考范围占位符，彻底废除硬编码的 7 项 `el-option` 与 `metricUnitMap` 私有字典
+- [x] **HEALTH-02**: `src/views/health/Metrics.vue` 实现血压收缩压与舒张压协同双字段录入、倒置警示检测与一键对调能力，支持在列表页中统一录入与编辑
+- [x] **HEALTH-03**: `src/views/health/Metrics.vue` 接入四梯度纯函数医学校验引擎与非破坏性失焦保护，超出正常范围展示状态胶囊与解释性文案，危急值触发二次确认弹窗，物理极限拦截但不抹除输入
 
 ### WELL — 保健生活指标录入对齐 (Wellness Metric Input Alignment)
 
@@ -102,9 +102,9 @@
 | VAL-04 | Phase 6 | Complete |
 | VAL-05 | Phase 6 | Complete |
 | SYNC-01 | Phase 7 | Pending |
-| HEALTH-01 | Phase 8 | Pending |
-| HEALTH-02 | Phase 8 | Pending |
-| HEALTH-03 | Phase 8 | Pending |
+| HEALTH-01 | Phase 8 | Complete |
+| HEALTH-02 | Phase 8 | Complete |
+| HEALTH-03 | Phase 8 | Complete |
 | WELL-01 | Phase 9 | Pending |
 | WELL-02 | Phase 9 | Pending |
 | WELL-03 | Phase 9 | Pending |
