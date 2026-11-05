@@ -17,19 +17,22 @@ export function useMetricValidation(
 
   // 规范化指标标识符
   const canonicalKey = computed<string>(() => {
-    return toCanonicalKey(metricKeyRef.value || '')
+    const raw = metricKeyRef.value || ''
+    if (raw === 'bloodPressure' || raw === 'blood_pressure' || raw.toLowerCase() === 'bp') {
+      return 'systolicBP'
+    }
+    return toCanonicalKey(raw)
   })
 
   // 判定是否为血压协同指标
   const isBloodPressure = computed<boolean>(() => {
-    const key = canonicalKey.value
-    return key === 'systolicBP' || metricKeyRef.value === 'bloodPressure'
+    return canonicalKey.value === 'systolicBP'
   })
 
   // 主指标权威元数据定义
   const definition = computed<MetricDefinitionVO | undefined>(() => {
     if (!metricKeyRef.value) return undefined
-    return metaStore.getDefinition(metricKeyRef.value)
+    return metaStore.getDefinition(canonicalKey.value)
   })
 
   // 舒张压权威元数据定义

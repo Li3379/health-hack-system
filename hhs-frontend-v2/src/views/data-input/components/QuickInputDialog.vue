@@ -61,8 +61,9 @@
         >
           <template #title>
             <div class="inversion-banner-title">
-              <span>检测到收缩压低于或等于舒张压，疑似输入颠倒</span>
+              <span>{{ isBpEqual ? '检测到收缩压与舒张压数值相同，请核对后修改' : '检测到收缩压低于舒张压，疑似输入颠倒' }}</span>
               <el-button
+                v-if="!isBpEqual"
                 size="small"
                 type="warning"
                 plain
@@ -156,6 +157,7 @@ import type { FormInstance, FormRules } from 'element-plus'
 import { Check, Warning, Bell, CircleClose, Switch, InfoFilled } from '@element-plus/icons-vue'
 import { healthApi } from '@/api/health'
 import { wellnessApi } from '@/api/wellness'
+import { formatDate } from '@/utils/format'
 import { useMetricValidation } from '@/composables/useMetricValidation'
 import ReferenceGuideCard from './ReferenceGuideCard.vue'
 import CriticalConfirmDialog from './CriticalConfirmDialog.vue'
@@ -181,7 +183,7 @@ const loading = ref(false)
 const form = ref({
   value: undefined as number | undefined,
   diastolicValue: undefined as number | undefined,
-  recordDate: new Date().toISOString().split('T')[0]
+  recordDate: formatDate(new Date())
 })
 
 const metricKeyRef = computed(() => props.metric?.key)
@@ -200,6 +202,23 @@ const {
   isSaveBlocked,
   swapBloodPressure
 } = useMetricValidation(metricKeyRef, valueRef, diastolicRef)
+
+// 判断血压高低压是否完全相同
+const isBpEqual = computed(() => {
+  return (
+    isBloodPressure.value &&
+    form.value.value !== undefined &&
+    form.value.diastolicValue !== undefined &&
+    form.value.value === form.value.diastolicValue
+  )
+})
+
+// 倒置状态解除后自动清除校验报错
+watch(isInverted, inverted => {
+  if (!inverted) {
+    formRef.value?.clearValidate(['value', 'diastolicValue'])
+  }
+})
 
 // 动态步长与精度 (GUIDE-01)
 const precision = computed(() => definition.value?.precision ?? 0)
@@ -316,7 +335,7 @@ watch(visible, val => {
   if (val) {
     form.value.value = undefined
     form.value.diastolicValue = undefined
-    form.value.recordDate = new Date().toISOString().split('T')[0]
+    form.value.recordDate = formatDate(new Date())
     setTimeout(() => {
       formRef.value?.clearValidate()
     }, 0)
@@ -337,9 +356,14 @@ const criticalMetricName = computed(() => {
   return definition.value?.displayName || props.metric?.name || '指标'
 })
 
-const criticalMetricValue = computed(() => {
-  if (isBloodPressure.value && !primaryEval.value?.isCritical && diastolicEval.value?.isCritical) {
-    return form.value.diastolicValue ?? 0
+const criticalMetricValue = computed<number | string>(() => {
+  if (isBloodPressure.value) {
+    if (primaryEval.value?.isCritical && diastolicEval.value?.isCritical) {
+      return `${form.value.value} / ${form.value.diastolicValue}`
+    }
+    if (diastolicEval.value?.isCritical) {
+      return form.value.diastolicValue ?? 0
+    }
   }
   return form.value.value ?? 0
 })
@@ -377,13 +401,8 @@ const executeSave = async () => {
       recordDate: form.value.recordDate
     }
 
-    if (props.metric?.category === 'WELLNESS') {
-      await wellnessApi.createMetric(data)
-    } else {
-      await healthApi.createMetric(data)
-    }
+    const isWellness = (definition.value?.category || props.metric?.category) === 'WELLNESS'
 
-    // 血压双指标协同保存舒张压
     if (isBloodPressure.value && form.value.diastolicValue !== undefined) {
       const diastolicData = {
         metricKey: 'diastolicBP',
@@ -391,7 +410,14 @@ const executeSave = async () => {
         unit: 'mmHg',
         recordDate: form.value.recordDate
       }
-      await healthApi.createMetric(diastolicData)
+      await Promise.all([
+        healthApi.createMetric(data),
+        healthApi.createMetric(diastolicData)
+      ])
+    } else if (isWellness) {
+      await wellnessApi.createMetric(data)
+    } else {
+      await healthApi.createMetric(data)
     }
 
     ElMessage.success('录入成功')
