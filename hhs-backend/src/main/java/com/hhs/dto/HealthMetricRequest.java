@@ -2,6 +2,7 @@ package com.hhs.dto;
 
 import com.fasterxml.jackson.annotation.JsonSetter;
 import com.hhs.service.domain.MetricKeyNormalizer;
+import com.hhs.service.domain.MetricValueProvider;
 import com.hhs.validation.ValidMetricRecord;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotNull;
@@ -20,7 +21,7 @@ import java.time.LocalDateTime;
  */
 @Data
 @ValidMetricRecord
-public class HealthMetricRequest {
+public class HealthMetricRequest implements MetricValueProvider {
 
     // userId is obtained from SecurityUtils.getCurrentUserId(), not from request body
     private Long userId;

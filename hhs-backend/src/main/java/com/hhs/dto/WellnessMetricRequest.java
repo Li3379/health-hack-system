@@ -1,5 +1,7 @@
 package com.hhs.dto;
 
+import com.hhs.service.domain.MetricValueProvider;
+import com.hhs.validation.ValidMetricRecord;
 import jakarta.validation.constraints.*;
 import lombok.Data;
 
@@ -8,10 +10,12 @@ import java.time.LocalDate;
 
 /**
  * Wellness Metric Request DTO
- * Used for creating and updating wellness metrics with wellness-specific validation
+ * Used for creating and updating wellness metrics with wellness-specific validation.
+ * Intercepts physiological impossible limits via {@link ValidMetricRecord}.
  */
 @Data
-public class WellnessMetricRequest {
+@ValidMetricRecord
+public class WellnessMetricRequest implements MetricValueProvider {
 
     @NotNull(message = "指标类型不能为空")
     @Pattern(regexp = "^(sleepDuration|sleepQuality|steps|exerciseMinutes|waterIntake|mood|energy)$",

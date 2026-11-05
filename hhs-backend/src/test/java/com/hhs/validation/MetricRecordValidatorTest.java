@@ -2,7 +2,10 @@ package com.hhs.validation;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.hhs.dto.ConfirmMetricsRequest;
 import com.hhs.dto.HealthMetricRequest;
+import com.hhs.dto.OcrConfirmRequest;
+import com.hhs.dto.WellnessMetricRequest;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
@@ -182,5 +185,98 @@ class MetricRecordValidatorTest {
         String spo2Json = "{\"metricKey\": \"spo2\", \"value\": 98, \"recordDate\": \"2026-11-04\"}";
         HealthMetricRequest spo2Req = objectMapper.readValue(spo2Json, HealthMetricRequest.class);
         assertEquals("bloodOxygen", spo2Req.getMetricKey(), "spo2 should deserialize to bloodOxygen");
+    }
+
+    @Test
+    @DisplayName("WellnessMetricRequest physical limit enforcement via MetricValueProvider")
+    void testWellnessMetricPhysicalLimitInterception() {
+        // Normal wellness metric passes
+        WellnessMetricRequest normalReq = new WellnessMetricRequest();
+        normalReq.setMetricKey("sleepDuration");
+        normalReq.setValue(new BigDecimal("7.5"));
+        normalReq.setRecordDate(LocalDate.now());
+        Set<ConstraintViolation<WellnessMetricRequest>> normalViolations = validator.validate(normalReq);
+        assertTrue(normalViolations.isEmpty(), "Normal sleepDuration 7.5 hours should pass");
+
+        // Physically impossible sleepDuration (28 hours in a day, limit: 0 ~ 24)
+        WellnessMetricRequest impossibleReq = new WellnessMetricRequest();
+        impossibleReq.setMetricKey("sleepDuration");
+        impossibleReq.setValue(new BigDecimal("28.0"));
+        impossibleReq.setRecordDate(LocalDate.now());
+        Set<ConstraintViolation<WellnessMetricRequest>> violations = validator.validate(impossibleReq);
+        assertFalse(violations.isEmpty(), "28 hours sleep should be rejected");
+        ConstraintViolation<WellnessMetricRequest> v = violations.iterator().next();
+        assertEquals("value", v.getPropertyPath().toString());
+        assertEquals("睡眠时长有效生理区间为 0 ~ 24 小时，请核对后重新输入", v.getMessage());
+
+        // Physically impossible waterIntake (25000 ml, limit: 0 ~ 20000)
+        WellnessMetricRequest waterReq = new WellnessMetricRequest();
+        waterReq.setMetricKey("waterIntake");
+        waterReq.setValue(new BigDecimal("25000"));
+        waterReq.setRecordDate(LocalDate.now());
+        Set<ConstraintViolation<WellnessMetricRequest>> waterViolations = validator.validate(waterReq);
+        assertFalse(waterViolations.isEmpty(), "25000 ml water should be rejected");
+        assertEquals("饮水量有效生理区间为 0 ~ 20000 ml，请核对后重新输入", waterViolations.iterator().next().getMessage());
+    }
+
+    @Test
+    @DisplayName("ConfirmMetricsRequest.MetricItem physical limit enforcement")
+    void testConfirmMetricsItemPhysicalLimitInterception() {
+        // Normal AI confirmed item
+        ConfirmMetricsRequest.MetricItem normalItem = new ConfirmMetricsRequest.MetricItem();
+        normalItem.setMetricKey("bloodGlucose");
+        normalItem.setValue(new BigDecimal("5.6"));
+        Set<ConstraintViolation<ConfirmMetricsRequest.MetricItem>> normalViolations = validator.validate(normalItem);
+        assertTrue(normalViolations.isEmpty(), "Normal glucose should pass");
+
+        // Impossible heartRate (450 bpm)
+        ConfirmMetricsRequest.MetricItem impossibleHr = new ConfirmMetricsRequest.MetricItem();
+        impossibleHr.setMetricKey("heartRate");
+        impossibleHr.setValue(new BigDecimal("450"));
+        Set<ConstraintViolation<ConfirmMetricsRequest.MetricItem>> hrViolations = validator.validate(impossibleHr);
+        assertFalse(hrViolations.isEmpty(), "Heart rate 450 bpm must be rejected");
+        assertEquals("心率有效生理区间为 20 ~ 300 次/分，请核对后重新输入", hrViolations.iterator().next().getMessage());
+
+        // Impossible temperature (55.0 °C)
+        ConfirmMetricsRequest.MetricItem impossibleTemp = new ConfirmMetricsRequest.MetricItem();
+        impossibleTemp.setMetricKey("bodyTemperature");
+        impossibleTemp.setValue(new BigDecimal("55.0"));
+        Set<ConstraintViolation<ConfirmMetricsRequest.MetricItem>> tempViolations = validator.validate(impossibleTemp);
+        assertFalse(tempViolations.isEmpty(), "Temperature 55.0 °C must be rejected");
+        assertEquals("体温有效生理区间为 34 ~ 42.5 °C，请核对后重新输入", tempViolations.iterator().next().getMessage());
+    }
+
+    @Test
+    @DisplayName("OcrConfirmRequest.MetricItem physical limit and CBC lab registry enforcement")
+    void testOcrConfirmItemPhysicalLimitInterception() {
+        // Normal OCR item passes
+        OcrConfirmRequest.MetricItem normalItem = new OcrConfirmRequest.MetricItem();
+        normalItem.setMetricKey("systolicBP");
+        normalItem.setValue(new BigDecimal("120"));
+        Set<ConstraintViolation<OcrConfirmRequest.MetricItem>> normalViolations = validator.validate(normalItem);
+        assertTrue(normalViolations.isEmpty(), "Normal SBP 120 should pass");
+
+        // Impossible systolicBP (400 mmHg)
+        OcrConfirmRequest.MetricItem impossibleSbp = new OcrConfirmRequest.MetricItem();
+        impossibleSbp.setMetricKey("systolicBP");
+        impossibleSbp.setValue(new BigDecimal("400"));
+        Set<ConstraintViolation<OcrConfirmRequest.MetricItem>> sbpViolations = validator.validate(impossibleSbp);
+        assertFalse(sbpViolations.isEmpty(), "SBP 400 mmHg must be rejected");
+        assertEquals("收缩压有效生理区间为 40 ~ 300 mmHg，请核对后重新输入", sbpViolations.iterator().next().getMessage());
+
+        // Lab routine CBC metric: impossible hemoglobin (350 g/L, limit: 20 ~ 300)
+        OcrConfirmRequest.MetricItem impossibleHb = new OcrConfirmRequest.MetricItem();
+        impossibleHb.setMetricKey("hemoglobin");
+        impossibleHb.setValue(new BigDecimal("350"));
+        Set<ConstraintViolation<OcrConfirmRequest.MetricItem>> hbViolations = validator.validate(impossibleHb);
+        assertFalse(hbViolations.isEmpty(), "Hemoglobin 350 g/L must be rejected");
+        assertEquals("血红蛋白有效生理区间为 20 ~ 300 g/L，请核对后重新输入", hbViolations.iterator().next().getMessage());
+
+        // Lab routine CBC metric: normal hemoglobin passes
+        OcrConfirmRequest.MetricItem normalHb = new OcrConfirmRequest.MetricItem();
+        normalHb.setMetricKey("hemoglobin");
+        normalHb.setValue(new BigDecimal("145"));
+        Set<ConstraintViolation<OcrConfirmRequest.MetricItem>> normalHbViolations = validator.validate(normalHb);
+        assertTrue(normalHbViolations.isEmpty(), "Hemoglobin 145 g/L should pass");
     }
 }

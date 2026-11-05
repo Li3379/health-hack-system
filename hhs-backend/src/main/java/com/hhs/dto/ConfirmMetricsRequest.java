@@ -1,5 +1,7 @@
 package com.hhs.dto;
 
+import com.hhs.service.domain.MetricValueProvider;
+import com.hhs.validation.ValidMetricRecord;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
@@ -35,8 +37,9 @@ public class ConfirmMetricsRequest {
      * 单个指标项
      */
     @Data
+    @ValidMetricRecord
     @Schema(description = "指标项")
-    public static class MetricItem {
+    public static class MetricItem implements MetricValueProvider {
 
         @NotNull(message = "指标Key不能为空")
         @Schema(description = "指标Key", example = "glucose", required = true)
