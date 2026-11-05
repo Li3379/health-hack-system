@@ -15,7 +15,7 @@
       <el-table v-loading="loading" :data="metrics" stripe>
         <el-table-column prop="metricKey" label="指标类型" width="150">
           <template #default="{ row }">
-            {{ row.metricName || getMetricLabel(row.metricKey) }}
+            {{ row.metricName || metricMetaStore.getDefinition(row.metricKey)?.displayName || getMetricLabel(row.metricKey) }}
           </template>
         </el-table-column>
         <el-table-column prop="value" label="数值" width="120">
@@ -53,26 +53,41 @@
     </el-card>
 
     <!-- 添加/编辑对话框 -->
-    <el-dialog v-model="dialogVisible" :title="dialogTitle" width="500px">
-      <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
+    <el-dialog
+      v-model="dialogVisible"
+      :title="dialogTitle"
+      width="560px"
+      destroy-on-close
+      append-to-body
+      class="prevention-metrics-dialog"
+    >
+      <el-form
+        ref="formRef"
+        :model="form"
+        :rules="rules"
+        label-position="top"
+        status-icon
+      >
+        <!-- 指标类型选择 (动态元数据驱动) -->
         <el-form-item label="指标类型" prop="metricKey">
           <el-select
             v-model="form.metricKey"
-            placeholder="请选择"
+            placeholder="请选择保健指标"
             style="width: 100%"
-            :disabled="!!editingId"
+            :disabled="editingId !== null"
+            @change="handleMetricKeyChange"
           >
             <el-option
-              v-for="(config, key) in WELLNESS_METRICS"
-              :key="key"
-              :label="config.label"
-              :value="key"
+              v-for="item in metricMetaStore.wellnessMetrics"
+              :key="item.canonicalKey"
+              :label="item.displayName"
+              :value="item.canonicalKey"
             />
           </el-select>
         </el-form-item>
 
-        <!-- 心情特殊输入 -->
-        <el-form-item v-if="form.metricKey === 'mood'" label="心情" prop="value">
+        <!-- 心情特殊输入 (1-5 星级打分) -->
+        <el-form-item v-if="form.metricKey === 'mood'" label="心情状态" prop="value">
           <div class="mood-input">
             <el-rate
               v-model="moodValue"
@@ -82,40 +97,101 @@
               @change="handleMoodChange"
             />
           </div>
+          <!-- 心情状态胶囊 -->
+          <div v-if="primaryEval" class="tier-pill-wrapper">
+            <el-tag :type="getTagType(primaryEval.status)" size="small" effect="light">
+              <el-icon><component :is="getTagIcon(primaryEval.status)" /></el-icon>
+              <span>{{ primaryEval.badgeText }}</span>
+            </el-tag>
+            <span class="eval-message">{{ primaryEval.message }}</span>
+          </div>
         </el-form-item>
 
-        <!-- 其他指标普通输入 -->
-        <el-form-item v-else label="数值" prop="value">
-          <el-input-number v-model="form.value" :precision="2" :min="0" style="width: 100%" />
-        </el-form-item>
-
-        <el-form-item label="记录日期" prop="recordDate">
-          <el-date-picker
-            v-model="form.recordDate"
-            type="date"
-            placeholder="选择日期"
-            value-format="YYYY-MM-DD"
+        <!-- 其他通用数值型生活方式指标 -->
+        <el-form-item v-else :label="definition?.displayName || '测量数值'" prop="value">
+          <el-input-number
+            v-model="form.value"
+            :precision="precision"
+            :step="step"
+            :controls="true"
+            :placeholder="placeholder"
             style="width: 100%"
           />
+          <!-- 四梯度状态胶囊微标签 -->
+          <div v-if="primaryEval" class="tier-pill-wrapper">
+            <el-tag :type="getTagType(primaryEval.status)" size="small" effect="light">
+              <el-icon><component :is="getTagIcon(primaryEval.status)" /></el-icon>
+              <span>{{ primaryEval.badgeText }}</span>
+            </el-tag>
+            <span class="eval-message">{{ primaryEval.message }}</span>
+          </div>
         </el-form-item>
+
+        <!-- 单位与记录日期行 -->
+        <el-row :gutter="16">
+          <el-col :span="10">
+            <el-form-item label="测量单位">
+              <el-input :value="definition?.unit || form.unit || ''" disabled placeholder="自动获取" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="14">
+            <el-form-item label="记录日期" prop="recordDate">
+              <el-date-picker
+                v-model="form.recordDate"
+                type="date"
+                placeholder="选择测量日期"
+                format="YYYY-MM-DD"
+                value-format="YYYY-MM-DD"
+                style="width: 100%"
+              />
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <!-- 常态化健康参考标准解读卡片 -->
+        <ReferenceGuideCard :definition="definition" />
       </el-form>
+
       <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="handleSubmit">确定</el-button>
+        <div class="dialog-footer">
+          <el-button @click="dialogVisible = false">取消</el-button>
+          <el-button
+            type="primary"
+            :loading="submitting"
+            :disabled="isSaveBlocked"
+            @click="handleSubmit"
+          >
+            {{ editingId ? '保存修改' : '确定' }}
+          </el-button>
+        </div>
       </template>
+
+      <!-- 急危重症二次确认模态窗 -->
+      <CriticalConfirmDialog
+        v-model="criticalDialogVisible"
+        :metric-name="criticalMetricName"
+        :value="criticalMetricValue"
+        :unit="criticalMetricUnit"
+        @confirm="executeSave"
+      />
     </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, reactive, computed, toRef, onMounted, onUnmounted, nextTick } from 'vue'
 import { gsap, cleanupScrollTriggers, DUR, EASE } from '@/composables/useGsap'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
-import { Plus } from '@element-plus/icons-vue'
+import { Plus, Check, Warning, Bell, CircleClose, InfoFilled } from '@element-plus/icons-vue'
 import { wellnessApi } from '@/api/wellness'
-import { formatDateTime, WELLNESS_METRICS, getMetricLabel, getMoodDescription } from '@/utils/format'
+import { formatDateTime, formatDate, getMetricLabel, getMoodDescription } from '@/utils/format'
+import { useMetricMetaStore } from '@/stores/metricMeta'
+import { useMetricValidation } from '@/composables/useMetricValidation'
+import ReferenceGuideCard from '@/views/data-input/components/ReferenceGuideCard.vue'
+import CriticalConfirmDialog from '@/views/data-input/components/CriticalConfirmDialog.vue'
 import type { WellnessMetricVO, WellnessMetricRequest } from '@/types/api'
 
+const metricMetaStore = useMetricMetaStore()
 const loading = ref(false)
 const submitting = ref(false)
 const metrics = ref<WellnessMetricVO[]>([])
@@ -132,21 +208,116 @@ const pagination = reactive({
 
 const form = reactive<WellnessMetricRequest>({
   metricKey: '',
-  value: 0,
-  recordDate: ''
+  value: undefined as any,
+  unit: '',
+  recordDate: formatDate(new Date())
+})
+
+const metricKeyRef = toRef(form, 'metricKey')
+const valueRef = toRef(form, 'value')
+
+// 引入四梯度响应式生理校验与元数据
+const {
+  definition,
+  primaryEval,
+  hasCritical,
+  isSaveBlocked
+} = useMetricValidation(metricKeyRef, valueRef)
+
+// 动态步长与精度
+const precision = computed(() => definition.value?.precision ?? 0)
+const step = computed(() => definition.value?.step ?? 1)
+
+// 动态参考区间占位符
+const placeholder = computed(() => {
+  if (definition.value?.normalMin !== undefined && definition.value?.normalMax !== undefined) {
+    return `参考范围: ${definition.value.normalMin} ~ ${definition.value.normalMax} ${definition.value.unit}`
+  }
+  return '请输入数值'
 })
 
 // 心情星级值（1-5）
 const moodValue = computed({
-  get: () => Math.round(form.value) || 3,
+  get: () => (form.value !== undefined ? Math.round(form.value) : 3),
   set: (val: number) => {
     form.value = val
   }
 })
 
+const handleMoodChange = (val: number) => {
+  form.value = val
+}
+
+const handleMetricKeyChange = (key: string) => {
+  const def = metricMetaStore.getDefinition(key)
+  form.unit = def?.unit || ''
+  if (key === 'mood') {
+    if (!form.value || form.value < 1 || form.value > 5) {
+      form.value = 3
+    }
+  }
+  formRef.value?.clearValidate('value')
+}
+
+// 状态标签色彩与图标
+const getTagType = (status: string) => {
+  switch (status) {
+    case 'success':
+      return 'success'
+    case 'warning':
+      return 'warning'
+    case 'danger':
+    case 'hard_danger':
+      return 'danger'
+    default:
+      return 'info'
+  }
+}
+
+const getTagIcon = (status: string) => {
+  switch (status) {
+    case 'success':
+      return Check
+    case 'warning':
+      return Warning
+    case 'danger':
+      return Bell
+    case 'hard_danger':
+      return CircleClose
+    default:
+      return InfoFilled
+  }
+}
+
+// 表单非破坏性宽容校验规则
+const validateValue = (_rule: any, value: number, callback: any) => {
+  if (form.metricKey === 'mood') {
+    if (value === undefined || value === null || value < 1 || value > 5) {
+      callback(new Error('请选择心情评级'))
+      return
+    }
+    callback()
+    return
+  }
+
+  if (value === undefined || value === null || isNaN(value)) {
+    callback(new Error('请输入数值'))
+    return
+  }
+
+  // Tier 4 生理不可能极限强行拦截
+  if (primaryEval.value?.isHardLimit) {
+    callback(new Error(primaryEval.value.message))
+    return
+  }
+
+  // Tier 1 正常、Tier 2 预警偏差、Tier 3 急危重症放行
+  callback()
+}
+
 const rules: FormRules = {
   metricKey: [{ required: true, message: '请选择指标类型', trigger: 'change' }],
-  value: [{ required: true, message: '请输入数值', trigger: 'blur' }],
+  value: [{ required: true, validator: validateValue, trigger: 'change' }],
   recordDate: [{ required: true, message: '请选择记录日期', trigger: 'change' }]
 }
 
@@ -169,28 +340,50 @@ const fetchMetrics = async () => {
 const showAddDialog = () => {
   dialogTitle.value = '添加保健指标'
   editingId.value = null
+  const defaultKey = metricMetaStore.wellnessMetrics[0]?.canonicalKey || 'steps'
+  const def = metricMetaStore.getDefinition(defaultKey)
   Object.assign(form, {
-    metricKey: '',
-    value: 0,
-    recordDate: new Date().toISOString().split('T')[0]
+    metricKey: defaultKey,
+    value: undefined,
+    unit: def?.unit || '',
+    recordDate: formatDate(new Date())
   })
   dialogVisible.value = true
+  setTimeout(() => {
+    formRef.value?.clearValidate()
+  }, 0)
 }
 
 const handleEdit = (row: WellnessMetricVO) => {
   dialogTitle.value = '编辑保健指标'
   editingId.value = row.id
+  const def = metricMetaStore.getDefinition(row.metricKey)
   Object.assign(form, {
     metricKey: row.metricKey,
     value: row.value,
+    unit: row.unit || def?.unit || '',
     recordDate: row.recordDate
   })
   dialogVisible.value = true
+  setTimeout(() => {
+    formRef.value?.clearValidate()
+  }, 0)
 }
 
-const handleMoodChange = (val: number) => {
-  form.value = val
-}
+// 急危重症二次确认模态窗控制
+const criticalDialogVisible = ref(false)
+
+const criticalMetricName = computed(() => {
+  return definition.value?.displayName || form.metricKey || '指标'
+})
+
+const criticalMetricValue = computed<number | string>(() => {
+  return form.value ?? 0
+})
+
+const criticalMetricUnit = computed(() => {
+  return definition.value?.unit || form.unit || ''
+})
 
 const handleSubmit = async () => {
   if (!formRef.value) return
@@ -198,23 +391,40 @@ const handleSubmit = async () => {
   await formRef.value.validate(async valid => {
     if (!valid) return
 
-    submitting.value = true
-    try {
-      if (editingId.value) {
-        await wellnessApi.updateMetric(editingId.value, form)
-        ElMessage.success('更新成功')
-      } else {
-        await wellnessApi.createMetric(form)
-        ElMessage.success('添加成功')
-      }
-      dialogVisible.value = false
-      fetchMetrics()
-    } catch (error) {
-      ElMessage.error(editingId.value ? '更新失败' : '添加失败')
-    } finally {
-      submitting.value = false
+    if (hasCritical.value) {
+      criticalDialogVisible.value = true
+      return
     }
+
+    await executeSave()
   })
+}
+
+const executeSave = async () => {
+  submitting.value = true
+  try {
+    const canonicalKey = definition.value?.canonicalKey || form.metricKey
+    const payload: WellnessMetricRequest = {
+      metricKey: canonicalKey,
+      value: form.value!,
+      unit: form.unit || definition.value?.unit,
+      recordDate: form.recordDate
+    }
+
+    if (editingId.value) {
+      await wellnessApi.updateMetric(editingId.value, payload)
+      ElMessage.success('更新成功')
+    } else {
+      await wellnessApi.createMetric(payload)
+      ElMessage.success('添加成功')
+    }
+    dialogVisible.value = false
+    fetchMetrics()
+  } catch (error) {
+    ElMessage.error(editingId.value ? '更新失败' : '添加失败')
+  } finally {
+    submitting.value = false
+  }
 }
 
 const handleDelete = async (row: WellnessMetricVO) => {
@@ -232,7 +442,7 @@ const handleDelete = async (row: WellnessMetricVO) => {
   }
 }
 
-// Format value display (especially for mood)
+// 格式化数值展示
 const formatValue = (key: string, value: number): string => {
   if (key === 'mood') {
     return `${value} (${getMoodDescription(value)})`
@@ -241,6 +451,7 @@ const formatValue = (key: string, value: number): string => {
 }
 
 onMounted(() => {
+  metricMetaStore.fetchMetadata()
   fetchMetrics()
 
   nextTick(() => {
@@ -255,7 +466,10 @@ onMounted(() => {
     , '-=0.2')
   })
 })
-onUnmounted(() => { cleanupScrollTriggers() })
+
+onUnmounted(() => {
+  cleanupScrollTriggers()
+})
 </script>
 
 <style scoped>
@@ -277,6 +491,26 @@ onUnmounted(() => { cleanupScrollTriggers() })
 
 .mood-input {
   width: 100%;
-  padding: 10px 0;
+  padding: 8px 0;
+}
+
+.tier-pill-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+
+.eval-message {
+  font-size: 11px;
+  color: var(--el-text-color-secondary, #909399);
+  line-height: 1.3;
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
 }
 </style>
