@@ -40,7 +40,28 @@
 
 ---
 
-## Future Requirements (v1.2+)
+## v1.2 Requirements (全站健康与保健指标录入标准化与体验对齐)
+
+### HEALTH — 健康指标录入对齐 (Health Metric Input Alignment)
+
+- [ ] **HEALTH-01**: `src/views/health/Metrics.vue` 弹窗重构为动态从 `useMetricMetaStore` 获取指标列表、单位、精度、步长与参考范围占位符，彻底废除硬编码的 7 项 `el-option` 与 `metricUnitMap` 私有字典
+- [ ] **HEALTH-02**: `src/views/health/Metrics.vue` 实现血压收缩压与舒张压协同双字段录入、倒置警示检测与一键对调能力，支持在列表页中统一录入与编辑
+- [ ] **HEALTH-03**: `src/views/health/Metrics.vue` 接入四梯度纯函数医学校验引擎与非破坏性失焦保护，超出正常范围展示状态胶囊与解释性文案，危急值触发二次确认弹窗，物理极限拦截但不抹除输入
+
+### WELL — 保健生活指标录入对齐 (Wellness Metric Input Alignment)
+
+- [ ] **WELL-01**: `src/views/prevention/Metrics.vue` 与 `src/views/wellness/Dashboard.vue` 统一接入权威元数据 Store，废除私有 `WELLNESS_METRICS` 硬编码字典与固定 `precision=2/1`
+- [ ] **WELL-02**: 保健指标录入保留心情（mood）特有的 1-5 星级打分机制，其他数值型指标（喝水、睡眠、步数、卡路里等）自动匹配推荐步长与精度，并展示常态化参考解读卡片
+- [ ] **WELL-03**: 保健指标录入接入四梯度宽容校验与非破坏性失焦保护，避免生硬红色报错与强制清空，支持异常数值顺利留存
+
+### REUSE — 通用表单复用与编辑一致性 (Reusable Input Form & UX Cohesion)
+
+- [ ] **REUSE-01**: 提炼/封装可复用的健康与保健指标录入组件（或基于 `QuickInputDialog` 模式抽象共享组件），统一健康指标与保健指标的表单排版、`ReferenceGuideCard` 与 `CriticalConfirmDialog` 交互，消除三个页面间的重复代码
+- [ ] **REUSE-02**: 指标编辑模式（修改既有记录）完整接入四梯度校验与元数据绑定，防止编辑历史数据时出现破坏性清空或校验规则不一致
+
+---
+
+## Future Requirements (v1.3+)
 
 ### Personalized Baseline
 
@@ -81,6 +102,14 @@
 | VAL-04 | Phase 6 | Complete |
 | VAL-05 | Phase 6 | Complete |
 | SYNC-01 | Phase 7 | Pending |
+| HEALTH-01 | Phase 8 | Pending |
+| HEALTH-02 | Phase 8 | Pending |
+| HEALTH-03 | Phase 8 | Pending |
+| WELL-01 | Phase 9 | Pending |
+| WELL-02 | Phase 9 | Pending |
+| WELL-03 | Phase 9 | Pending |
+| REUSE-01 | Phase 10 | Pending |
+| REUSE-02 | Phase 10 | Pending |
 
 ---
 *Requirements defined: 2026-11-04 after research synthesis*
