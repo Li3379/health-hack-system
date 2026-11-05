@@ -95,6 +95,16 @@ describe('metricValidation', () => {
       expect(res?.isHardLimit).toBe(false)
     })
 
+    it('should evaluate glucose and diastolic definitions and check PANIC_LIMITS', () => {
+      expect(PANIC_LIMITS.bloodGlucose).toBeDefined()
+      const diastolicNormal = evaluateMetricValue(80, diastolicDef)
+      expect(diastolicNormal?.tier).toBe('NORMAL')
+
+      const glucoseCritical = evaluateMetricValue(20.0, glucoseDef)
+      expect(glucoseCritical?.tier).toBe('CRITICAL')
+      expect(glucoseCritical?.isCritical).toBe(true)
+    })
+
     it('should safely fall back when definition is missing', () => {
       const res = evaluateMetricValue(100, undefined)
       expect(res).not.toBeNull()
