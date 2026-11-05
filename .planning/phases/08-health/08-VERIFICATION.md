@@ -12,7 +12,7 @@ covered_files:
   - "hhs-frontend-v2/src/__tests__/views/Metrics.spec.ts"
   - "hhs-frontend-v2/src/composables/useMetricValidation.ts"
   - "hhs-frontend-v2/src/views/health/Metrics.vue"
-covered_digest: "v1:sha256:0e263e8c63321d0dee45ec5afde8e0469cc88b9f7e76881a554f6b7a50fb1425"
+covered_digest: "v1:sha256:fc31e16eb330f0436bcd05ee14399adc1918875fdc545ad135b20385adb99dbe"
 behavior_unverified: 0
 overrides_applied: 0
 human_verification:

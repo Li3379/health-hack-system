@@ -3,7 +3,7 @@
 ## Milestones
 
 - ✅ **v1.0 Optimization & Redeployment** — Phases 1-3 (completed 2026-05-29)
-- 🚧 **v1.1 智能健康指标填报引导与友好校验** — Phases 4-7 (in progress)
+- ✅ **v1.1 智能健康指标填报引导与友好校验** — Phases 4-7 (completed 2026-11-05)
 - 🚧 **v1.2 全站健康与保健指标录入标准化与体验对齐** — Phases 8-10 (in progress)
 
 ## Phases
@@ -14,7 +14,7 @@
 - [x] **Phase 7: 全渠道校验对齐与跨端测试验证** - 统一 AI 解析与 OCR 识别校验引擎，跨渠道全链路测试闭环 (completed 2026-11-05)
 - [x] **Phase 8: 健康指标管理页录入与编辑对齐** - 将 health/Metrics.vue 录入与编辑弹窗重构为权威元数据驱动，支持血压双字段协同与四梯度宽容校验 (completed 2026-11-05)
 - [x] **Phase 9: 保健指标管理页录入对齐** - 将 prevention/Metrics.vue 与 wellness/Dashboard.vue 统一接入权威元数据，对齐心情评星与四梯度宽容校验 (completed 2026-11-05)
-- [ ] **Phase 10: 指标录入通用交互组件封装与全站验证** - 提炼高复用指标表单交互组件，统一编辑模式与全站体验一致性验证
+- [x] **Phase 10: 指标录入通用交互组件封装与全站验证** - 提炼高复用指标表单交互组件，统一编辑模式与全站体验一致性验证 (completed 2026-11-05)
 
 ## Phase Details
 
@@ -173,7 +173,17 @@ Plans:
   2. 用户对既有历史指标进行“编辑”修改时，弹窗完整加载该指标的历史值与对应权威元数据规则，编辑过程中的非破坏性失焦保护与四梯度校验与新增模式完全一致，杜绝任何字段清空或规则脱节
   3. 全站指标录入全流程完成自动化与交互回归测试，前端单测覆盖新增与重构的录入组件，无 ESLint/TypeScript 类型报错
 
-**Plans**: TBD
+**Plans:** 2/2 plans complete
+
+Plans:
+**Wave 1**
+
+- [x] 10-01-PLAN.md — UniversalMetricDialog 提炼封装与向后兼容适配
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [x] 10-02-PLAN.md — 三大核心页面收敛接入 UniversalMetricDialog 与全站回归
+
 **UI hint**: yes
 
 ## Progress
@@ -186,4 +196,4 @@ Plans:
 | 7. 全渠道校验对齐与跨端测试验证 | 3/3 | Complete    | 2026-11-05 |
 | 8. 健康指标管理页录入与编辑对齐 | 2/2 | Complete    | 2026-11-05 |
 | 9. 保健指标管理页录入对齐 | 2/2 | Complete    | 2026-11-05 |
-| 10. 指标录入通用交互组件封装与全站验证 | 0/0 | Not started | - |
+| 10. 指标录入通用交互组件封装与全站验证 | 2/2 | Complete    | 2026-11-05 |

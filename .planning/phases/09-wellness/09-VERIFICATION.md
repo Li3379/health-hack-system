@@ -13,7 +13,7 @@ covered_files:
   - "hhs-frontend-v2/src/utils/metricValidation.ts"
   - "hhs-frontend-v2/src/views/prevention/Metrics.vue"
   - "hhs-frontend-v2/src/views/wellness/Dashboard.vue"
-covered_digest: "v1:sha256:ab9d43aab678cb246d552f4fab08b77d14fbef8cb7a07249929f6257c96b01db"
+covered_digest: "v1:sha256:c772f84c3fc6961a0c77049dbe8d67374f5fdfd5e55cdcf8ffb8a15537862155"
 behavior_unverified: 0
 overrides_applied: 0
 human_verification:

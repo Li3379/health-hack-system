@@ -56,8 +56,8 @@
 
 ### REUSE — 通用表单复用与编辑一致性 (Reusable Input Form & UX Cohesion)
 
-- [ ] **REUSE-01**: 提炼/封装可复用的健康与保健指标录入组件（或基于 `QuickInputDialog` 模式抽象共享组件），统一健康指标与保健指标的表单排版、`ReferenceGuideCard` 与 `CriticalConfirmDialog` 交互，消除三个页面间的重复代码
-- [ ] **REUSE-02**: 指标编辑模式（修改既有记录）完整接入四梯度校验与元数据绑定，防止编辑历史数据时出现破坏性清空或校验规则不一致
+- [x] **REUSE-01**: 提炼/封装可复用的健康与保健指标录入组件（或基于 `QuickInputDialog` 模式抽象共享组件），统一健康指标与保健指标的表单排版、`ReferenceGuideCard` 与 `CriticalConfirmDialog` 交互，消除三个页面间的重复代码
+- [x] **REUSE-02**: 指标编辑模式（修改既有记录）完整接入四梯度校验与元数据绑定，防止编辑历史数据时出现破坏性清空或校验规则不一致
 
 ---
 
