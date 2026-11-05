@@ -36,7 +36,7 @@
 
 ### SYNC — 全渠道输入规则对齐 (Cross-Channel Consistency)
 
-- [ ] **SYNC-01**: 重构 `AiParseServiceImpl.java` 与 OCR 图片识别确认流程，底层完全接入权威元数据注册表，确保 AI 解析提示、识别校验与手动表单规则 100% 统一
+- [x] **SYNC-01**: 重构 `AiParseServiceImpl.java` 与 OCR 图片识别确认流程，底层完全接入权威元数据注册表，确保 AI 解析提示、识别校验与手动表单规则 100% 统一
 
 ---
 
@@ -101,7 +101,7 @@
 | VAL-03 | Phase 6 | Complete |
 | VAL-04 | Phase 6 | Complete |
 | VAL-05 | Phase 6 | Complete |
-| SYNC-01 | Phase 7 | Pending |
+| SYNC-01 | Phase 7 | Complete |
 | HEALTH-01 | Phase 8 | Complete |
 | HEALTH-02 | Phase 8 | Complete |
 | HEALTH-03 | Phase 8 | Complete |
