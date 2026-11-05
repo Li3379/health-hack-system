@@ -320,4 +320,44 @@ describe('health/Metrics.vue', () => {
     // Value remains 400 (not wiped!)
     expect(vm.form.value).toBe(400)
   })
+
+  it('CR-01 & WR-01 & WR-02 & WR-04: should handle action=add, key switching, legacy alias edit, and filter pagination reset', async () => {
+    // Test WR-04: filter query resets page to 1
+    const wrapper = mount(Metrics, {
+      global: {
+        stubs: globalStubs,
+        directives: { loading: () => {} }
+      }
+    })
+    await flushPromises()
+
+    const vm = wrapper.vm as any
+    vm.pagination.page = 3
+    vm.handleFilterQuery()
+    expect(vm.pagination.page).toBe(1)
+
+    // Test WR-01: handleMetricKeyChange resets values and sets unit for bloodPressure
+    vm.showAddDialog()
+    vm.form.value = 120
+    vm.form.diastolicValue = 80
+    vm.handleMetricKeyChange('bloodPressure')
+    expect(vm.form.unit).toBe('mmHg')
+    expect(vm.form.value).toBeUndefined()
+    expect(vm.form.diastolicValue).toBeUndefined()
+
+    // Test WR-02: handleEdit normalizes legacy aliases like glucose to bloodGlucose
+    const legacyRow = {
+      id: 101,
+      metricKey: 'glucose',
+      metricName: '血糖',
+      value: 6.0,
+      unit: 'mmol/L',
+      recordDate: '2026-11-05',
+      trend: 'STABLE',
+      createTime: '2026-11-05 10:00:00'
+    }
+    vm.handleEdit(legacyRow)
+    expect(vm.form.metricKey).toBe('bloodGlucose')
+    expect(vm.form.unit).toBe('mmol/L')
+  })
 })
