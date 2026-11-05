@@ -528,7 +528,6 @@ const addCriticalMetricUnit = computed(() => {
 })
 
 const handleAddMetric = async () => {
-  if (adding.value) return
   if (!addFormRef.value) return
 
   await addFormRef.value.validate(async valid => {

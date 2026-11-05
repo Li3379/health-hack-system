@@ -128,13 +128,13 @@ export function checkBloodPressureInversion(
   if (
     systolic === undefined ||
     systolic === null ||
-    isNaN(systolic) ||
+    isNaN(Number(systolic)) ||
     diastolic === undefined ||
     diastolic === null ||
-    isNaN(diastolic)
+    isNaN(Number(diastolic))
   ) {
     return false
   }
 
-  return systolic <= diastolic
+  return Number(systolic) <= Number(diastolic)
 }
