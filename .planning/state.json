@@ -1,7 +1,7 @@
 {
   "contract": "1.0.0",
   "flavor": "core",
-  "milestone": "v1.2 — 全站健康与保健指标录入标准化与体验对齐",
+  "milestone": "v1.3",
   "phases": [
     {
       "number": "4",
@@ -40,9 +40,9 @@
     }
   ],
   "next": {
-    "command": "/gsd:new-milestone",
-    "label": "Start a new milestone",
-    "reason": "All phases complete — start a new milestone"
+    "command": "/gsd:discuss-phase",
+    "label": "Discuss the first phase",
+    "reason": "Project initialized — plan your first phase"
   },
-  "updated_at": "2026-11-05T13:23:41.940Z"
+  "updated_at": "2026-11-05T13:54:53.876Z"
 }
