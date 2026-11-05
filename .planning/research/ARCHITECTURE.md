@@ -1,95 +1,187 @@
 # Architecture Research
 
-**Domain:** 智能健康指标填报引导、统一校验管线与元数据架构 (Intelligent Health Metric Guidance & Validation Pipeline)  
-**Researched:** 2026-11-04  
-**Confidence:** HIGH (基于 HHS 全栈代码审计、MySQL 数据库结构、现有集成测试以及国家临床参考区间标准)
+**Domain:** 既有 Spring Boot 3.2 + Vue 3 单体应用的增量能力集成 — 统一错误反馈层、阈值关系校验、健康档案完整度与下游依赖门控
+**Researched:** 2026-11-05
+**Confidence:** HIGH（结论基于对仓库现有代码的逐行审计；所有集成点均已定位到文件与行号）
+
+---
+
+## Scope & Method
+
+本文件回答一个**集成问题**，而非绿地设计问题：三项新能力如何嵌入既有架构，才能不破坏 v1.0–v1.2 已交付的行为（四梯度校验、UniversalMetricDialog、元数据 SSOT、评分持久化、CI/CD 流水线）。
+
+研究方式：以仓库为第一手来源，读取 `request.ts`、`GlobalExceptionHandler`、`Result<T>`、`ErrorCode`、`UserThresholdRequest/ServiceImpl/Controller`、`ThresholdRangeChecker/Comparator/Evaluator`、`ProfileScorer`、`RiskAssessmentServiceImpl`、`HealthReportServiceImpl`、`AIChatServiceImpl`、`AlertAIAnalysisService`、`HealthScoreServiceImpl`、`UniversalMetricDialog.vue`、`Thresholds.vue`、`Profile.vue`、`metricMeta.ts`、`metricValidation.ts`，并核对本地 `element-plus` 类型声明（`FormInstance.validateField`、`FormItem.error`）。未依赖外部二手资料。
 
 ---
 
 ## Standard Architecture
 
-### System Overview
-
-本架构设计旨在彻底解决 HHS 当前健康指标体系中存在的“定义碎片化”、“校验生硬破坏输入”、“Key命名不统一（驼峰/下划线/缩写）致使用户端英文外露”以及“病理异常值被当作非法输入拦截”四大痛点。
-
-系统在后端建立**指标元数据单一事实源 (SSOT, Single Source of Truth)**，对外提供统一的元数据字典接口，并在数据接入链路嵌入**指标 Key 归一化**与**分级宽容校验管线**；前端通过 Pinia 元数据 Store 缓存字典，实现表单控件属性（单位、步长、精度、范围）的动态绑定，并在用户输入过程中实时呈现解释性引导反馈。
+### System Overview — 三项能力的落点
 
 ```
-┌────────────────────────────────────────────────────────────────────────────────────────┐
-│                                前端交互层 (Vue 3 + Element Plus)                        │
-├────────────────────────────────────────────────────────────────────────────────────────┤
-│  ┌──────────────────────┐  ┌─────────────────────┐  ┌───────────────────────────────┐  │
-│  │ QuickInputDialog.vue │  │ QuickInput.vue      │  │ Metrics.vue / Thresholds.vue  │  │
-│  │ (动态步长/范围/引导) │  │ (智能快捷入口)      │  │ (动态下拉选项/无硬编码)       │  │
-│  └──────────┬───────────┘  └──────────┬──────────┘  └───────────────┬───────────────┘  │
-│             │                         │                             │                  │
-├─────────────┴─────────────────────────┴─────────────────────────────┴──────────────────┤
-│                               前端状态与引导逻辑层 (Pinia & Composables)                │
-├────────────────────────────────────────────────────────────────────────────────────────┤
-│  ┌──────────────────────────────────────────────────────────────────────────────────┐  │
-│  │ useMetricMetaStore (Pinia 字典缓存: 权威中文名、单位、精度、四级阈值、引导文案)   │  │
-│  ├──────────────────────────────────────────────────────────────────────────────────┤  │
-│  │ useMetricValidation (组合式校验函数: 实时计算健康等级胶囊、柔性提示、错误解释)   │  │
-│  ├──────────────────────────────────────────────────────────────────────────────────┤  │
-│  │ metricNormalizer.ts / format.ts (双向归一化转换器: 杜绝英文Key外露)              │  │
-│  └──────────────────────────────────────────┬───────────────────────────────────────┘  │
-│                                             │ HTTP GET /api/metrics/metadata           │
-├─────────────────────────────────────────────┼──────────────────────────────────────────┤
-│                                后端接入层 (Spring Boot REST Controllers)                │
-├─────────────────────────────────────────────┼──────────────────────────────────────────┤
-│  ┌───────────────────────────────┐          │          ┌────────────────────────────┐  │
-│  │ MetricMetadataController      │◄─────────┘          │ HealthMetricController     │  │
-│  │ (GET /api/metrics/metadata)   │                     │ WellnessController         │  │
-│  │ (GET /api/metrics/categories) │                     │ AiParseController          │  │
-│  └──────────────┬────────────────┘                     └─────────────┬──────────────┘  │
-│                 │                                                    │                 │
-├─────────────────┴────────────────────────────────────────────────────┴─────────────────┤
-│                             后端领域元数据与校验层 (Domain Core)                       │
-├────────────────────────────────────────────────────────────────────────────────────────┤
-│  ┌─────────────────────────────────┐           ┌────────────────────────────────────┐  │
-│  │ MetricMetadataRegistry (SSOT)   │           │ MetricKeyNormalizer                │  │
-│  │ (19+指标全属性内存元数据注册表)  │◄──────────┤ (camelCase/snake_case/别名自适应)  │  │
-│  └──────────────┬──────────────────┘           └─────────────────┬──────────────────┘  │
-│                 │                                                │                     │
-│                 │               ┌────────────────────────────────┴──────────────────┐  │
-│                 └──────────────►│ MetricValidationPipeline (分级校验管线)            │  │
-│                                 │ - Tier 1: 生理极限物理不可能 (Hard Block 拒绝入库)│  │
-│                                 │ - Tier 2: 临床危急值区间 (Critical 二次核对保存)  │  │
-│                                 │ - Tier 3: 异常警戒区间 (Warning 解释性提示保存)   │  │
-│                                 │ - Tier 4: 理想生理区间 (Normal 绿色常态)          │  │
-│                                 └────────────────────────┬──────────────────────────┘  │
-│                                                          │                             │
-├──────────────────────────────────────────────────────────┴─────────────────────────────┤
-│                             业务服务与数据持久层 (Services & Persistence)              │
-├────────────────────────────────────────────────────────────────────────────────────────┤
-│  ┌────────────────────────┐  ┌─────────────────────────┐  ┌─────────────────────────┐  │
-│  │ HealthMetricServiceImpl│  │ AiParseServiceImpl      │  │ MetricsScorer /         │  │
-│  │ (指标增删改查/事件发布)│  │ (统一校验与提示词对齐)  │  │ WellnessScorer          │  │
-│  └───────────┬────────────┘  └────────────┬────────────┘  └────────────┬────────────┘  │
-│              │                            │                            │               │
-│  ┌───────────┴────────────┐  ┌────────────┴────────────┐  ┌────────────┴────────────┐  │
-│  │ Redis (metric_meta缓存)│  │ MySQL 8.0               │  │ ApplicationEventPublisher│ │
-│  │ (sub-ms 元数据响应)    │  │ (health_metric 等表)    │  │ (MetricRecordedEvent)   │  │
-│  └────────────────────────┘  └─────────────────────────┘  └─────────────────────────┘  │
-└────────────────────────────────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────────────────┐
+│                        前端展示层 (Vue 3 + Element Plus)                       │
+├───────────────────────────────────────────────────────────────────────────────┤
+│  UniversalMetricDialog   Thresholds.vue   Profile.vue   Risk.vue   Score.vue  │
+│        │                      │                │             │          │      │
+│        │  useFormServerErrors (NEW) │          │             │          │      │
+│        ▼                      ▼                ▼             ▼          ▼      │
+│  ┌────────────────────────────────────────┐  ┌──────────────────────────────┐ │
+│  │ showError() / ApiError  (NEW appError) │  │ useProfileReadinessStore(NEW)│ │
+│  │ 唯一 toast 出口 + 字段错误归一化        │  │ 会话级单次拉取 + 失效重取     │ │
+│  └────────────────┬───────────────────────┘  └──────────────┬───────────────┘ │
+│                   │                                          │                │
+│  ┌────────────────▼───────────────────────┐                  │                │
+│  │ request.ts  (MODIFIED: 只翻译不展示)    │                  │                │
+│  │ + silent 请求级配置 + Accept-Language   │                  │                │
+│  └────────────────┬───────────────────────┘                  │                │
+├───────────────────┼──────────────────────────────────────────┼────────────────┤
+│                   │ HTTP                                     │ HTTP           │
+│                   ▼                                          ▼                │
+│  ┌────────────────────────────────────────┐  ┌──────────────────────────────┐ │
+│  │ GlobalExceptionHandler (MODIFIED)      │  │ PreventionController         │ │
+│  │ → Result {code,errorCode,message,      │  │ GET /profile/readiness (NEW) │ │
+│  │           fieldErrors[]}               │  └──────────────┬───────────────┘ │
+│  └────────────────┬───────────────────────┘                 │                 │
+├───────────────────┼─────────────────────────────────────────┼─────────────────┤
+│                   ▼                                         ▼                 │
+│  ┌──────────────────────────────┐   ┌───────────────────────────────────────┐ │
+│  │ @ValidThresholdRange (NEW)   │   │ ProfileReadinessService (NEW)         │ │
+│  │ ThresholdRangeValidator(NEW) │   │  └ ProfileCompletenessCalculator(NEW) │ │
+│  │ 挂载 UserThresholdRequest    │   │      ↑ 复用（重构）ProfileScorer      │ │
+│  └──────────────┬───────────────┘   └───────────────┬───────────────────────┘ │
+│                 ▼                                   ▼                         │
+│  ┌──────────────────────────────┐   ┌───────────────────────────────────────┐ │
+│  │ UserThresholdServiceImpl     │   │ HealthProfileMapper（单次读取）        │ │
+│  │ (MODIFIED: 仅补测试与委托)    │   │ RiskAssessment / Report / AIChat      │ │
+│  └──────────────────────────────┘   │ 各自 getProfileByUserId（现状保留）    │ │
+│                                      └───────────────────────────────────────┘ │
+│  ┌──────────────────────────────────────────────────────────────────────────┐  │
+│  │ ThresholdRangeChecker (BUG FIX: isWarningRange 条件颠倒) → 统一 classify │  │
+│  └──────────────────────────────────────────────────────────────────────────┘  │
+└───────────────────────────────────────────────────────────────────────────────┘
 ```
-
----
 
 ### Component Responsibilities
 
-| Component | Responsibility | Typical Implementation |
-|-----------|----------------|------------------------|
-| **`MetricMetadataRegistry`** (Backend NEW) | 指标元数据全生命周期单一事实源 (SSOT)。管理全部 19+ 种健康/保健指标的标准 Key、别名列表、中文名、单位、输入精度、步长、生理极限区间、临床参考区间及引导提示文案。 | Spring `@Component` 托管的不可变注册表，初始化载入常驻内存，结合 `@Cacheable` 或高并发只读 Map 提供 sub-millisecond 查询性能。 |
-| **`MetricKeyNormalizer`** (Backend NEW) | 跨渠道多命名规范自适应归一化器。统一将 `camelCase`（如 `heartRate`）、`snake_case`（如 `heart_rate`）、`SCREAMING_SNAKE`（如 `HEART_RATE`）以及历史别名（如 `bodyTemperature`、`temp`、`spo2`）转化为权威 Canonical Key。 | 静态/组件级双向映射哈希表，内建别名反查索引与首字母缩写保护规则（避免 `systolicBP` 被误转为 `systolicBp`）。 |
-| **`MetricValidationPipeline`** (Backend NEW) | 四梯度分级校验引擎。替代原有的粗暴 `@DecimalMax("1000.0")`。负责：1) 物理不可能极值硬性拦截；2) 复合指标逻辑完整性校验（如收缩压必须大于舒张压）；3) 临床异常与急危值判定并生成医学解释性建议。 | 领域服务组件，输出包含 `isValid`、`severity` (NORMAL/WARN/CRITICAL/HARD_LIMIT)、`message` 和 `suggestion` 的结构化校验结果。 |
-| **`MetricMetadataController`** (Backend NEW) | 前后端元数据同步网关。向前端暴露 `/api/metrics/metadata` 接口，支持 HTTP 缓存头与全量字典下发。 | Spring MVC `@RestController`，输出 `Result<Map<String, MetricMetaVO>>`。 |
-| **`ValidMetricRecord` / `MetricRecordValidator`** (Backend NEW) | 声明式请求对象级 Bean 校验器。挂载在 DTO 类级别，实现请求反序列化后的即时动态范围校验。 | Jakarta Bean Validation `ConstraintValidator<ValidMetricRecord, Object>` 实现。 |
-| **`useMetricMetaStore`** (Frontend NEW) | 前端全局元数据状态管理。负责应用启动或首次使用时拉取元数据字典，建立内存别名索引，提供统一的名称查询、单位查询、输入参数获取接口。 | Pinia Store (`stores/metricMeta.ts`)，具备本地只读兜底配置，离线或断网依然可用。 |
-| **`useMetricValidation`** (Frontend NEW) | 前端交互式校验组合式函数。监听用户输入，实时计算健康状态胶囊、提供华氏度/单位失误自纠诊断，配合 Element Plus `async-validator` 实现非阻塞体验。 | Vue 3 Composable (`composables/useMetricValidation.ts`)。 |
-| **`metricNormalizer.ts` / `format.ts`** (Frontend MODIFIED) | 前端显示映射与格式化中枢。扩展现有 `format.ts`，重定向所有指标标签与单位查询至统一归一化逻辑，确保全系统任意位置绝不泄漏英文代码。 | 统一桥接函数，包含保底别名映射表。 |
-| **`QuickInputDialog.vue`** (Frontend MODIFIED) | 快捷指标录入弹窗。彻底移除硬编码 `METRIC_RANGES` 与失焦清空输入框的破坏性逻辑，动态应用元数据的精度、步长、范围，提供直观状态引导。 | Element Plus 表单，集成动态占位符与分级提示 Banner。 |
-| **`AiParseServiceImpl`** (Backend MODIFIED) | 智能语义解析服务。将内部硬编码的 `METRIC_RANGES`、`HEALTH_KEYS`、`WELLNESS_KEYS` 收敛至 `MetricMetadataRegistry`，提示词对照表动态同步。 | 注入 `MetricMetadataRegistry`，统一生成异常 warning 文案。 |
+| Component | Responsibility | Home | New/Modified |
+|-----------|----------------|------|--------------|
+| **`Result<T>`** | 统一响应信封；新增 `errorCode`（字符串）与 `fieldErrors`（结构化）两个可选字段 | `common/Result.java` | MODIFIED |
+| **`FieldErrorVO`** | 字段级错误载荷 `{field, message, code?}`，替代当前 `List<String>` 的 `"field: msg"` 字符串拼接 | `vo/FieldErrorVO.java` | NEW |
+| **`GlobalExceptionHandler`** | 所有异常收敛为同一信封；validation 分支产出 `fieldErrors`；保留 HTTP 语义不变 | `exception/GlobalExceptionHandler.java` | MODIFIED |
+| **`ApiError` + `normalizeApiError`** | 前端唯一错误模型：`kind`（validation/auth/network/server/business）、`message`、`fieldErrors: Record<field,string>`、`status`、`code` | `utils/appError.ts` | NEW |
+| **`request.ts`** | 只做**翻译与拒绝**，不做展示（401 例外）；支持 `silent` 请求配置；固定 `Accept-Language` | `utils/request.ts` | MODIFIED |
+| **`useFormServerErrors`** | 把 `fieldErrors` 绑定到 `el-form-item :error`，提交时清空、成功后清空 | `composables/useFormServerErrors.ts` | NEW |
+| **`@ValidThresholdRange` + `ThresholdRangeValidator`** | 类级跨字段约束，校验 `criticalLow < warningLow < warningHigh < criticalHigh`（null 表示无界） | `validation/` | NEW |
+| **`thresholdValidation.ts`** | 前端同构纯函数，用于即时禁用保存与内联提示（仅 UX 前置，非权威） | `utils/thresholdValidation.ts` | NEW |
+| **`ThresholdRangeChecker`** | 现有四态判定；`isWarningRange` 逻辑缺陷需修复 | `service/domain/ThresholdRangeChecker.java` | MODIFIED (bug fix) |
+| **`ProfileCompletenessCalculator`** | 纯函数：由 `HealthProfile`（可为 null）推导完整度分数、缺失字段、每项权重与下游影响 | `service/domain/ProfileCompletenessCalculator.java` | NEW |
+| **`ProfileScorer`** | 改为委托 `ProfileCompletenessCalculator`，消除第二套完整度规则 | `service/domain/ProfileScorer.java` | MODIFIED |
+| **`ProfileReadinessService` / `Impl`** | 单次读取档案 → 组装 `ProfileReadinessVO`（完整度 + 下游依赖状态表） | `service/ProfileReadinessService.java` + `service/impl/` | NEW |
+| **`ProfileReadinessVO`** | `{completeness, dependencies[]}`，前端无需二次调用 | `vo/ProfileReadinessVO.java` | NEW |
+| **`PreventionController`** | 新增 `GET /api/prevention/profile/readiness`（复用已有路由前缀与鉴权） | `controller/PreventionController.java` | MODIFIED |
+| **`useProfileReadinessStore`** | Pinia：会话级单次拉取 + `invalidate()`，仿 `useMetricMetaStore` 的离线容错风格 | `stores/profileReadiness.ts` | NEW |
+| **`ProfileReadinessBanner`** | 全局单条横幅：完整度 + 一条最高优先级建议 + CTA | `components/profile/ProfileReadinessBanner.vue` | NEW |
+
+---
+
+## Data Flow
+
+### Flow 1: 一次失败 → 恰好一条人类可读信息
+
+**目标契约（新规则）**
+
+| 失败类型 | 后端形状 | 前端展示 | 数量 |
+|---------|---------|---------|------|
+| 字段校验失败（400 + `fieldErrors`） | `fieldErrors[]` 非空 | **仅内联**：`el-form-item :error`；弹窗顶部一条 `el-alert` 汇总 | 每条信息 1 个位置，无 toast |
+| 业务规则失败（HTTP 200，body `code != 200`） | `errorCode` 存在、`fieldErrors` 为空 | `showError(error, fallback)` → 1 个 `ElMessage` | 1 |
+| 传输/服务器失败（5xx、超时、断网） | 无信封 | `showError` → 1 个 `ElMessage` | 1 |
+| 401 | 无信封 | 1 个 toast + `authStore.logout()`（唯一在拦截器内展示的例外） | 1 |
+
+**请求链路（改造后）**
+
+```
+用户点击保存
+   ↓
+formRef.validate()  ← 本地规则（四梯度、硬极限、血压倒置）
+   ↓ 通过
+API 调用（可能 Promise.all 两个血压请求）
+   ↓
+request.ts 响应拦截器
+   ├─ res.code === 200 → 返回信封
+   └─ 否则 → normalizeApiError() → reject(new ApiError(...))     ← 不再 ElMessage
+   ↓ (catch)
+调用方
+   ├─ validation kind → useFormServerErrors.apply(error.fieldErrors)；不 toast
+   └─ 其它 kind      → showError(error, '<场景回退文案>')
+```
+
+**关键实现细节（均为已核实的现状约束）**
+
+1. **两条不同的失败通道必须都处理。** `GlobalExceptionHandler.handleMethodArgumentNotValid` 返回 `ResponseEntity.badRequest()`（HTTP 400，走 Axios `error` 分支）；而 `handleBusinessException` 返回 `Result.failure(ec.getCode(), message)`（HTTP 200，走 `response` 分支）。因此 `normalizeApiError` 必须同时读取 `error.response.data` 与 `error.response.data.code`。
+2. **当前 `errors` 数组在传输层已被丢弃。** `request.ts` 的 error 分支只取 `data?.message`（第 70 行），`errors` 从未到达页面。这是"字段级细节无法回到表单"的根因。
+3. **业务错误码当前会退化为 500。** `BusinessException` 的 `ec.getCode()` 返回字符串（如 `health.threshold_invalid`），而 `Result.failure(String, String)` 会走 `parseCodeToInt` 并回退到 `500`（`Result.java:42-48`）。新增 `errorCode` 字段后前端可精确分支，同时**不改变** `code` 的既有数值语义以保护既有测试（如 `PushConfigControllerTest` 断言 `status().isOk()` + `$.code == 400`）。
+4. **语言漂移。** 前端从不发送 `Accept-Language`，后端按浏览器语言分支（`resolveLanguage` 只在 `startsWith("en")` 时用英文）。中文界面 + 英文浏览器会拿到英文报错。修正：`request.ts` 显式设置 `Accept-Language: zh-CN`。这比给每个 DTO 注解做 i18n 更小、更确定。
+5. **`silent` 是消除"背景请求噪音"的必要开关。** 当前 `App.vue` 的 `fetchMetadata()`、`data-input/Index.vue` 的 `loadTodayStats()` 在 `catch` 中静默吞掉错误，但拦截器已经弹过一次红 toast——"静默加载失败却弹窗"是重复反馈的另一来源。新增 `AxiosRequestConfig` 扩展 `{ silent?: boolean }`（`types/axios.d.ts` NEW），拦截器据此跳过展示，只 reject。
+6. **血压双请求的分字段归属。** `UniversalMetricDialog.vue:716-719` 用 `Promise.all([createMetric(systolic), createMetric(diastolic)])` 提交。后端返回的 `fieldErrors.field` 一律是 `value`（DTO 字段名），前端无法区分是哪一条失败。必须在调用侧标注上下文（例如 `catch(e => { e.formField = 'diastolicValue'; throw e })`），由 `useFormServerErrors` 优先使用 `formField` 覆盖后端字段名。
+
+---
+
+### Flow 2: 档案完整度与下游依赖（单次调用，无 N+1）
+
+```
+应用启动 / 登录成功 / 档案保存成功
+   ↓
+useProfileReadinessStore.fetch()                       ← 每会话 1 次
+   ↓ GET /api/prevention/profile/readiness
+ProfileReadinessService
+   ├─ HealthProfileMapper.selectOne(userId)             ← 唯一一次档案查询
+   ├─ ProfileCompletenessCalculator.calculate(profile)  ← 纯函数，无 IO
+   └─ DependencyMatrix（静态表，编译期常量）
+   ↓ Result<ProfileReadinessVO>
+{ completeness: { status, score, fields[] }, dependencies: [ {key,label,status,reason} ] }
+   ↓
+ProfileReadinessBanner（MainLayout 内，1 处渲染）
+Risk.vue / Score.vue / Dashboard.vue（读取同一 store，不额外请求）
+```
+
+**依赖矩阵（与现有消费者一一对应，均为代码实证）**
+
+| featureKey | 消费者 | 档案缺失 (MISSING) | 档案不完整 (PARTIAL) | 依据 |
+|-----------|--------|--------------------|----------------------|------|
+| `healthScore` | `ScoreCalculator` → `ProfileScorer` | DEGRADED（返回中性 70，占权重 25%） | DEGRADED（按缺失项扣分） | `ProfileScorer.java:35-61`、`ScoreCalculator.java:53-60` |
+| `riskAssessment` | `RiskAssessmentServiceImpl` | **BLOCKED**（现状静默代入 age=35 / BMI=22 产出伪评分） | DEGRADED（缺 age 或 BMI 时代入默认值） | `RiskAssessmentServiceImpl.java:50-51,117-124` |
+| `healthReport` | `HealthReportServiceImpl` | BLOCKED（抛 `HEALTH_PROFILE_NOT_FOUND`） | DEGRADED（提示词缺字段） | `HealthReportServiceImpl.java:172-175` |
+| `aiAdvice` | `AIChatServiceImpl` / `AlertAIAnalysisService` | DEGRADED（提示词无个性化段落） | DEGRADED（部分字段省略） | `AIChatServiceImpl.java:85-116`、`AlertAIAnalysisService.java:134-150` |
+
+**为什么不把 readiness 塞进 `DashboardSummaryVO`：** 仪表盘并非所有用户入口，且会让 `StatsServiceImpl` 额外依赖 `HealthProfileMapper`；而 store + 专用端点只调用一次、命中缓存的成本更低，契约也更单一。这属于"避免投机抽象"的取舍。
+
+**缓存失效策略（最小实现）：** 档案的唯一写入方是 `HealthProfileServiceImpl.create/update`，且由同一前端会话触发。因此 `Profile.vue` 保存成功后调用 `store.fetch()`，登录时在 `App.vue` 调用一次即可，无需新增领域事件。若后续出现管理端代改档案，再引入 `ProfileUpdatedEvent`。
+
+---
+
+### Flow 3: 阈值关系校验
+
+**不变量（必须与判定代码一致，而非"直觉顺序"）**
+
+`ThresholdRangeChecker` 的语义为：`value <= criticalLow` → CRITICAL；`value >= criticalHigh` → CRITICAL；`isNormalRange` 用 `value <= warningLow || value >= warningHigh` 判定异常。由此推导的合法次序：
+
+```
+criticalLow  <  warningLow  <  warningHigh  <  criticalHigh
+（每个边界可独立为 null；仅当相邻两侧均非 null 时才要求成立）
+```
+
+**校验归属**
+
+| 规则 | 归属 | 理由 |
+|------|------|------|
+| 关系次序（权威） | **后端** `@ValidThresholdRange` 类级约束（挂 `UserThresholdRequest`） | 直接调用 API 可绕过前端；且 `UserThresholdRequest` 已被 `@Valid` 装饰，无需新增调用点；沿用既有 `@ValidMetricRecord` 的类级约束先例 |
+| 关系次序（UX 前置） | **前端** `utils/thresholdValidation.ts` 纯函数 | 即时禁用保存 + 内联提示，避免无谓往返，符合四梯度友好反馈哲学；但明确标注为"非权威" |
+| 边界非负 | 后端 `@DecimalMin("0.0")`（已存在） | 无需改动 |
+| 数据库 CHECK 约束 | **不做** | ① 部署路径为手工 SQL（`PROJECT.md` Key Decisions: 迁移暂用手动），无 Flyway 回滚/数据清洗；② 存量 `user_threshold` 行可能已违反次序，CHECK 会导致迁移失败；③ 四个可空列的 CHECK 表达冗长。留待"数据库迁移策略"需求单独处理 |
+| 判定逻辑一致性 | **后端** 重构 `ThresholdRangeChecker` 为单一 `classify()` | 见下方"已发现缺陷" |
+
+**校验器产出两个属性节点。** 类级约束无法判断"是谁的错"，因此违规消息应同时 `addPropertyNode("warningHigh")` 与 `addPropertyNode("criticalHigh")`（或对应的低值字段对），使两个输入框都获得内联红字，与 Flow 1 的 `fieldErrors` 契约天然对齐。
 
 ---
 
@@ -98,437 +190,365 @@
 ```
 hhs-backend/src/main/java/com/hhs/
 ├── common/
-│   └── enums/
-│       ├── MetricCategory.java                 # 保持: HEALTH / WELLNESS
-│       └── MetricValidationSeverity.java       # [NEW] NORMAL, WARNING, CRITICAL, HARD_LIMIT
-├── metadata/                                   # [NEW] 指标元数据核心模块
-│   ├── MetricDefinition.java                   # [NEW] 指标元数据 Java Record (不可变定义)
-│   ├── MetricMetadataRegistry.java             # [NEW] 核心注册表 (SSOT 单一事实源)
-│   └── MetricKeyNormalizer.java                # [NEW] Key 命名归一化器 (兼容 camel/snake/alias)
+│   └── Result.java                              # [MODIFIED] +errorCode +fieldErrors（可选，@JsonInclude(NON_EMPTY)）
+├── vo/
+│   ├── FieldErrorVO.java                        # [NEW] record(String field, String message, String code)
+│   ├── ProfileReadinessVO.java                  # [NEW] completeness + dependencies
+│   └── (既有 HealthProfileVO/HealthScoreVO 不变)
+├── exception/
+│   └── GlobalExceptionHandler.java              # [MODIFIED] 三个 validation 分支改产 fieldErrors；业务分支填 errorCode
 ├── validation/
-│   ├── ValidMetricRecord.java                  # [NEW] DTO 级别自定义校验注解
-│   ├── MetricRecordValidator.java              # [NEW] Jakarta 校验器实现 (调用 Pipeline)
-│   ├── MetricValidationPipeline.java           # [NEW] 领域级四梯度分级校验管线
-│   ├── MetricValidationResult.java             # [NEW] 结构化校验输出 (含解释与建议)
-│   ├── MetricRangeValidator.java               # [REFACTOR/DEPRECATE] 兼容旧类
-│   └── ValidMetricRange.java                   # [REFACTOR/DEPRECATE] 兼容旧类
-├── controller/
-│   ├── MetricMetadataController.java           # [NEW] GET /api/metrics/metadata 接口
-│   └── HealthMetricController.java             # [MODIFIED] 规范化入参与查询
+│   ├── ValidThresholdRange.java                 # [NEW] @Target(TYPE) 类级约束
+│   ├── ThresholdRangeValidator.java             # [NEW] ConstraintValidator<ValidThresholdRange, UserThresholdRequest>
+│   └── (既有 ValidMetricRecord / MetricRecordValidator 不变)
 ├── dto/
-│   ├── HealthMetricRequest.java                # [MODIFIED] 移除硬编码 1000 上限，挂载 @ValidMetricRecord
-│   ├── WellnessMetricRequest.java              # [MODIFIED] 统一别名兼容与范围约束
-│   └── MetricMetaVO.java                       # [NEW] 元数据输出视图对象
+│   └── UserThresholdRequest.java                # [MODIFIED] 挂载 @ValidThresholdRange
 ├── service/
-│   ├── domain/
-│   │   ├── MetricDisplayFormatter.java         # [MODIFIED] 委托给 MetricMetadataRegistry
-│   │   ├── MetricCategoryService.java          # [MODIFIED] 委托给 MetricMetadataRegistry
-│   │   └── MetricsScorer.java                  # [MODIFIED] 支持归一化 Key 扣分匹配
-│   └── impl/
-│       ├── HealthMetricServiceImpl.java        # [MODIFIED] 写入/查询自动归一化
-│       ├── AiParseServiceImpl.java             # [MODIFIED] 移除分散 METRIC_RANGES
-│       └── OcrServiceImpl.java                 # [MODIFIED] 移除分散 REFERENCE_RANGES
-```
+│   ├── ProfileReadinessService.java             # [NEW] 接口
+│   ├── impl/
+│   │   └── ProfileReadinessServiceImpl.java     # [NEW] 单次读取 + 组装 VO
+│   └── domain/
+│       ├── ProfileCompletenessCalculator.java   # [NEW] 纯函数，无 Spring 依赖
+│       ├── ProfileScorer.java                   # [MODIFIED] 委托 calculator（保持权重不变）
+│       └── ThresholdRangeChecker.java           # [MODIFIED] 修复 isWarningRange；抽出 classify()
+├── controller/
+│   └── PreventionController.java                # [MODIFIED] +GET /profile/readiness
+└── (mapper/entity 无改动 —— 不新增表、不新增列)
 
-```
 hhs-frontend-v2/src/
-├── api/
-│   └── metricMeta.ts                           # [NEW] 元数据 API (getMetricMetadata)
-├── constants/
-│   └── metricMetaDefaults.ts                   # [NEW] 离线/编译时兜底元数据清单 (20+指标)
-├── stores/
-│   └── metricMeta.ts                           # [NEW] Pinia Store (全局元数据缓存与查询)
-├── composables/
-│   └── useMetricValidation.ts                  # [NEW] 组合式实时健康引导与分级校验
+├── types/
+│   ├── api.ts                                   # [MODIFIED] ApiResponse +errorCode? +fieldErrors?；新增 FieldError/ProfileReadiness 类型
+│   └── axios.d.ts                               # [NEW] 模块增强：AxiosRequestConfig.silent?: boolean
 ├── utils/
-│   ├── metricNormalizer.ts                     # [NEW] 权威双向映射与归一化工具
-│   └── format.ts                               # [MODIFIED] 桥接至 metricNormalizer，杜绝英文外露
+│   ├── request.ts                               # [MODIFIED] 只翻译不展示；silent；Accept-Language
+│   ├── appError.ts                              # [NEW] ApiError / normalizeApiError / showError
+│   └── thresholdValidation.ts                   # [NEW] 纯函数：次序校验（UX 前置）
+├── composables/
+│   └── useFormServerErrors.ts                   # [NEW] fieldErrors → el-form-item :error
+├── api/
+│   └── prevention.ts                            # [MODIFIED] +getReadiness()
+├── stores/
+│   └── profileReadiness.ts                      # [NEW] Pinia store
+├── components/profile/
+│   └── ProfileReadinessBanner.vue               # [NEW] 全局横幅
 └── views/
-    ├── data-input/
-    │   └── components/
-    │       ├── QuickInputDialog.vue            # [MODIFIED] 彻底移除失焦清空与本地字典，动态配置
-    │       ├── QuickInput.vue                  # [MODIFIED] 动态呈现快捷录入按钮
-    │       └── AIInput.vue                     # [MODIFIED] 统一显示规范化指标标签
-    └── health/
-        ├── Metrics.vue                         # [MODIFIED] 下拉筛选与表单采用动态字典
-        └── Thresholds.vue                      # [MODIFIED] 动态指标选项与单位联动
+    ├── health/Thresholds.vue                    # [MODIFIED] 补 prop 绑定、前端次序校验、字段内联错误
+    ├── prevention/Profile.vue                   # [MODIFIED] 展示缺失字段、保存后 fetch readiness、字段内联错误
+    ├── prevention/Risk.vue                      # [MODIFIED] 依 store 显示 BLOCKED/DEGRADED，而非"创建评估失败"
+    ├── health/Score.vue                         # [MODIFIED] 展示"DEGRADED：档案不完整"提示
+    └── components/layout/MainLayout.vue         # [MODIFIED] 在 el-main 顶部挂载 ProfileReadinessBanner
 ```
 
 ### Structure Rationale
 
-- **`metadata/` 独立分包：** 指标元数据是全系统（AI、OCR、告警规则、健康评分、表单录入）的基础设施。将其提升为一级核心领域，避免各 Service 循环依赖，确保单向引用。
-- **`validation/` 聚焦领域校验管线：** 分离 Jakarta Bean 校验外壳（`MetricRecordValidator`）与纯业务校验引擎（`MetricValidationPipeline`）。既能在 Controller 层自动拦截物理不可能数据，又能在 Service 层为 AI/OCR 批量导入提供丰富的警告诊断。
-- **前端 `stores/` + `composables/` 模式：** 元数据属于静态/低频变动的全局配置，放入 Pinia Store 集中拉取并缓存；交互式校验状态（实时胶囊、自纠提示）与具体表单生命周期绑定，放入 Composable，实现关注点清晰分离。
+- **`validation/` 而非新增 `metadata/` 分包：** `@ValidThresholdRange` 与既有 `@ValidMetricRecord` 同属 Jakarta 约束层，放同一包可直接复用既有测试基建（`MetricRecordValidatorTest` 的 `Validator` 用法）。
+- **`service/domain/` 承载纯函数：** `ProfileCompletenessCalculator` 与 `ThresholdRangeChecker` 都是无状态、可脱离 Spring 测试的规则体，符合项目既有 `service/domain/` 约定（`ScoreCalculator`、`RiskScorer` 等）。
+- **前端 `utils/appError.ts` 单文件而非 `errors/` 目录：** 当前错误模型只有一个类与两个函数，建立目录属于过度设计；当出现第三方错误适配时再拆。
+- **不新增数据库对象：** 三项能力全部可由现有表（`health_profile`、`user_threshold`）与编译期常量推导，避免触发项目尚未建立的迁移机制。
 
 ---
 
 ## Architectural Patterns
 
-### Pattern 1: Centralized In-Memory Registry (SSOT) with Tiered Boundaries
+### Pattern 1: Translate-Don't-Display（拦截器只翻译）
 
-**What:** 后端构建不可变的 `MetricMetadataRegistry`，以 Java Record `MetricDefinition` 集中管理所有生理指标的临床基准、单位、生理极限（Hard Limit）、临床正常区间（Normal Range）及预警阈值（Warning/Critical）。  
-**When to use:** 存在多业务模块（手动表单、AI语义抽取、OCR体检报告、硬件同步）共享同一套指标度量基准，且指标医学标准高度固定（无需频繁在数据库增删表结构）。  
-**Trade-offs:** 内存常驻带来极高吞吐与类型安全，无需额外维护数据库迁移脚本；若未来需要医院管理员动态扩展非标准指标，可在注册表之上叠加数据库配置提供覆盖机制（Overlay Pattern）。
+**What:** 传输层拦截器负责把异形错误统一为 `ApiError`，展示权完全下放给消费方。
+**When to use:** 应用同时存在表单（需要内联）与非表单（需要 toast）两类失败面。
+**Trade-offs:** 需要在各调用点做一次迁移，但迁移是**可增量的**——移除拦截器内的 `ElMessage` 会立刻把现状的"三重 toast"降为"单重 toast"，之后逐步替换为 `showError` 提升文案质量。反过来说，若先改调用点再改拦截器，会暂时出现"零反馈"。
+
+**Example:**
+```ts
+// utils/appError.ts  —— 唯一错误模型
+export type ErrorKind = 'validation' | 'auth' | 'network' | 'server' | 'business'
+
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly kind: ErrorKind,
+    readonly status?: number,
+    readonly code?: string,
+    readonly fieldErrors: Record<string, string> = {},
+    readonly formField?: string          // 调用方覆盖：血压双请求分字段归属
+  ) { super(message) }
+}
+
+export function normalizeApiError(raw: unknown): ApiError {
+  const err = raw as any
+  const data = err?.response?.data
+  const status: number | undefined = err?.response?.status
+
+  if (data?.fieldErrors?.length) {
+    const map: Record<string, string> = {}
+    for (const fe of data.fieldErrors) map[fe.field] = fe.message
+    return new ApiError(data.message || '请检查填写内容', 'validation', status, data.errorCode, map)
+  }
+  if (status === 401) return new ApiError('登录已过期，请重新登录', 'auth', status)
+  if (!err?.response) return new ApiError('网络异常，请检查连接后重试', 'network')
+  if (status && status >= 500) return new ApiError('服务暂时不可用，请稍后重试', 'server', status)
+  if (data?.code && data.code !== 200) {
+    return new ApiError(data.message || '操作失败', 'business', status, data.errorCode)
+  }
+  return new ApiError(data?.message || '请求失败', 'server', status)
+}
+
+/** 非表单场景的唯一 toast 出口 */
+export function showError(raw: unknown, fallback: string): ApiError {
+  const e = normalizeApiError(raw)
+  if (e.kind !== 'validation') ElMessage.error(e.message || fallback)
+  return e
+}
+```
+
+### Pattern 2: Field-Error Projection（字段错误投影到表单）
+
+**What:** 后端字段路径 → 表单 `prop` 的直接映射，通过 `el-form-item` 的 `error` 属性实现"服务端红字"，无需 `validateField` 回调。
+**When to use:** 表单字段名与 DTO 字段名可稳定对齐（本项目基本满足）。
+**Trade-offs:** `el-form-item` 的 `error` 一旦设置会永久显示直到被清空，因此必须在"任何输入变化"与"重新提交"时复位；`FormItem.error` 是 `element-plus` 公开 prop（已在本地类型 `form-item.d.ts:38-40` 确认）。
+
+**Example:**
+```ts
+// composables/useFormServerErrors.ts
+export function useFormServerErrors() {
+  const fieldErrors = ref<Record<string, string>>({})
+  const summary = ref('')
+
+  function apply(err: ApiError) {
+    if (err.kind !== 'validation') { summary.value = err.message; return }
+    const next: Record<string, string> = {}
+    for (const [field, msg] of Object.entries(err.fieldErrors)) next[field] = msg
+    if (err.formField) {                       // 血压：把 value 改投到 diastolicValue
+      const moved = next.value
+      delete next.value
+      if (moved) next[err.formField] = moved
+    }
+    fieldErrors.value = next
+    summary.value = err.message                 // 弹窗顶部 el-alert 用
+  }
+
+  function reset() { fieldErrors.value = {}; summary.value = '' }
+  return { fieldErrors, summary, apply, reset }
+}
+```
+```vue
+<!-- 用法：<el-form-item prop="warningHigh" :error="fieldErrors.warningHigh"> -->
+```
+
+### Pattern 3: Derived-Readiness with Single Read（单读派生就绪度）
+
+**What:** 一次读取档案，纯函数派生完整度，静态矩阵派生下游影响。
+**When to use:** 多个下游服务共享同一份前置数据，且当前各自重复查询、各自兜底。
+**Trade-offs:** 不引入共享缓存/加载器（避免投机抽象）；代价是"评分页"可能同时触发 `ProfileScorer` 与 readiness 各一次档案查询——这是常数（2 次），不是 N+1。
 
 **Example:**
 ```java
-public record MetricDefinition(
-    String canonicalKey,
-    Set<String> aliases,
-    String displayName,
-    MetricCategory category,
-    String defaultUnit,
-    int precision,
-    BigDecimal step,
-    BigDecimal hardMin,       // 物理不可能下限 (低于此值拒绝入库)
-    BigDecimal hardMax,       // 物理不可能上限 (高于此值拒绝入库)
-    BigDecimal normalMin,     // 正常生理参考下限
-    BigDecimal normalMax,     // 正常生理参考上限
-    String placeholder,
-    String guideHint
-) {}
-
-@Component
-public class MetricMetadataRegistry {
-    private final Map<String, MetricDefinition> registry = new ConcurrentHashMap<>();
-    private final Map<String, String> aliasToCanonicalMap = new ConcurrentHashMap<>();
-
-    @PostConstruct
-    public void init() {
-        register(new MetricDefinition(
-            "glucose",
-            Set.of("blood_glucose", "bloodGlucose", "fastingGlucose", "fasting_glucose", "GLUCOSE"),
-            "血糖",
-            MetricCategory.HEALTH,
-            "mmol/L",
-            1,
-            new BigDecimal("0.1"),
-            new BigDecimal("1.0"),    // 极端生理极限下限
-            new BigDecimal("35.0"),   // 极端生理极限上限
-            new BigDecimal("3.9"),    // 正常空腹下限
-            new BigDecimal("6.1"),    // 正常空腹上限
-            "例如: 5.6",
-            "正常空腹参考值 3.9 ~ 6.1 mmol/L"
-        ));
-        // 注册其他 18+ 指标...
-    }
+// service/domain/ProfileCompletenessCalculator.java （权重必须与现 ProfileScorer 完全一致）
+public ProfileCompleteness calculate(HealthProfile profile) {
+    if (profile == null) return ProfileCompleteness.missing();   // score=0, status=MISSING
+    int score = 100;
+    List<MissingField> missing = new ArrayList<>();
+    if (profile.getGender() == null || profile.getBirthDate() == null) { score -= 10; missing.add(...); }
+    if (profile.getHeightCm() == null || profile.getWeightKg() == null) { score -= 15; missing.add(...); }
+    if (profile.getBmi() == null) { score -= 10; missing.add(...); }
+    if (isBlank(profile.getLifestyleHabits())) { score -= 15; missing.add(...); }
+    return new ProfileCompleteness(Math.max(0, score), statusOf(missing), missing);
 }
 ```
 
 ---
 
-### Pattern 2: Graduated Non-Destructive Validation Pipeline
+## Validation Rule Homes (汇总表)
 
-**What:** 区分**物理不可能数据（数据污染/打字错误）**与**病理异常数据（患者真实健康危机）**。物理不可能值予以拦截但保留用户输入；病理异常值允许保存入库，并在 UI 侧呈现解释性反馈、在后台触发告警。  
-**When to use:** 所有医疗健康类数据录入场景，杜绝由于表单校验拦截导致患病用户无法记录危险体征。  
-**Trade-offs:** 相比简单的二元布尔校验，前端需根据校验返回的严重等级（`NORMAL`、`WARNING`、`CRITICAL`、`HARD_LIMIT`）渲染不同的交互组件（绿色标签、黄色警示条、危急值核对弹窗）。
-
-```
-        用户输入数值 (Value)
-                 │
-                 ▼
-       ┌───────────────────┐
-       │ value < hardMin ||│  YES  [Tier 1: 物理极限拦截]
-       │ value > hardMax ? │──────► 拦截提交，保留输入内容，
-       └─────────┬─────────┘        给出物理不可能解释 (如"体温不可超过43°C")
-                 │ NO
-                 ▼
-       ┌───────────────────┐
-       │ value < critLow ||│  YES  [Tier 2: 临床危急核对]
-       │ value > critHigh ?│──────► 允许保存，弹出二次核对提示，
-       └─────────┬─────────┘        防范误录入，确认后触发高优先健康预警
-                 │ NO
-                 ▼
-       ┌───────────────────┐
-       │ value < normMin ||│  YES  [Tier 3: 异常生理状态]
-       │ value > normMax ? │──────► 正常保存，界面呈现黄色警示胶囊，
-       └─────────┬─────────┘        展示生活方式建议与复测贴士
-                 │ NO
-                 ▼
-    [Tier 4: 正常生理区间]
-    正常保存，界面呈现绿色健康胶囊
-```
+| 规则 | 前端 | 后端 | 数据库 | 判定理由 |
+|------|------|------|--------|---------|
+| 阈值相邻次序 `criticalLow < warningLow < warningHigh < criticalHigh` | ✅ 纯函数（禁用保存 + 内联） | ✅ `@ValidThresholdRange`（权威） | ❌ | API 可被直接调用；手工 SQL 部署无迁移回滚；存量数据可能违规 |
+| 阈值可空边界 | ✅（允许留空并跳过比较） | ✅（null 跳过比较） | — | 与既有"null = 无界"语义一致 |
+| 阈值非负 | ✅ 输入 `min=0`（已存在） | ✅ `@DecimalMin("0.0")`（已存在） | — | 已有，不重复实现 |
+| 档案必填字段（性别/生日） | ✅ 表单 `required`（已存在） | ✅ `@NotNull`/`@Past`（已存在） | — | 已有 |
+| 档案完整度权重 | ✅ 展示用（读 VO，不重算） | ✅ 唯一计算方 | — | 避免前后端权重漂移导致"页面说 85 分、评分按 70 算" |
+| 依赖门控（报告/风险/评分/建议） | ✅ 依 `dependencies[]` 渲染 | ✅ 唯一产出方 | — | 门控是业务策略，不可由客户端决定 |
+| 指标生理极限 | ✅ 四梯度（已存在） | ✅ `@ValidMetricRecord`（已存在） | — | v1.1 已落地，不重复 |
 
 ---
 
-### Pattern 3: Bidirectional Alias-Aware Key Normalization Bridge
+## Discovered Defects (必须纳入计划，否则新能力建立在不稳地基上)
 
-**What:** 在数据流入口（反序列化、入库、数据同步）实施透明的 Key 归一化，在数据流出口（VO 序列化、前端渲染）实施透明的中文与单位映射，保证内部流转的一致性与外部展示的无感兼容。  
-**When to use:** 历史代码中同时存在 `camelCase`（`heartRate`）、`snake_case`（`heart_rate`）、`SCREAMING_SNAKE`（`HEART_RATE`）和缩写差异（`bodyTemperature` vs `temperature`）。  
-**Trade-offs:** 需要在 DTO 反序列化与数据库查询封装处做一次映射，但彻底隔绝了英文 Key 泄漏到界面的漏洞。
+### D-1: `ThresholdRangeChecker.isWarningRange` 条件颠倒（HIGH）
 
-**Example:**
-```typescript
-// frontend: utils/metricNormalizer.ts
-const ALIAS_MAP: Record<string, string> = {
-  heart_rate: 'heartRate',
-  HEART_RATE: 'heartRate',
-  pulse: 'heartRate',
-  bodyTemperature: 'temperature',
-  body_temperature: 'temperature',
-  BODY_TEMPERATURE: 'temperature',
-  systolic_bp: 'systolicBP',
-  diastolic_bp: 'diastolicBP',
-  blood_glucose: 'glucose',
-  spo2: 'bloodOxygen',
-  sleep_duration: 'sleepDuration'
-}
-
-export const toCanonicalKey = (key: string): string => {
-  if (!key) return ''
-  return ALIAS_MAP[key] || ALIAS_MAP[key.toLowerCase()] || key
-}
+**Evidence:** `ThresholdRangeChecker.java:37-45`
+```java
+return (belowCriticalLow && aboveWarningLow) ||   // v <= criticalLow && v >= warningLow
+       (belowWarningHigh && aboveCriticalHigh);   // v <= warningHigh && v >= criticalHigh
 ```
-
----
-
-## Data Flow
-
-### Request Flow
-
+两侧区间在合法数据下**恒为空**：低侧要求 `warningLow <= criticalLow`（与语义相反），高侧要求 `criticalHigh <= warningHigh`（与语义相反）。
+**Consequence:** 介于 `warningHigh` 与 `criticalHigh` 之间的值（如心率 110，warningHigh=100，criticalHigh=120）被 `getSeverityLevel` 判为 `NORMAL`，**告警丢失**。这直接影响 `AlertRuleEngineImpl` → `ThresholdEvaluator.evaluateValue` 的告警生成。
+**Fix:** 抽出单一 `classify(value, threshold) → NORMAL | WARNING_LOW | WARNING_HIGH | CRITICAL_LOW | CRITICAL_HIGH`，采用互斥半开区间，保留既有 `<=`/`>=` 约定：
 ```
-[用户在表单键入数值]
-    │ (动态输入事件 @input)
-    ▼
-[useMetricValidation Composable]
-    │ 实时比对 Pinia useMetricMetaStore 缓存的区间
-    ▼
-[即时状态渲染: 呈现绿色/黄色/橙色胶囊，绝不清空输入]
-    │
-[用户点击保存按钮]
-    │
-[Element Plus async-validator]
-    │ 仅在超出 hardMin / hardMax 时触发 reject 阻止提交
-    ▼
-[HTTP POST /api/metrics]
-    │
-[Spring Controller @Valid]
-    │
-[@ValidMetricRecord / MetricRecordValidator]
-    │ 1. MetricKeyNormalizer.toCanonicalKey(key)
-    │ 2. MetricValidationPipeline.validate(canonicalKey, value)
-    │ 3. 校验双指标关系 (如 systolicBP > diastolicBP)
-    ▼
-[HealthMetricServiceImpl.add()]
-    │ 1. 采用规范化 CanonicalKey 存储至数据库
-    │ 2. 采用规范化 Unit 校验并纠正
-    │ 3. 发布 MetricRecordedEvent
-    ▼
-[ApplicationEventPublisher] ──► [AlertEventListener] 评估预警
+CRITICAL_LOW  : v <= criticalLow
+WARNING_LOW   : criticalLow < v <= warningLow
+NORMAL        : warningLow < v < warningHigh
+WARNING_HIGH  : warningHigh <= v < criticalHigh
+CRITICAL_HIGH : v >= criticalHigh
 ```
+`isNormalRange/isWarningRange/isCriticalRange/getSeverityLevel` 全部委托 `classify`。
+**Blast radius:** 告警从"漏报"变为"正常上报"——这是行为变更，需要专门的单元测试与 UAT 条目（`ThresholdRangeCheckerTest` 目前不存在，须新建）。
 
----
+### D-2: `Thresholds.vue` 表单项缺少 `prop`（HIGH，阻塞字段级反馈）
 
-### State Management
+**Evidence:** `Thresholds.vue:74-92` 的四个 `el-form-item` 均无 `prop`，因此 `el-form-item :error` 无法注入、`validateField` 无法定位。
+**Fix:** 为 `criticalHigh`/`warningHigh`/`warningLow`/`criticalLow` 补 `prop`，加入 `rules`，并接入 `useFormServerErrors`。
 
-```
-[前端应用初始化 / 路由进入 data-input]
-    │
-    ▼
-[useMetricMetaStore.initialize()]
-    │
-    ├─► 优先读取 Pinia 内存缓存
-    │
-    ├─► 若未加载，发起异步请求: GET /api/metrics/metadata
-    │       │
-    │       ├─► 成功: 写入 Store 状态，构建 aliasMap 索引
-    │       │
-    │       └─► 失败: 加载 @/constants/metricMetaDefaults.ts 兜底字典
-    ▼
-[页面组件订阅 (Computed Properties)]
-    │
-    ├─► QuickInputDialog: 自动获取 step, precision, min, max, unit
-    ├─► Metrics.vue: 动态生成筛选下拉框 options
-    └─► format.ts: getMetricLabel(key) 自动反查权威中文名
-```
+### D-3: 业务错误码退化为 500（MEDIUM）
 
----
+**Evidence:** `Result.java:42-48` + `GlobalExceptionHandler.java:53`。
+**Fix:** `Result` 增加 `errorCode` 字符串字段；业务分支改为 `Result.failure(ec.getHttpStatus(), errorCodeStr, message)` 的重载，保持 `code` 数值语义不变。
 
-### Key Data Flows
+### D-4: 背景请求失败仍弹 toast（MEDIUM）
 
-1. **元数据自举与缓存流 (Metadata Bootstrap & Cache Flow):**
-   前端通过 Pinia Store 初始化拉取 `/api/metrics/metadata`。后端利用 Redis 缓存该接口数据，同时返回 HTTP `Cache-Control: max-age=86400` 与 `ETag`。客户端获得毫秒级加载性能，且即使离线也有静态常量兜底。
-2. **交互引导与非破坏性校验流 (Interactive Guidance & Safe Blur Flow):**
-   用户在 `QuickInputDialog` 中输入时，`useMetricValidation` 在客户端实时匹配判定状态。失焦（blur）时**绝不清空用户输入**，仅在下方呈现对应的健康建议（如血糖 7.2 mmol/L 显示“轻度偏高，建议餐后复测”）。仅当输入物理不可能数值（如体温 50°C）时，输入框亮红并禁止点击“保存”。
-3. **多入口归一化流 (Multi-Channel Normalization Flow):**
-   - **手动录入：** 直接提交 Canonical Key。
-   - **AI 解析：** `AiParseServiceImpl` 在组装 `MetricParseResultVO` 时，通过 `MetricKeyNormalizer` 将大模型抽取的 key 规范化为统一 key，并应用统一的 `validateMetricRange` 生成统一 warning。
-   - **OCR 识别：** `OcrServiceImpl` 使用同一套注册表别名库，将报告中的“收缩压/高压/SBP”映射为 `systolicBP`。
-   - **设备同步：** SDK 数据点中的 `heart_rate`、`spo2` 在进入 Service 前被清洗转换为 `heartRate`、`bloodOxygen`。
+**Evidence:** `App.vue:17`、`data-input/Index.vue:132-144` 的 catch 均为静默，但拦截器已弹窗。
+**Fix:** `silent: true` 请求配置 + 在元数据/统计/轮询类调用上启用。
 
----
+### D-5: 风险评分在无档案时产出伪评分（HIGH，需产品确认）
 
-## Scaling Considerations
+**Evidence:** `RiskAssessmentServiceImpl.java:135-139` 在 `profile == null` 时仍返回糖尿病 30 / 高血压 25 / 心血管 25。
+**Fix:** 依赖门控置 `riskAssessment = BLOCKED`，`createAssessment` 抛 `BusinessException(HEALTH_PROFILE_NOT_FOUND, "请先完善健康档案")`；前端 `Risk.vue` 改为引导 CTA。**这是行为变更，需在 roadmap 中单列并标记产品确认点。**
 
-| Scale | Architecture Adjustments |
-|-------|--------------------------|
-| **0 - 1k users (当前规模)** | 后端 `MetricMetadataRegistry` 全常驻 JVM 内存；前端一次性加载完整字典（<15KB JSON）；单体数据库存储，无需任何复杂分库分表。 |
-| **1k - 100k users** | Spring Boot 启用 Redis 缓存元数据响应；开启 Nginx/浏览器静态协商缓存（ETag/If-None-Match 304）；分级校验全部由客户端计算分流，服务端仅执行轻量级拦截，零计算性能损耗。 |
-| **100k+ users** | 采用 CDN 边缘分发元数据字典静态 JSON 文件；校验管线保持纯无状态（Stateless），水平扩展任意数量后端容器实例均具备完全一致的校验能力。 |
+### D-6: 未捕获的 3 处"不可达"错误分支（LOW，清理）
 
-### Scaling Priorities
-
-1. **第一瓶颈：前端重复拉取元数据接口**
-   - *表现：* 用户频繁刷新页面或切换路由产生冗余请求。
-   - *对策：* Pinia Store 设置 `loaded` 守卫标志位，结合 `stale-while-revalidate` 策略，只有版本号变更时才重新拉取。
-2. **第二瓶颈：历史脏数据导致的查询不兼容**
-   - *表现：* 数据库历史记录中混杂了 `heart_rate` 与 `heartRate`，用户按指标筛选时遗漏数据。
-   - *对策：* 在 `HealthMetricServiceImpl.list()` 与 `getTrend()` 中，使用 `MetricKeyNormalizer.getAllAliases(metricKey)` 构造 SQL `IN (...)` 查询，透明覆盖历史存量数据。
+`stores/push.ts:55,75`、`stores/ai.ts:105`、`stores/wellness.ts:64` 在 `try` 内检查 `res.code`，但拦截器已拒绝非 200，故分支不可达。改造后可删除，降低理解成本。
 
 ---
 
 ## Anti-Patterns
 
-### Anti-Pattern 1: 各业务模块私设“范围小孤岛” (Hardcoded Range Islands)
+### Anti-Pattern 1: 在拦截器里做展示（现状）
 
-**What people do:** `QuickInputDialog.vue` 写一套 `METRIC_RANGES`，`AiParseServiceImpl.java` 写一套 `METRIC_RANGES`，`HealthMetricRequest` 写一套 `@DecimalMax("1000")`，`Metrics.vue` 再写一套下拉列表。  
-**Why it's wrong:** 导致全系统规则分歧。例如体温在弹窗是 30~43，在 AI 解析是 34~42；步数在快速录入是 0~100000，但发给后端却被 `@DecimalMax("1000")` 拦截。  
-**Do this instead:** 建立后端 `MetricMetadataRegistry` 单一事实源，前端通过 `useMetricMetaStore` 统一下发与消费。
+**What people do:** 在 Axios 拦截器中直接 `ElMessage.error`。
+**Why it's wrong:** 与调用方 `catch` 中的 toast 叠加，产生 2–3 条同义红条；且拦截器不知道上下文（表单字段、静默请求、批量请求），无法给出正确呈现方式。
+**Do this instead:** 拦截器只 reject 结构化 `ApiError`；展示由 `showError`（非表单）与 `useFormServerErrors`（表单）按场景决定。
 
----
+### Anti-Pattern 2: 把 `errors: ["field: msg"]` 当契约
 
-### Anti-Pattern 2: 校验失败时强行清空用户输入 (Destructive Error Handling)
+**What people do:** 后端拼字符串，前端按 `":"` 切割。
+**Why it's wrong:** 冒号在中文/英文文案中均可能出现；字段路径含嵌套（`a.b`）；无法携带错误码；无法本地化。
+**Do this instead:** `fieldErrors: [{field, message, code?}]`；字符串数组保留一个版本做兼容后删除。
 
-**What people do:** 当前 `QuickInputDialog.vue` 中的逻辑：
-```typescript
-const handleValueBlur = () => {
-  if (val < r.min || val > r.max) {
-    ElMessage.warning('超出范围，请重新输入')
-    form.value.value = undefined // 强行清空！
-  }
-}
-```
-**Why it's wrong:** 极度破坏用户体验。用户误触输入 1200（想输 120），原本只需按一次退格键，系统粗暴清空迫使全部重输，产生极大挫败感。  
-**Do this instead:** 严禁清空用户输入。保留原值，输入框以黄色/红色边框提示，下方显示错误原因和建议修改区间。
+### Anti-Pattern 3: 为完整度另建一套规则
 
----
+**What people do:** 新增计算器复制 `ProfileScorer` 的 `-10/-15/-10/-15` 权重。
+**Why it's wrong:** 两份权重必然漂移，最终出现"横幅说缺 15 分、评分却只扣 10 分"。
+**Do this instead:** 让 `ProfileScorer` 委托 `ProfileCompletenessCalculator`，权重只存在一处；并在单测中锁定 `ProfileScorer.calculate` 的输出不变（回归保护）。
 
-### Anti-Pattern 3: 将临床病理异常当作参数校验错误拦截 (Treating Pathology as Validation Error)
+### Anti-Pattern 4: 在数据库上加 CHECK 约束来兜底阈值次序
 
-**What people do:** 将体温 38.8°C 或血糖 14.0 mmol/L 当作无效数据（`return callback(new Error('非法数值'))`），阻止表单提交。  
-**Why it's wrong:** 健康监测系统存在的唯一意义是真实记录健康状态。发热或高血糖患者此时最需要保存数据以供随访和预警，被系统拒之门外将导致平台彻底失去临床价值。  
-**Do this instead:** 区分 Hard Limit 与 Normal Range。正常区间外使用柔性警告（Warning/Critical），允许数据入库并触发告警；仅当出现物理不可能（如体温 60°C）时才拒绝入库。
-
----
-
-### Anti-Pattern 4: 缺少映射时直接向用户抛出英文代码 (Raw Key Leaking)
-
-**What people do:** `format.ts` 中的保底代码：
-```typescript
-export const getMetricDisplayName = (key: string) => map[key] || key;
-```
-由于 `map` 中只定义了 8 个指标，导致 `fastingGlucose`、`totalCholesterol`、`sleepDuration`、`heart_rate` 在表格中直接显示为生硬的英文代码。  
-**Do this instead:** `MetricKeyNormalizer` 必须覆盖系统支持的全部 19+ 种指标及其所有别名变体。若遇到未知 Key，也应通过分词（如将 `fasting_glucose` 拆分为友好格式）处理，杜绝代码外泄。
+**What people do:** `ALTER TABLE user_threshold ADD CONSTRAINT chk_order CHECK (...)`。
+**Why it's wrong:** 项目无迁移框架（手工 SQL），存量违规行会让迁移失败；且四列可空使 CHECK 表达复杂、错误信息对用户不可读。
+**Do this instead:** 应用层类级约束 + 显式 `fieldErrors`；数据库清理作为独立需求评估。
 
 ---
 
 ## Integration Points
 
-### External Services
-
-| Service | Integration Pattern | Notes |
-|---------|---------------------|-------|
-| **Huawei Health SDK** | `HealthDataPoint.mapHuaweiDataType()` 桥接至 `MetricKeyNormalizer` | SDK 上报的 `com.huawei.health.heart_rate` 转换为权威 `heartRate`，单位转换为标准 `次/分`。 |
-| **Xiaomi Health SDK** | `XiaomiHealthServiceImpl` 注入 `MetricKeyNormalizer` | 清洗 SDK 原始 snake_case 数据类型。 |
-| **Baidu OCR API** | `OcrServiceImpl` 依赖 `MetricMetadataRegistry` 进行文本模式识别 | 将 OCR 提取到的中文名称（如“总胆固醇”、“空腹血糖”）通过注册表精确匹配为 Canonical Key。 |
-| **Tongyi Qianwen LLM** | `AiParseServiceImpl.PARSE_SYSTEM_PROMPT` | 提示词中的指标参考表通过 `MetricMetadataRegistry` 模板化生成，确保大模型理解的范围与系统校验范围绝对一致。 |
-
----
-
 ### Internal Boundaries
 
 | Boundary | Communication | Notes |
 |----------|---------------|-------|
-| **Metadata Registry ↔ Validation Pipeline** | 本地 Spring Bean 依赖注入 | 校验管线直接从注册表读取 `MetricDefinition` 进行四级区间比对。 |
-| **Validation Pipeline ↔ Request DTOs** | Jakarta Validation 注解联动 | `@ValidMetricRecord` 拦截 Controller 请求，统一抛出 `MethodArgumentNotValidException` 并由全局异常处理器转换。 |
-| **Backend REST API ↔ Frontend Pinia Store** | HTTP REST (`/api/metrics/metadata`) | 前端异步拉取，内存持久化，提供全局同步查询方法。 |
-| **Frontend Pinia Store ↔ UI Components** | Vue 3 响应式系统 (`computed`) | `QuickInputDialog`、`QuickInput`、`Metrics.vue` 自动绑定元数据属性。 |
-| **HealthMetricService ↔ Realtime & Alerts** | Spring `ApplicationEventPublisher` | 即使录入的是极端异常值，只要通过了 Hard Limit 校验，依然正常入库并触发 `MetricRecordedEvent`。 |
+| `request.ts` ↔ `appError.ts` | 直接函数调用 | 拦截器只 import `normalizeApiError`，避免循环依赖（`appError` 不得 import store） |
+| `appError.ts` ↔ `ElMessage` | 唯一出口 `showError` | 禁止在其它模块直接 `ElMessage.error(serverMessage)`；可在 code review 中用 grep 约束 |
+| `useFormServerErrors` ↔ `el-form` | `el-form-item :error` | 需 `prop` 与 DTO 字段同名；血压例外由 `formField` 覆盖 |
+| `ProfileReadinessServiceImpl` ↔ `ProfileScorer` | 共享 `ProfileCompletenessCalculator` | `ProfileScorer` 保留 `calculate(Long userId)` 签名以兼容 `ScoreCalculator` 与既有测试 |
+| `PreventionController` ↔ `ProfileReadinessService` | 直接服务注入 | 复用既有 `/api/prevention` 前缀与 `@PreAuthorize("isAuthenticated()")` |
+| `useProfileReadinessStore` ↔ `MainLayout` | Pinia 订阅 | 横幅单点渲染，`/prevention/profile` 路由上隐藏以免自我指涉 |
+| `ThresholdRangeValidator` ↔ `GlobalExceptionHandler` | 约束违规 → `ConstraintViolationException` 或 `MethodArgumentNotValidException` | 类级约束在 `@RequestBody @Valid` 上会进入 `handleMethodArgumentNotValid`（`getFieldErrors` 可能为空，需同时读 `getGlobalErrors`）；**必须处理 `GlobalError` 分支**，否则类级违规会落到兜底 500 |
+
+### External Services
+
+无新增外部依赖。本方案不引入 Maven 依赖、npm 包或新基础设施，符合 `PROJECT.md` 的技术栈约束。
 
 ---
 
-## New vs. Modified Components
+## Suggested Build Order (依赖感知)
 
-为达成项目质量门禁与实施要求，将组件划分为**新建 (NEW)**与**改造 (MODIFIED)**两类，明确改造范围与边界：
+> 三项能力彼此可并行，但共享 Flow 1 的信封契约。推荐按"契约 → 消费 → 领域"推进。
 
-### 1. 新建组件 (NEW)
+**Wave 0（无依赖，可先行）**
+1. **阈值判定缺陷修复**：`ThresholdRangeChecker.classify()` 重构 + 新建 `ThresholdRangeCheckerTest`（覆盖 `warningHigh` 与 `criticalHigh` 之间、`criticalLow` 与 `warningLow` 之间的分诊，以及 null 边界）。
+   - 理由：独立于其它改动，且是阈值能力的地基；先修真错，再谈校验次序。
 
-| 组件全路径 | 职责与技术细节 | 依赖 |
-|------------|----------------|------|
-| `com.hhs.metadata.MetricDefinition` | Java Record。不可变数据类，封装单一指标全维度元数据（key, aliases, name, category, unit, precision, step, hardMin, hardMax, normalMin, normalMax, guidance）。 | 无 |
-| `com.hhs.metadata.MetricMetadataRegistry` | Spring `@Component`。维护 19+ 核心指标字典，构建别名反查索引，提供快速检索与分类过滤。 | `MetricDefinition` |
-| `com.hhs.metadata.MetricKeyNormalizer` | 工具/组件类。提供 `toCanonicalKey(key)`、`getAliases(key)`，兼容 camelCase、snake_case、SCREAMING_SNAKE。 | `MetricMetadataRegistry` |
-| `com.hhs.validation.MetricValidationPipeline` | 校验管线核心。输入 `(metricKey, value, context)`，评估返回包含严重级别与指导意见的 `MetricValidationResult`。 | `MetricMetadataRegistry`, `MetricKeyNormalizer` |
-| `com.hhs.validation.ValidMetricRecord` / `MetricRecordValidator` | Jakarta 类级别约束注解及校验实现，无缝融入 Spring MVC `@Valid` 流程。 | `MetricValidationPipeline` |
-| `com.hhs.controller.MetricMetadataController` | 暴露 `GET /api/metrics/metadata` 供各端消费。 | `MetricMetadataRegistry` |
-| `frontend: api/metricMeta.ts` | Axios 请求封装，获取后端元数据。 | `@/utils/request` |
-| `frontend: stores/metricMeta.ts` | Pinia Store。管理元数据加载生命周期，对外暴露权威名称与属性查询。 | `api/metricMeta`, `metricMetaDefaults` |
-| `frontend: composables/useMetricValidation.ts` | 组合式函数。封装表单层四梯度实时判定、胶囊状态计算与输入自纠逻辑。 | `stores/metricMeta` |
-| `frontend: utils/metricNormalizer.ts` | 前端双向 Key 映射与显示守卫工具。 | 无依赖（静态字典+Store） |
+**Wave 1（契约层）**
+2. **后端错误信封**：`Result` + `errorCode`/`fieldErrors`，`FieldErrorVO`，`GlobalExceptionHandler` 三处 validation 分支（含 `GlobalError` 处理）+ `errorCode` 填充。
+3. **前端错误模型**：`types/api.ts`、`types/axios.d.ts`、`utils/appError.ts`、`request.ts` 改造（translate-only + `silent` + `Accept-Language`）。
+   - 依赖 2 的字段名。
 
-### 2. 改造组件 (MODIFIED)
+**Wave 2（表单投影，依赖 Wave 1）**
+4. `useFormServerErrors` + `UniversalMetricDialog.vue` 接入（含血压 `formField` 归属）。
+5. `Thresholds.vue` 补 `prop`/`rules` + 接入。
+6. `Profile.vue` 接入；随后按模块分派替换 `catch` 中的裸 `ElMessage.error`（优先 `data-input/*`、`health/Metrics.vue`、`health/Thresholds.vue`、`prevention/*`）。
+   - 该步骤可增量交付：Wave 1 完成后"三重 toast"已降为"单重"，替换只提升文案质量。
 
-| 组件全路径 | 改造前问题与现状 | 改造方案与兼容性保障 |
-|------------|------------------|----------------------|
-| `com.hhs.dto.HealthMetricRequest` | 硬编码 `@DecimalMax("1000.0")`，导致步数/饮水等指标报错；无针对具体指标的校验。 | 移除 `@DecimalMax("1000.0")`（或放宽至物理极限），添加 `@ValidMetricRecord` 注解，利用管线动态校验。 |
-| `com.hhs.service.impl.HealthMetricServiceImpl` | 写入时直接使用前端传入的 raw `metricKey`；单位自动纠正依赖分散的 formatter；查询未考虑别名。 | 注入 `MetricKeyNormalizer` 归一化 Key；查询时使用别名集合匹配存量数据；单位校验委托给注册表。 |
-| `com.hhs.service.impl.AiParseServiceImpl` | 包含私有静态 `METRIC_RANGES`、`HEALTH_KEYS`、`WELLNESS_KEYS`，与外界定义脱节。 | 废除私有常量 Map，全量引用 `MetricMetadataRegistry` 与 `MetricValidationPipeline`。 |
-| `com.hhs.service.impl.OcrServiceImpl` | 包含私有 `REFERENCE_RANGES`、`DEFAULT_UNITS`、`METRIC_KEY_MAP`。 | 统一对接注册表与归一化器，提升体检指标识别匹配率。 |
-| `com.hhs.service.domain.MetricDisplayFormatter` | 仅支持 8 个指标的中文名，缺少别名支持，导致 `bodyTemperature` 泄漏英文。 | 内部委托给 `MetricMetadataRegistry`，若未匹配则由 `MetricKeyNormalizer` 兜底。 |
-| `frontend: QuickInputDialog.vue` | 包含硬编码 `METRIC_RANGES`；失焦时清空输入框；错误反馈生硬。 | 移除本地 ranges；从 Store 动态获取步长/精度/范围；移除清空逻辑；增加状态胶囊与解释性提示。 |
-| `frontend: QuickInput.vue` | 快捷录入按钮硬编码指标清单与单位。 | 从 Store 读取指标标准信息，保持配置与后端严格一致。 |
-| `frontend: views/health/Metrics.vue` | 下拉框 `<el-option>` 静态写死；`metricUnitMap` 本地硬编码；无范围校验。 | 下拉框绑定 Store 动态列表；表单录入集成 `useMetricValidation`。 |
-| `frontend: views/health/Thresholds.vue` | 阈值下拉框硬编码 6 项指标。 | 改为从 Store 读取 HEALTH 指标列表，联动显示单位。 |
-| `frontend: utils/format.ts` | `getMetricDisplayName` 仅包含少量指标，回退逻辑 `map[key] || key` 导致英文外露。 | 重新实现该方法，优先调用 `metricNormalizer.ts`，确保所有 19+ 指标均能正确显示中文。 |
+**Wave 3（阈值关系，依赖 Wave 1 以产出 fieldErrors）**
+7. `@ValidThresholdRange` + `ThresholdRangeValidator` + 挂载 + 单测。
+8. `utils/thresholdValidation.ts` + `Thresholds.vue` 即时校验与四段区间可视化。
+
+**Wave 4（档案就绪度，可与 Wave 2/3 并行）**
+9. `ProfileCompletenessCalculator` + 重构 `ProfileScorer` 委托 + 回归测试（锁定评分不变）。
+10. `ProfileReadinessVO` + `ProfileReadinessService(Impl)` + `GET /profile/readiness` + 集成测试。
+11. `useProfileReadinessStore` + `ProfileReadinessBanner` + `MainLayout` 挂载。
+12. 消费端：`Risk.vue`（BLOCKED CTA）、`Score.vue`（DEGRADED 提示）、`Profile.vue`（缺失字段清单 + 保存后 `fetch()`）。
+
+**Wave 5（收尾）**
+13. `RiskAssessmentServiceImpl` 无档案时的 BLOCKED 行为变更（**需产品确认**，单列风险项）。
+14. 清理 D-6 不可达分支；全量 `npm run test:run` / `mvn clean verify -DskipITs` 回归。
+
+**关键依赖说明**
+- 4/5/6/7 都依赖 2/3；若先做前端，会因信封字段缺失而返工。
+- 9 必须先于 10：否则完整度权重会出现第二份实现。
+- 13 必须晚于 10/11：前端需先具备展示 BLOCKED 的能力，否则用户只见报错。
 
 ---
 
-## Suggested Build Order & Dependencies
+## Scalability Considerations
 
-为了降低集成风险、避免破坏现有 CI/CD 测试流水线，推荐按照以下依赖顺序递进开发与交付：
+| Concern | 当前规模（<10k 用户） | 若增长 |
+|---------|----------------------|--------|
+| 错误信封体积 | `fieldErrors` 通常 ≤5 条，可忽略 | 若批量子实体校验，需限制条数（如 cap 20） |
+| readiness 调用 | 每会话 1 次；单表主键查询 | 可加 Redis `profile:readiness:{userId}`，随档案更新失效 |
+| 档案重复读取 | 评分页最多 2 次（`ProfileScorer` + readiness） | 如需合并，引入请求级上下文缓存，而不是全局单例缓存 |
+| 阈值校验 | 纯内存比较，O(1) | 无变化 |
 
-```
-[Phase 1: 后端元数据核心] ──► [Phase 2: 校验管线与接口] ──► [Phase 3: 前端状态与映射工具]
-           │                                                       │
-           ▼                                                       ▼
-[Phase 5: 全渠道对齐 (AI/OCR/存量)] ◄────────────── [Phase 4: 前端交互与弹窗重构]
-```
+---
 
-### Step 1: 建立后端元数据注册表与归一化基础 (Zero Breakage Foundation)
-- **目标：** 创建 `MetricDefinition`、`MetricMetadataRegistry` 与 `MetricKeyNormalizer`。
-- **实施：** 录入全部 19+ 种指标标准参数（心率、收缩压、舒张压、空腹血糖、餐后血糖、体温、体重、BMI、血氧、胆固醇、甘油三酯、睡眠、步数、运动、饮水、心情、精力等）。
-- **验证：** 编写单元测试验证所有常见变体（如 `heart_rate`、`HEART_RATE`、`bodyTemperature`）均能稳定解析为 Canonical Key。
+## Gaps & Open Questions
 
-### Step 2: 实现分级校验管线与元数据 REST API
-- **目标：** 构建 `MetricValidationPipeline` 并发布 `/api/metrics/metadata` 接口。
-- **实施：** 实现四梯度判定逻辑；创建 `@ValidMetricRecord` 类级别校验器；改造 `HealthMetricRequest` 放宽粗暴的 1000 上限；在 `MetricMetadataController` 暴露元数据。
-- **验证：** 后端单元测试验证正常值、警告值、危急值与物理极限拦截行为。
-
-### Step 3: 前端元数据 Store 与双向归一化工具升级
-- **目标：** 在前端建立与后端对应的消费端体系。
-- **实施：** 编写 `api/metricMeta.ts` 与 `stores/metricMeta.ts`；编写 `metricNormalizer.ts` 并改造 `format.ts` 的 `getMetricDisplayName`。
-- **验证：** Vitest 单元测试覆盖各类驼峰/下划线 key 的中文标签解析，验证无任何指标回退为原始英文代码。
-
-### Step 4: 改造前端录入与交互组件 (UX Upgrade)
-- **目标：** 彻底改善用户录入体验与引导。
-- **实施：** 重构 `QuickInputDialog.vue`，动态加载 Store 配置，移除失焦清空，集成状态胶囊与解释性提示；改造 `QuickInput.vue`、`Metrics.vue`、`Thresholds.vue` 接入动态字典。
-- **验证：** 手动录入各维度指标，检查极值阻断、异常预警与正常展示全链路流畅性。
-
-### Step 5: 全渠道对齐与存量兼容验证 (Cross-Channel Convergence)
-- **目标：** 收敛 AI 解析与 OCR 识别中的分散定义，确保系统整洁统一。
-- **实施：** 改造 `AiParseServiceImpl` 和 `OcrServiceImpl`，废弃其私有 ranges；在 `HealthMetricServiceImpl` 读写链路注入归一化保护。
-- **验证：** 运行 `mvn clean verify -DskipITs` 与前端测试，确保既有 489+ 测试用例全部绿灯通过。
+1. **`@ValidThresholdRange` 的违规是否进入 `getFieldErrors` 还是 `getGlobalErrors`** —— 需在实现时以 `MetricRecordValidatorTest` 的同类模式实测确认；`GlobalExceptionHandler` 必须两个集合都消费（已在上文标注）。
+2. **风险评分 BLOCKED 的产品语义** —— 是"拒绝创建"还是"创建但标记为不完整"？本文推荐拒绝，但需产品确认。
+3. **错误文案的 i18n 深度** —— 本方案固定 `zh-CN` 并保留 `ErrorCode` 双语能力，不为 DTO 注解建立消息目录；若未来真正需要多语言 UI，再引入 `ValidationMessageCatalog`。
+4. **`Thresholds.vue` 的指标下拉目前硬编码 6 项且含 `glucose`/`temperature` 旧别名** —— 与 v1.1 的元数据 SSOT 未对齐。建议在同一阶段顺手切换为 `metricMetaStore.allDefinitions`，但属可选优化，需评估测试影响。
+5. **`ThresholdRangeChecker` 修复会改变告警产出** —— 需要新的 UAT 条目，且应确认生产环境历史数据的阈值次序分布（若存量已违规，修复后可能出现大量新告警）。
 
 ---
 
 ## Sources
 
-- **中国高血压防治指南 / 2024 中华医学会糖尿病诊疗标准:** 血压、血糖临床正常与危急值切分点。
-- **WHO 国际临床生理参数参考标准:** 心率、血氧饱和度、体温的极限生理区间（Hard Bounds）。
-- **Jakarta Bean Validation 3.0 (Hibernate Validator 8.0) 官方文档:** 动态类级别约束与上下文错误构建最佳实践。
-- **Element Plus Form Validation Specifications:** 自定义异步校验规则与非侵入式响应设计规范。
-- **HHS 系统源码审计:** `hhs-backend` (v3.2.0), `hhs-frontend-v2` (v3.4.15), `schema.sql` (v3.8.0)。
+| 来源 | 类型 | 置信度 |
+|------|------|--------|
+| `hhs-frontend-v2/src/utils/request.ts`（拦截器双通道展示） | 第一手代码 | HIGH |
+| `hhs-backend/src/main/java/com/hhs/exception/GlobalExceptionHandler.java` | 第一手代码 | HIGH |
+| `hhs-backend/src/main/java/com/hhs/common/Result.java` | 第一手代码 | HIGH |
+| `hhs-backend/src/main/java/com/hhs/service/domain/ThresholdRangeChecker.java`（D-1） | 第一手代码 | HIGH |
+| `hhs-backend/src/main/java/com/hhs/service/domain/ProfileScorer.java` | 第一手代码 | HIGH |
+| `hhs-backend/src/main/java/com/hhs/service/impl/RiskAssessmentServiceImpl.java`（D-5） | 第一手代码 | HIGH |
+| `hhs-backend/src/main/java/com/hhs/service/impl/{HealthReportServiceImpl,AIChatServiceImpl}.java`、`service/alert/AlertAIAnalysisService.java` | 第一手代码 | HIGH |
+| `hhs-backend/src/main/java/com/hhs/dto/{UserThresholdRequest,HealthMetricRequest,HealthProfileRequest}.java` | 第一手代码 | HIGH |
+| `hhs-frontend-v2/src/views/health/Thresholds.vue`（D-2） | 第一手代码 | HIGH |
+| `hhs-frontend-v2/src/components/metric/UniversalMetricDialog.vue:664-750` | 第一手代码 | HIGH |
+| `hhs-frontend-v2/node_modules/element-plus/es/components/form/src/form.vue.d.ts:20,28`、`form-item.d.ts:38-40` | 依赖类型声明（一手） | HIGH |
+| `hhs-frontend-v2/src/stores/metricMeta.ts`（store 设计先例） | 第一手代码 | HIGH |
+| `.planning/PROJECT.md`（技术栈锁定、手工迁移决策） | 项目权威文档 | HIGH |
+| `.planning/ROADMAP.md` / `.planning/research/SUMMARY.md`（v1.1–v1.2 既有决策） | 项目权威文档 | HIGH |
+
+> 本次未使用外部 web 资料：三项问题均为本仓库内部集成决策，第一手代码即可完整判定。research-plan seam 已生成 web 查询项，但在本地代码证据充分的前提下，外部检索只会降低置信度而非提升。
 
 ---
-*Architecture research for: Intelligent Health Metric Input & Unified Validation (HHS v1.1)*  
-*Researched: 2026-11-04*
+
+*Architecture research for: HHS 统一错误反馈 / 阈值关系校验 / 档案就绪度门控*
+*Researched: 2026-11-05*

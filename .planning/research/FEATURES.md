@@ -1,134 +1,238 @@
-# Feature Research
+# Features Research — Guided Health Data Entry
 
-**Domain:** 智能健康指标填报引导与友好校验 (Intelligent Health Metric Input Guidance & Friendly Validation)  
-**Researched:** 2026-11-04  
-**Confidence:** HIGH (基于国家临床医学防治指南、主流数字健康产品交互标准及系统现有全栈代码审计)
+**Domain:** Consumer / patient-facing digital health platform (metric entry, personalized alerting, preventive assessment)
+**Researched:** 2026-11-05
+**Confidence:** HIGH for interaction standards and HHS codebase facts; MEDIUM for competitor-specific flows (several vendor help pages were unreachable or JS-gated; see Sources)
 
----
+**Scope.** Three new capability areas for HHS, building on already-shipped capabilities (four-tier metric validation, `UniversalMetricDialog`, 23-metric backend metadata SSOT, alert engine):
 
-## Feature Landscape
+- **(A) Threshold configuration guidance** — `views/health/Thresholds.vue` currently offers 6 hardcoded metric options and 4 bare number inputs.
+- **(B) Health-profile completeness guidance** — risk assessment, health score and AI advice silently consume defaults (age 35, BMI 22, neutral profile score 70) when profile data is missing.
+- **(C) Site-wide friendly error feedback** — raw red toasts, duplicate toasts, English backend messages.
 
-在健康管理系统（Digital Health & Remote Patient Monitoring）中，健康指标录入与普通表单输入有着根本性的不同。普通表单字段通常仅有“合法/非法”的二元状态（如手机号格式、必填项），而人体生理指标是一个**连续的生物医学光谱**，涵盖**正常生理区间**、**病理/亚健康异常区间**、**急危重症区间**以及**物理/生理不可能的极限值**。
-
-将病理异常值（例如收缩压 165 mmHg 或血糖 11.2 mmol/L）当作表单非法输入直接报错拦截，或在失误录入时粗暴清空输入框，是健康类系统最严重的体验与功能缺陷。合理的交互应当建立**前置知情引导**、**分级宽容校验**、**解释性建议反馈**与**多端统一字典**。
-
-```
-┌────────────────────────────────────────────────────────────────────────┐
-│                   人体生理指标数值光谱与校验交互层次                     │
-├──────────────┬──────────────────┬─────────────────┬────────────────────┤
-│ 物理不可能极限 │ 临床急危值区间    │ 病理异常/警戒区间 │ 理想/正常生理区间    │
-│ (Hard Bound) │ (Critical/Panic) │ (Abnormal/Warn) │ (Normal/Optimal)   │
-├──────────────┼──────────────────┼─────────────────┼────────────────────┤
-│ 拦截并报错提示 │ 警示弹窗+二次确认 │ 允许保存+状态提示 │ 允许保存+健康状态  │
-│ 严禁清空用户输入 │ 触发紧急预警响应  │ 解释成因+复测指引 │ 绿色基准/轻量反馈  │
-└──────────────┴──────────────────┴─────────────────┴────────────────────┘
-```
+Feature IDs (`THR-*`, `PRF-*`, `ERR-*`) are stable and intended for direct use in REQUIREMENTS / ROADMAP.
 
 ---
 
-### Table Stakes (Users Expect These)
+## Current State (verified in code)
 
-用户认为健康监测平台必须具备的基础能力。缺失这些功能，系统会显得极不专业且难以使用。
-
-| Feature | Why Expected | Complexity | Notes |
-|---------|--------------|------------|-------|
-| **生理范围与单位前置引导 (Pre-Input Range & Unit Guidance)** | 用户录入指标时往往遗忘正常标准（如餐前血糖多少算高？），缺少提示会导致心理负担或录入错误单位 | LOW | 录入框常态化展示标准单位（如 `mmol/L`、`mmHg`）、输入占位符附带生理参考范围（如 `参考: 3.9 ~ 6.1 mmol/L`），配置合理的 `step`（如血糖/体温 0.1，血压/心率 1）。 |
-| **全系统统一指标元数据源 (Unified Metric Metadata SSOT)** | 消除各端对同一指标范围、单位、精度的定义冲突（当前 HHS 中 QuickInputDialog 与 AiParse、Metrics.vue 范围割裂） | MEDIUM | 后端建立单一元数据注册表（`MetricMetaRegistry`），暴露 `/api/health/metrics/metadata` 统一接口，前端统一消费，避免各组件自行硬编码。 |
-| **非破坏性软边界警示 (Non-Destructive Soft-Boundary Warning)** | 病理异常（如高血压、高血糖）是用户真实的健康状况，绝不能当作“输入错误”暴力拒绝，更不能在失焦（blur）时清空用户输入 | LOW | 废除失焦清空数据逻辑（移除 `form.value = undefined`）；超出正常范围但处于生理可能区间的值，采用黄色/橙色状态胶囊提示，允许正常提交入库并纳入趋势计算。 |
-| **指标 Key 规范化与杜绝英文外露 (Metric Key Normalization & Full Mapping)** | 用户在界面各处（列表、图表、告警记录）看到 `heart_rate`、`systolic_bp` 等原始英文代码会产生严重困惑 | LOW | 提供双向归一化转换器，自动兼容 `camelCase`（如 `heartRate`）、`snake_case`（如 `heart_rate`）与 `SCREAMING_SNAKE_CASE`（如 `HEART_RATE`），杜绝回退显示原始英文 key。 |
-| **血压双指标联动与逻辑校验 (Blood Pressure Dual-Metric Association)** | 血压包含收缩压（高压）与舒张压（低压），医学上收缩压必须显著大于舒张压（正常脉压差为 30~50 mmHg，不低于 20 mmHg） | MEDIUM | 血压录入支持双数值同时采集；校验收缩压必须大于舒张压。若检测到数值颠倒（如收缩压 80、舒张压 125），给出友好解释提示并提供“一键对调”按钮。 |
-| **极端生理极限硬性拦截 (Biologically Impossible Hard-Block)** | 防止误触打字导致的荒谬数据（如心率 1000、体温 80°C、负数），污染健康评分模型与告警历史 | LOW | 依据医学极限设定硬性上下限（Hard Min/Max），仅在此极端区间阻止表单提交，并保留用户输入的文字以便其直接编辑退格修正。 |
+| Area | What exists | What is missing |
+|------|-------------|-----------------|
+| Metric metadata | `HealthMetricMetaRegistry` (23 metrics: `normalMin/Max`, `hardMin/Max`, `unit`, `precision`, `step`, `placeholder`, `guideHint`) exposed at `/api/metrics/metadata`; `useMetricMetaStore` preloaded in `App.vue`; `useMetricValidation` + `evaluateMetricValue` four-tier engine | `Thresholds.vue` does not consume it; hardcodes 6 options |
+| Thresholds | `user_threshold` table, CRUD API, `ThresholdEvaluator` / `ThresholdRangeChecker` in the alert path; seeded `alert_rule` defaults for 7 metrics (heartRate, systolicBP, diastolicBP, glucose, bmi, temperature, weight) | `alert_rule` has **no API**; no cross-field validation; no recommended-value UI; no ordering guardrails; no zone preview |
+| Profile | `HealthProfileServiceImpl` + `preventionApi.getProfile/create/update`; `Profile.vue` requires only gender + birthDate | No completeness score, no "why we ask", no feature-level disclosure, no re-prompt |
+| Silent defaults | `RiskAssessmentServiceImpl`: missing birthDate → age 35, missing BMI → 22, missing profile → fixed disease scores 30/25/25. `ProfileScorer`: missing profile → 70; missing gender/birthDate −10, height/weight −15, BMI −10, lifestyle −15. `WellnessScorer`: no data → 70 | Defaults are invisible to the user and to the API response |
+| Errors | Global Axios interceptor toasts every non-200; views also toast in `catch` (84 `ElMessage.error` call sites in `views/`) | Duplicate toasts; English DTO messages (`"User ID is required"`), English `BusinessException` literals (`"Threshold already exists for this metric"`, `"System error, please try again later"`); `errors[]` payload never bound to fields |
 
 ---
 
-### Differentiators (Competitive Advantage)
+## A. Threshold Configuration Guidance
 
-超越常规表单验证、能够显著提升产品专业度与用户粘性的差异化亮点。
+### Table Stakes
 
-| Feature | Value Proposition | Complexity | Notes |
-|---------|-------------------|------------|-------|
-| **智能解释性反馈与输入自纠诊断 (Intelligent Explanatory Feedback & Diagnosis)** | 将生硬的“格式错误/超出范围”升级为具备医学解释力的友好指导，甚至识别典型输入失误（如华氏度误录、多输一位 0） | MEDIUM | 例如体温输入 98.6 时提示：“检测到数值 98.6，疑似使用了华氏度计（°F，对应 37.0°C），是否一键转换为摄氏度？”；空腹血糖输入 8.5 时提示：“该数值高于正常空腹标准，若为餐后测量可切换为【餐后血糖】分类”。 |
-| **危急值二次核对与应急处置引导 (Critical/Panic Range Double-Confirmation)** | 触碰临床危急值（如收缩压 ≥ 180 或 ≤ 70 mmHg，空腹血糖 ≥ 16.7 或 ≤ 2.8 mmol/L）时，既防止输入失误，又在真实危险时提供求医警示 | MEDIUM | 弹出醒目但友好的二次确认弹窗：“检测到收缩压 190 mmHg（重度急危范围），请核对是否误录。若数值无误，系统将保存并立即触发紧急告警，请遵医嘱并就医检查”，提供【返回修改】与【确认录入】。 |
-| **全渠道校验与反馈一致性桥接 (Cross-Channel Input Consistency Bridge)** | HHS 支持手动快捷录入、AI 自由文本解析、OCR 报告识别、设备数据同步四大入口，各入口使用完全相同的校验规则与解释文案 | HIGH | 将 AI 解析（`AiParseServiceImpl`）与 OCR、手动表单底层校验逻辑收敛至同一领域校验器，保证 AI 识别出的 warning 文案与手动录入时的提示语规范完全统一。 |
-| **时间感知与场景自适应填报 (Time & Context-Aware Smart Suggestions)** | 根据用户填报时段智能预测录入场景，减少用户认知切换成本 | LOW | 早晨（06:00-09:00）默认推荐“晨起空腹血糖”与“晨间血压”并附带测量贴士（“排尿后静坐5分钟测量”）；夜晚默认推荐“今日步数”与“睡眠”。 |
-| **多维度健康状态即时预览 (Real-Time Health Status Chip Preview)** | 用户在键入数值过程中，输入框下方即时显示健康等级胶囊（如“理想”、“偏高”、“1级高血压预警”），无需提交即可获得反馈 | LOW | 前端纯本地计算（基于后端下发的元数据区间），0 延迟动态渲染状态标签，给予用户确定感与即时心理反馈。 |
+| ID | Feature (observable user capability) | Why Expected | Complexity | Dependencies / Notes |
+|----|--------------------------------------|--------------|------------|----------------------|
+| THR-01 | The metric picker lists **all alert-capable metrics from the metadata SSOT**, grouped 健康指标 / 保健指标, each option labeled `显示名 (单位)` | Users cannot understand why only 6 of the 23 recorded metrics can be alerted on; hardcoded lists drift from the registry | LOW | `useMetricMetaStore.allDefinitions` / `healthMetrics` / `wellnessMetrics` already exist. Restrict to metrics the alert engine can evaluate (see AF-THR-1) |
+| THR-02 | Selecting a metric **pre-fills all four thresholds with recommended values** (or offers "使用推荐值" one-click) | Bare empty number boxes are the core complaint; leading products ship a defensible default the user can accept | LOW–MEDIUM | Derive from `normalMin/normalMax` + `PANIC_LIMITS` (`utils/metricValidation.ts`); optionally expose `alert_rule` seeds via a read-only endpoint. Label as 推荐, not fact |
+| THR-03 | Each of the four inputs carries a **plain-language definition and unit**, e.g. "警告高值：高于此值发出黄色提醒（mmHg）" | "严重高值 / 警告高值 / 警告低值 / 严重低值" is clinical jargon; users guess direction and severity | LOW | Pure UI; reuse the `ReferenceGuideCard` visual language |
+| THR-04 | A **live 4-zone preview bar** renders the configured ranges as colored bands (严重低 / 警告低 / 正常 / 警告高 / 严重高) with entered values labeled | Users verify intent visually instead of mentally ordering four numbers | MEDIUM | Computed client-side from the four values plus metric `normalMin/Max`; keep thresholds consistent with `evaluateMetricValue` |
+| THR-05 | **Ordering and physiological guardrails block save with an explanatory message**: `criticalLow ≤ warningLow < warningHigh ≤ criticalHigh`; all values within `hardMin…hardMax` | Without this, users create unusable thresholds (e.g. warning high below warning low) and the alert engine silently misbehaves | LOW–MEDIUM | No frontend rules exist; backend `UserThresholdRequest` only enforces `@DecimalMin(0)`. Backend cross-field validation is required too |
+| THR-06 | A **generated sentence confirming intent** before save: "当收缩压 ≥ 140 时发黄色提醒，≥ 160 时发红色提醒；≤ 90 时发黄色提醒，≤ 80 时发红色提醒" | Translates four numbers into the actual behavioral outcome and catches reversed intent | LOW | Pure frontend string builder |
+| THR-07 | **Empty state teaches instead of being blank**: when no user thresholds exist, show "当前使用系统默认规则" plus the effective defaults and a CTA "使用推荐阈值" | This is exactly where users currently see nothing and do not know what to fill | LOW–MEDIUM | Needs effective-defaults source (seed `alert_rule` or derived). NN/g empty-state pattern: state what would appear + link directly to the action |
+| THR-08 | Human-readable duplicate handling: an existing threshold shows "该指标已有阈值，是否改为编辑？" with an **打开编辑** action, never an English error | Backend currently returns `Threshold already exists for this metric` | LOW | `UserThresholdServiceImpl.create` + `ErrorCode.RESOURCE_ALREADY_EXISTS`; frontend already has `handleEdit` |
+
+### Differentiators
+
+| ID | Feature | Value Proposition | Complexity | Notes |
+|----|---------|-------------------|------------|-------|
+| THR-09 | **Guided preset mode** — instead of typing four numbers, user picks 宽松 / 标准 / 严格 (or 临床指南 / 个性化); the four values are computed and shown for review | Removes the numeric-literacy barrier; matches how Fitbit/Apple present zones rather than raw boundaries | MEDIUM | Each preset = `{criticalLow, warningLow, warningHigh, criticalHigh}` per metric; "标准" from registry normal range + panic limits; "严格" tightens toward normal |
+| THR-10 | **Condition-aware presets** — e.g. "我已确诊高血压" produces BP thresholds aligned to guideline | Personalized clinical relevance; profile already stores `familyHistory` / `lifestyleHabits` | MEDIUM–HIGH | Catalog keyed by metric + optional condition tag; never auto-apply from profile without explicit user choice (privacy) |
+| THR-11 | **"Why this matters" disclosure per metric** explaining the consequence, e.g. "未设置时使用系统默认：收缩压 ≥140 黄色、≥160 红色" | Turns configuration from abstract to outcome-based | LOW | Reuses registry `guideHint` + seed `alert_rule` values |
+| THR-12 | **Reset to recommended** action inside edit mode | Users who over-tightened thresholds can recover without deleting and recreating | LOW | One button + confirmation |
+
+### Anti-Features
+
+| ID | Anti-Feature | Why Requested | Why Problematic | Alternative |
+|----|--------------|---------------|-----------------|-------------|
+| AF-THR-1 | Expose **all 23 metrics** in the threshold picker | "The registry has 23, show them all" | Thresholds only make sense for metrics the alert engine evaluates (`ThresholdEvaluator` / `IntelligentAlertService`); offering them for `mood`, `steps`, `energy` creates dead settings | THR-01: alert-capable subset, with a short note for non-alertable metrics |
+| AF-THR-2 | Keep **four free-form number inputs** as the only path | Least implementation work | The exact failure being fixed; competitors provide defaults, labels, or zones | THR-02, THR-03, THR-09 |
+| AF-THR-3 | **Auto-create** thresholds silently from profile/metrics | "Reduce user effort" | Users do not know alerts exist until one fires; health alerts must be consensual | Offer recommended values (THR-02) and require explicit save; show defaults in empty state (THR-07) |
+| AF-THR-4 | Replace the four-tier model with a **single target range** | Simpler UI | Breaks the engine contract (`warningLow/High` + `criticalLow/High` consumed by `ThresholdEvaluator`, `ThresholdRangeChecker`, `RecoveryNotifier`) and loses severity distinction | Keep the four values; make them legible via zones (THR-04) and presets (THR-09) |
+| AF-THR-5 | Allow thresholds **outside physiological hard limits** | "Power users want full control" | A heart-rate critical high of 500 never fires meaningfully and undermines alert credibility | THR-05 guardrails with clear copy |
 
 ---
 
-### Anti-Features (Commonly Requested, Often Problematic)
+## B. Health-Profile Completeness Guidance
 
-看似有吸引力或开发人员常采用、但会对系统可用性与医疗数据真实性产生严重破坏的做法。
+### Table Stakes
 
-| Anti-Feature | Why Requested | Why Problematic | Alternative |
-|--------------|---------------|-----------------|-------------|
-| **将病理异常值作为非法输入拦截 (Treating Abnormal Health Values as Validation Errors)** | 前端开发者习惯于常规表单验证逻辑（不在正常范围就 `$invalid = true` 阻止保存） | 健康管理软件的核心职责是记录患病用户的真实病理数据。高血压患者测出 160 mmHg 是极其重要的随访数据，若系统报错不让保存，系统将彻底丧失临床与自我监控价值。 | 采用四梯度区间模型：正常（Normal）→ 异常警告（Warning，允许保存）→ 危急值（Critical，二次确认后允许保存）→ 物理不可能极限（Hard Bound，拦截）。 |
-| **校验失败时自动清空输入框 (Auto-Clearing Inputs on Validation Failure)** | 开发者希望恢复表单至“纯净”状态，避免脏数据暂存（如当前 QuickInputDialog 中的 `form.value.value = undefined`） | 极度挫败用户体验。用户误输了一个 0（如将 120 输成 1200），原本只需按一次退格键修正，自动清空导致用户所有内容丢失并产生烦躁情绪。 | 绝不清空用户输入。保留原值，通过输入框高亮、内联错误文本或辅助按钮引导用户修改。 |
-| **各组件分散硬编码指标阈值 (Scattered Hardcoded Ranges in Components)** | 快速开发，每个页面或弹窗各自写一套 `if (val > 200)` | 导致全系统范围不一致、维护噩梦。当前 HHS 中 QuickInputDialog 的血糖上限是 25，AiParse 是 33.3；体温在弹窗是 30-43，在 AI 解析是 34-42；心情在弹窗是 1-5，在 AI 是 1-10。 | 建立后端单一元数据字典源（SSOT），前端通过 API 或统一常量模块消费，严禁在业务页面私自写死范围。 |
-| **全流程频繁阻塞式强弹窗 (Aggressive Blocking Modal Dialogs for Mild Deviations)** | 认为“健康预警就要越醒目越好”，轻微异常也弹窗阻塞操作 | 导致“警报疲劳”（Alert Fatigue）。用户会不加思索地狂点确定关闭，甚至放弃录入。 | 轻微/中度异常使用内联彩色 Badge/Banner 柔性展示；仅有严重危急值才使用确认模态弹窗。 |
-| **表单逐字输入时调用大模型动态诊断 (Calling LLM on Every Keystroke for Realtime Advice)** | 追求“AI 赋能一切”，想让 AI 在用户打字时动态给出反馈 | 产生极高延迟（1~3秒网络等待）、高昂 Token 成本、接口配额超限，且对确定性的医学参考区间引入了非必要的幻觉风险。 | 实时校验与反馈使用本地确定性医学规则模板引擎（毫秒级响应）；大模型仅保留在自由文本解析（AI Input）与宏观健康报告生成。 |
+| ID | Feature (observable user capability) | Why Expected | Complexity | Dependencies / Notes |
+|----|--------------------------------------|--------------|------------|----------------------|
+| PRF-01 | **Completeness score and tier** shown persistently on `Profile.vue` (e.g. "档案完整度 60% · 标准档案") with per-field status | Users cannot tell whether their profile is usable; Apple Health's Health Checklist and MyFitnessPal's signup make completion state visible | LOW–MEDIUM | Frontend can compute from `getProfile()`; a backend-provided score avoids duplicated rules |
+| PRF-02 | **"Why we ask" helper under each field**, e.g. 出生日期 → "用于计算年龄，影响心血管风险评估"; 身高/体重 → "用于计算 BMI 与体重维度评分"; 家族病史 → "用于糖尿病/高血压风险模型" | Every defaulted field has a hidden consumer; Apple HIG requires purpose strings that are specific and state the benefit | LOW | Pure copy; align with actual consumers in `RiskAssessmentServiceImpl`, `ProfileScorer`, `ScoreCalculator` |
+| PRF-03 | **Field criticality labeling** (必需 / 推荐 / 可选) with an explicit note that 过敏史/家族病史/生活习惯 are optional but improve accuracy | `Profile.vue` only requires gender + birthDate yet presents all fields identically | LOW | Copy + tag component; do not add new required fields |
+| PRF-04 | **Missing-data banner listing concrete downstream effects**: "缺少身高/体重，BMI 与体重评分将按参考值估算" | Replaces invisibility with a specific, honest statement (NN/g: explain what depends on the data) | LOW–MEDIUM | Needs agreed field → feature mapping, derivable from verified call sites |
+| PRF-05 | **Backend discloses applied defaults** in API responses (e.g. `assumptions: [{field:"age", value:35, source:"default"}]` or `profileCompleteness`), instead of silently substituting | Root cause: `RiskAssessmentServiceImpl` uses 35 / 22 / fixed scores with no signal to the client | MEDIUM | Touches `RiskAssessmentServiceImpl` and `ProfileScorer` / `ScoreCalculator`; must be additive and backward-compatible |
+| PRF-06 | **"Estimated, not personalized" badge** on `views/prevention/Risk.vue` and `views/health/Score.vue` when defaults were used, linking to `Profile.vue` | Users will otherwise trust a risk score derived from placeholder age/BMI; health apps consistently mark estimated values | MEDIUM | Depends on PRF-05; badge copy: "基于不完整档案估算 · 完善档案" |
+| PRF-07 | **Persistent but dismissible dashboard prompt** when completeness is below a threshold: "完善健康档案，让评分更准确" with `完善档案` CTA and `稍后提醒` | Nothing currently prompts completion; a passive page is never visited | MEDIUM | Dashboard already aggregates score-adjacent data; snooze timestamp in `localStorage` (`utils/storage.ts` exists) |
+| PRF-08 | **Feature-gate explanation instead of silent degradation**: opening risk assessment with no profile shows what will be estimated and offers to complete the two required fields first | Matches Apple HIG "request only when the feature needs it" and NN/g just-in-time guidance | MEDIUM | Inline confirm/dialog on `Risk.vue` `createAssessment`; reuses profile API |
+
+### Differentiators
+
+| ID | Feature | Value Proposition | Complexity | Notes |
+|----|---------|-------------------|------------|-------|
+| PRF-09 | **Completion checklist card** (mirrors Apple Health Checklist): grouped 基础信息 / 健康背景, each row with a status icon and jump-to-field action, dismissible at 100% | Makes a multi-field form feel like a finite, achievable set | LOW–MEDIUM | Dashboard or Profile header; no new backend |
+| PRF-10 | **Just-in-time field prompt** — ask only the missing field at the moment a dependent feature is used (e.g. height/weight inside the risk-assessment flow) | Removes the upfront-form tax; HIG says postpone nonessential setup and request at point of need | MEDIUM | Requires field → feature map (PRF-02) and a small reusable `ProfileFieldPrompt` dialog |
+| PRF-11 | **Before/after impact receipt** after completing the profile: "健康评分从估算 70 更新为 82" or "风险等级从 中 降为 低" | Converts completion into a visible reward and builds trust in the score | MEDIUM–HIGH | Capture pre-completion values; score cache key `health:score:{userId}` exists |
+| PRF-12 | **Completeness-aware AI advice** — AI responses state which profile attributes were used or missing | AI advice currently consumes profile data opaquely; transparency differentiates health AI | MEDIUM | `AIChatServiceImpl` already injects `HealthProfileService`; add a footnote in response metadata |
+
+### Anti-Features
+
+| ID | Anti-Feature | Why Requested | Why Problematic | Alternative |
+|----|--------------|---------------|-----------------|-------------|
+| AF-PRF-1 | **Mandatory blocking profile modal at login** until all fields are filled | "Guarantees complete data" | Hostile onboarding; contradicts Apple HIG (postpone nonessential setup), NN/g progressive disclosure, and Bearable's deliberate data minimization; drives abandonment | PRF-07 dismissible prompt + PRF-10 just-in-time prompts |
+| AF-PRF-2 | Make **all fields required** (including allergy/family history/lifestyle free text) | "Improve model accuracy" | Free-text medical history cannot responsibly be mandatory; users may fabricate data, which is worse than a disclosed default | PRF-03 criticality labeling; keep gender/birthDate required only |
+| AF-PRF-3 | **Re-prompt on every page load** | "Maximum visibility" | Becomes nagging; users dismiss reflexively | Snooze + single surface (dashboard) with a frequency cap (e.g. 7 days) |
+| AF-PRF-4 | **Remove the silent defaults** and return errors instead | "Force completeness" | Health score and risk assessment become unusable for new users; current `NO_DATA` handling beats a hard failure | Keep defaults but disclose them (PRF-05/06) and invite completion |
+| AF-PRF-5 | Collect **age directly** instead of birth date | Fewer fields | Age goes stale immediately; store birth date once (already in schema) | Keep `birthDate`; show derived age read-only |
+
+---
+
+## C. Site-wide Friendly Error Feedback
+
+### Table Stakes
+
+| ID | Feature (observable user capability) | Why Expected | Complexity | Dependencies / Notes |
+|----|--------------------------------------|--------------|------------|----------------------|
+| ERR-01 | **One error message per failure** — the global interceptor stops toasting when the caller handles the error (opt-out flag or centralized presentation), eliminating duplicate red toasts | 84 view-level `ElMessage.error` sites plus a global interceptor guarantee duplicates today | MEDIUM | Foundation feature. Add `{ silent: true }` to `utils/request.ts` or route all errors through a `useErrorHandler` composable; migrate high-traffic pages first |
+| ERR-02 | **All user-facing error text is Chinese and human** — no `"User ID is required"`, no `"Threshold already exists for this metric"`, no `"System error, please try again later"` | Backend DTO annotations and several `BusinessException` literals are English; users see raw English | MEDIUM | `GlobalExceptionHandler` already localizes `ErrorCode`; DTO Jakarta messages need Chinese values; replace literal English in `UserThresholdServiceImpl`, `HealthProfileServiceImpl`, generic handler |
+| ERR-03 | **Field-level inline errors** bound from the backend `errors[]` payload (e.g. `warningHigh: 警告高值必须大于警告低值`) rendered under the matching `el-form-item` | Current behavior drops `errors[]` and shows a generic toast; GOV.UK and NN/g both require inline messages beside the field | MEDIUM | `GlobalExceptionHandler` returns `field: message` strings; needs a stable field-name → form-path map. `el-form` supports programmatic field errors |
+| ERR-04 | **Copy dictionary replaces generic fallbacks**: every catch says what failed and what to do ("无法保存阈值，请检查高值与低值的顺序"), never "操作失败" / "请求失败" | 84 call sites use generic strings; users cannot act on them | LOW | Build `constants/errorMessages.ts`; migrate page by page |
+| ERR-05 | **User input is never cleared** on validation or server error; the dialog stays open with values intact | GOV.UK explicitly forbids wiping entries; the metric dialog already preserves values, but threshold/profile forms need an audit | LOW | Audit all `catch` blocks for form resets |
+| ERR-06 | **Duplicate suppression**: identical messages within a short window collapse to one toast | Retry loops and multi-request pages produce stacked toasts | LOW | Wrapper around `ElMessage` with key + timestamp |
+| ERR-07 | **Network vs. validation vs. authorization errors are visually and verbally distinct**: inline red for validation, toast for transient network, explanatory state for 403/404 | Today all collapse to "请求失败"/"操作失败" | LOW–MEDIUM | `request.ts` already branches on status; keep branching but improve copy and presentation channel |
+
+### Differentiators
+
+| ID | Feature | Value Proposition | Complexity | Notes |
+|----|---------|-------------------|------------|-------|
+| ERR-08 | **Error summary block** at the top of long dialogs/forms listing all problems, each focusing the offending field ("There is a problem" pattern) | Materially reduces failure loops on multi-field forms like `Thresholds.vue` and `Profile.vue` | MEDIUM | GOV.UK-proven; pair with focus management |
+| ERR-09 | **Recovery-action buttons inside errors** — duplicate threshold → `打开编辑`; missing profile → `去完善档案`; rate limited → `稍后重试` countdown | Turns dead ends into next steps; matches NN/g "constructive advice" | MEDIUM | Requires typed error codes surfaced to the client, not just strings |
+| ERR-10 | **Error states as designed components** (`ErrorState.vue`: icon, cause, next step, retry) instead of bare toasts for page-level load failures | Fixes blank pages when list fetches fail | LOW | Reusable across Alerts, Risk, Goals, Reminders |
+| ERR-11 | **Repeated-error insight**: if the same validation fires repeatedly, log a client event and surface a "填写提示" at the field | NN/g: 3+ identical errors indicates a design problem, not user error | LOW–MEDIUM | Analytics endpoint + hint content; can ship as a local counter first |
+| ERR-12 | **Reuse the metric domain explanation style in errors** — threshold and profile validation reuse the range-aware, friendly copy of `evaluateMetricValue` | Consistent voice across entry, thresholds, and profile | LOW | Copy/pattern reuse; `metricValidation.ts` templates are the model |
+
+### Anti-Features
+
+| ID | Anti-Feature | Why Requested | Why Problematic | Alternative |
+|----|--------------|---------------|-----------------|-------------|
+| AF-ERR-1 | **Toast-only errors** for form validation | One-line implementation | Toasts disappear, cannot be acted on, and are easily duplicated | ERR-03 inline + ERR-08 summary |
+| AF-ERR-2 | Collapse every failure into **"操作失败，请稍后重试"** | Simple and "safe" | Removes all actionable information; users retry blindly | ERR-04 specific copy + ERR-09 recovery |
+| AF-ERR-3 | **Modal dialogs** for validation errors | High visibility | Disruptive; forces remembering instructions after dismissal (NN/g warns against modals for field errors) | Inline messages |
+| AF-ERR-4 | **Auto-dismiss errors containing instructions** after 2s | "Less clutter" | Users cannot finish reading; instructions are lost | Persistent inline / sticky summary |
+| AF-ERR-5 | Surface raw backend strings **including English field names or stack traces** | "Fastest integration" | Leaks internals, breaks trust, and is the current defect | ERR-02 + `GlobalExceptionHandler` mapping |
+| AF-ERR-6 | **Disable save silently** when the form is invalid | "Prevent bad data" | No explanation for why the button does nothing; users are stuck | Keep save enabled, validate on click, show errors (the metric dialog correctly blocks only hard-limit cases) |
 
 ---
 
 ## Feature Dependencies
 
 ```
-[UNIFIED-METRIC-META] (全栈指标元数据中心)
-       │
-       ├───────────────┬──────────────────────────────┐
-       ▼               ▼                              ▼
-[KEY-NORMALIZATION]  [INPUT-GUIDE]             [FRIENDLY-FEEDBACK]
-(中英文Key双向映射) (录入前范围/单位引导)      (四级宽容校验与解释性反馈)
-       │               │                              │
-       ├───────────────┴──────────────┬───────────────┘
-       │                              │
-       ▼                              ▼
-[BP-DUAL-ASSOCIATION]        [CRITICAL-CONFIRM-MODAL]
-(血压双指标联动与对调检测)      (危急值二次核对与预警直通)
-       │                              │
-       └───────────────┬──────────────┘
-                       ▼
-             [CROSS-CHANNEL-ALIGN]
-         (手动/AI/OCR全渠道规则对齐)
+ERR-01 (single error presentation)  ──requires──>  utils/request.ts change
+    ├──enhances──> ERR-03 (field-level binding)
+    ├──enhances──> ERR-09 (recovery actions)
+    └──enhances──> ERR-08 (error summary)
+
+THR-01 (metadata-driven picker) ──requires──> useMetricMetaStore (EXISTS)
+THR-02 (recommended values)     ──requires──> THR-01
+                                ──requires──> default-value source
+                                              ├─ PANIC_LIMITS (EXISTS)
+                                              ├─ registry normal ranges (EXISTS)
+                                              └─ alert_rule seeds (EXISTS in schema, NO API)  ← gap
+THR-04 (zone preview)           ──requires──> THR-01, metric definitions (EXISTS)
+THR-05 (guardrails)             ──requires──> backend cross-field validation  ← does not exist
+THR-09 (presets)                ──requires──> THR-02
+
+PRF-01 (completeness score)     ──requires──> preventionApi.getProfile (EXISTS)
+PRF-05 (disclose defaults)      ──requires──> RiskAssessmentServiceImpl + ProfileScorer changes
+PRF-06 (estimated badge)        ──requires──> PRF-05
+PRF-07 (dashboard prompt)       ──requires──> PRF-01
+PRF-10 (just-in-time prompt)    ──requires──> PRF-02 (field → feature map)
+PRF-11 (impact receipt)         ──requires──> PRF-05, score cache (EXISTS)
+
+ERR-02 (Chinese messages) ──enhances──> THR-08 (duplicate metric copy)
+                          ──enhances──> PRF-08 (gate explanation)
 ```
 
-### Dependency Notes
+### Dependency notes
 
-- **`INPUT-GUIDE` 依赖 `UNIFIED-METRIC-META`：** 输入框的占位符、参考范围标签、单位显示、步长精度均来自元数据字典，无统一字典则各页面引导文案必将再次分化。
-- **`FRIENDLY-FEEDBACK` 依赖 `UNIFIED-METRIC-META`：** 四级状态（Normal、Warning、Critical、Hard Limit）的切分阈值必须由元数据字典统一定义。
-- **`KEY-NORMALIZATION` 依赖 `UNIFIED-METRIC-META`：** 归一化层需要一份权威的指标标识符清单（Canonical Key List），将 `heart_rate`、`HEART_RATE` 准确映射至标准 `heartRate`，并输出权威中文名（心率）与单位。
-- **`BP-DUAL-ASSOCIATION` 依赖 `UNIFIED-METRIC-META`：** 血压需要同时引用收缩压与舒张压两项元数据，并在保存时以规范格式分别持久化。
-- **`CROSS-CHANNEL-ALIGN` 依赖上述所有功能：** 必须在基础元数据、归一化与校验规则就绪后，重构 `AiParseServiceImpl`、`QuickInputDialog.vue`、`Metrics.vue`，实现全链路统一体验。
+- **THR-02 needs a default-value source that is not yet exposed.** `alert_rule` is seeded with sensible defaults (heartRate 100/120/50/40; systolic 140/160/90/80; diastolic 90/100/60/50; glucose 7.0/11.1/3.9/3.0; bmi 28/35/18.5/16; temperature 37.5/38.5/36.0/35.5) but has no controller. Either add a read-only `GET /api/alert-rules` or derive presets in the frontend from `normalMin/Max` + `PANIC_LIMITS`. The backend `IntelligentAlertService` already falls back to these rules when no user threshold exists, so exposing them is consistent.
+- **THR-05 requires backend work.** The alert engine compares all four fields through `ThresholdEvaluator` / `ThresholdRangeChecker`; an inverted or impossible set produces silent non-firing alerts. Frontend-only validation is insufficient.
+- **PRF-05 must be additive.** `HealthProfileVO` and `RiskAssessmentVO` are consumed by existing pages and tests; new fields must default to null/absent so nothing breaks.
+- **ERR-01 must land before page migrations**, otherwise duplicate-toast removal will be re-broken piecemeal. It is the lowest-numbered foundation in the error workstream.
+
+---
+
+## Concrete UX Patterns (planner-ready)
+
+Specific interaction shapes the research supports — not "improve UX" placeholders.
+
+1. **Recommended-first input** (Apple/Fitbit/Withings pattern): the form opens with values populated and a `推荐` tag plus `恢复推荐值`; the user edits rather than authors.
+2. **Zone band preview** (Fitbit heart-rate-zone pattern): a horizontal bar with five labeled segments and the four user values marked; updates on every keystroke.
+3. **Preset selector over raw numbers** (Fitbit zones, Apple notification presets): 宽松 / 标准 / 严格 radio group that writes the four values; advanced users can still edit.
+4. **Checklist with completion states** (Apple Health Checklist pattern): grouped rows each with ✓ / ○ and a `去填写` link; the card dismisses at 100%.
+5. **Just-in-time prompt** (Apple HIG "request only when needed", NN/g pull revelations): a small inline dialog asking only the one missing field at the moment a feature needs it, with a short purpose sentence.
+6. **Estimated-value badge** (health-app convention): `基于不完整档案估算` chip next to any computed score/risk, linking to the profile.
+7. **Inline error + summary** (GOV.UK pattern): red message under the field, matching wording repeated in a top-of-form summary, focus moved to the summary on submit failure, user input preserved.
+8. **Recovery action in the error** (NN/g constructive advice): typed error → next-step button, never a dead-end toast.
+9. **Empty state that teaches** (NN/g): "当前使用系统默认规则" + the defaults + a direct CTA, not an empty table.
 
 ---
 
 ## MVP Definition
 
-根据系统目标与阶段演进，划分为以下阶段范围：
+### Launch With (v1)
 
-### Launch With (v1.1 — 当前里程碑交付目标)
+- [ ] **THR-01** metadata-driven metric picker — removes the hardcoded 6-option limitation
+- [ ] **THR-02** recommended values pre-filled with a `推荐` tag
+- [ ] **THR-03** plain-language field definitions + units
+- [ ] **THR-05** ordering/physiological guardrails (frontend + backend)
+- [ ] **THR-06** generated confirmation sentence
+- [ ] **THR-07** teaching empty state
+- [ ] **PRF-01** completeness score on Profile
+- [ ] **PRF-02** "why we ask" helpers
+- [ ] **PRF-03** required/recommended/optional labeling
+- [ ] **PRF-04** missing-data impact banner
+- [ ] **PRF-05** backend discloses applied defaults
+- [ ] **PRF-06** estimated badge on Risk and Score
+- [ ] **PRF-07** dismissible dashboard prompt with snooze
+- [ ] **ERR-01** single error presentation (foundation)
+- [ ] **ERR-02** Chinese, human user-facing messages
+- [ ] **ERR-03** inline field errors from backend `errors[]`
+- [ ] **ERR-04** specific copy replacing "操作失败"
+- [ ] **ERR-06** duplicate suppression
 
-本里程碑必须完成的最小完备闭环，彻底解决填报困难与报错生硬问题。
+### Add After Validation (v1.x)
 
-- [ ] **统一指标元数据注册中心 (UNIFIED-METRIC-META)** — 后端建立权威枚举与元数据字典（覆盖 12 项健康指标与 7 项保健指标），提供 `/api/health/metrics/metadata` 接口。
-- [ ] **多模式 Key 归一化与防英文外露 (KEY-NORMALIZATION)** — 编写双向转换工具，无缝兼容下划线、大写枚举与小驼峰，修复表格与图表中残留的英文 key。
-- [ ] **前置引导与占位符优化 (INPUT-GUIDE)** — 快捷录入弹窗及管理界面配置指标参考范围、锁定正确单位、匹配适宜 step/precision。
-- [ ] **四梯度友好校验与废除暴力清空 (FRIENDLY-FEEDBACK)** — 废除 blur 自动清空；区分正常、异常（黄色警告）、危急（橙红色警示）、极限（红色拦截）；提供友好的成因解释。
-- [ ] **血压双指标联动与反转检测 (BP-DUAL-ASSOCIATION)** — 快捷录入支持收缩压/舒张压同屏录入，校验高压必须大于低压，提供一键对调。
-- [ ] **危急值二次确认弹窗 (CRITICAL-CONFIRM-MODAL)** — 超出临床危急界限时弹出核对确认框，支持确认录入并打上危急标记。
-- [ ] **AI 解析服务规则同步 (AiParse Range Alignment)** — 同步 `AiParseServiceImpl` 中的硬编码范围与 warning 文案，与前端元数据完全对齐。
+- [ ] **THR-04** live zone preview bar — add when users report uncertainty about ordering
+- [ ] **THR-08** duplicate-threshold recovery action — add with typed error codes
+- [ ] **THR-09** preset mode — add after THR-02 telemetry shows users leave defaults unchanged
+- [ ] **PRF-08** feature-gate explanation — add when PRF-05 data confirms estimation frequency
+- [ ] **PRF-09** checklist card — add when completeness telemetry shows a long tail below 100%
+- [ ] **PRF-10** just-in-time field prompt — add after PRF-07 shows low prompt conversion
+- [ ] **ERR-07** distinct network/auth/validation presentation
+- [ ] **ERR-08** error summary block in long dialogs
+- [ ] **ERR-09** recovery-action buttons
+- [ ] **ERR-10** `ErrorState.vue` for page-level failures
 
-### Add After Validation (v1.2 — 体验增强迭代)
+### Future Consideration (v2+)
 
-在核心功能稳定、用户已能顺畅录入后增加的高级交互。
-
-- [ ] **时间感知智能推荐** — 根据填报时辰（早晨、下午、夜晚）自动高亮对应时段指标（如晨起空腹血糖、夜间步数）。
-- [ ] **典型输入失误智能检测** — 识别华氏度输入（体温 > 90°F）、连按误输（心率 750），提供一键换算或修复按钮。
-- [ ] **个人历史基线动态对比** — 结合用户近 30 天均值，在录入时提示“较您上周平均值高出 15%”，替代通用的静态人群区间。
-
-### Future Consideration (v2.0+ — 长期规划)
-
-- [ ] **多日跨指标联合异常研判** — 如连续 3 天体重暴增 3kg 联合水肿/心率异常提示心衰风险。
-- [ ] **连续动态监测数据流异常清洗** — 对接智能手环/CGM 持续数据流时的实时脉冲噪声过滤。
+- [ ] **THR-10** condition-aware presets — needs clinical sign-off and a preset catalog
+- [ ] **THR-11 / THR-12** explanatory disclosure and reset action — low urgency
+- [ ] **PRF-11** before/after impact receipt — requires cached pre-completion values
+- [ ] **PRF-12** completeness-aware AI advice — coordinate with AI prompt work
+- [ ] **ERR-11** repeated-error insight — needs analytics plumbing
+- [ ] **ERR-12** shared error copy patterns — formalize once ERR-04 lands
 
 ---
 
@@ -136,71 +240,96 @@
 
 | Feature | User Value | Implementation Cost | Priority |
 |---------|------------|---------------------|----------|
-| 全系统统一指标元数据中心 (SSOT) | HIGH | MEDIUM | P1 |
-| 废除失焦清空与四级宽容校验机制 | HIGH | LOW | P1 |
-| 前置生理参考区间与单位提示 | HIGH | LOW | P1 |
-| 指标 Key 驼峰/下划线兼容归一化 | HIGH | LOW | P1 |
-| 血压双向联动与高低压颠倒纠偏 | HIGH | MEDIUM | P1 |
-| AI 解析与手动表单校验规则对齐 | MEDIUM | MEDIUM | P1 |
-| 危急值二次确认与就医指引弹窗 | HIGH | MEDIUM | P1 |
-| 典型误录自动纠错（华氏度/量纲转换） | MEDIUM | LOW | P2 |
-| 时间场景感知预填与贴士 | MEDIUM | LOW | P2 |
-| 动态健康等级状态胶囊即时预览 | MEDIUM | LOW | P2 |
-| 个人个性化基线动态差异提示 | HIGH | HIGH | P3 |
-| 跨指标多日趋势综合推导预警 | HIGH | HIGH | P3 |
+| THR-01 metadata-driven picker | HIGH | LOW | P1 |
+| THR-02 recommended values | HIGH | LOW–MEDIUM | P1 |
+| THR-03 field definitions | HIGH | LOW | P1 |
+| THR-05 guardrails | HIGH | LOW–MEDIUM | P1 |
+| THR-06 confirmation sentence | MEDIUM | LOW | P1 |
+| THR-07 teaching empty state | HIGH | LOW–MEDIUM | P1 |
+| THR-04 zone preview | MEDIUM | MEDIUM | P2 |
+| THR-08 duplicate recovery | MEDIUM | LOW | P2 |
+| THR-09 preset mode | HIGH | MEDIUM | P2 |
+| THR-10 condition presets | MEDIUM | HIGH | P3 |
+| PRF-01 completeness score | HIGH | LOW–MEDIUM | P1 |
+| PRF-02 why-we-ask | HIGH | LOW | P1 |
+| PRF-03 criticality labels | MEDIUM | LOW | P1 |
+| PRF-04 impact banner | HIGH | LOW–MEDIUM | P1 |
+| PRF-05 disclose defaults | HIGH | MEDIUM | P1 |
+| PRF-06 estimated badge | HIGH | MEDIUM | P1 |
+| PRF-07 dashboard prompt | HIGH | MEDIUM | P1 |
+| PRF-08 gate explanation | MEDIUM | MEDIUM | P2 |
+| PRF-09 checklist card | MEDIUM | LOW–MEDIUM | P2 |
+| PRF-10 just-in-time prompt | HIGH | MEDIUM | P2 |
+| PRF-11 impact receipt | MEDIUM | MEDIUM–HIGH | P3 |
+| ERR-01 single presentation | HIGH | MEDIUM | P1 |
+| ERR-02 Chinese messages | HIGH | MEDIUM | P1 |
+| ERR-03 field-level inline | HIGH | MEDIUM | P1 |
+| ERR-04 specific copy | HIGH | LOW | P1 |
+| ERR-06 dedupe | MEDIUM | LOW | P1 |
+| ERR-07 distinct error classes | MEDIUM | LOW–MEDIUM | P2 |
+| ERR-08 error summary | MEDIUM | MEDIUM | P2 |
+| ERR-09 recovery actions | HIGH | MEDIUM | P2 |
+| ERR-10 ErrorState component | MEDIUM | LOW | P2 |
 
-**Priority key:**
-- **P1:** 核心基石，本里程碑（v1.1）必须 100% 交付
-- **P2:** 次要增强，在 P1 稳定后快速补充
-- **P3:** 高级智能特性，留待后续版本
-
----
-
-## 典型生理指标基准与校验区间全览 (Clinical Standards Reference)
-
-依据《中国高血压防治指南（2024年版）》、《中国2型糖尿病防治指南（2020版）》及 WHO 基础生理参数：
-
-| 指标 Key (规范小驼峰) | 中文名 | 标准单位 | 正常生理参考区间 (Normal) | 常见异常范围 (Warning, 允许录入) | 临床危急值 (Critical, 需二次确认) | 物理/生理极限 (Hard Block, 拦截) | 步长 / 精度 |
-|---------------------|--------|---------|-------------------------|--------------------------------|---------------------------------|---------------------------------|------------|
-| `systolicBP` | 收缩压 | mmHg | 90 ~ 139 | 140 ~ 179 (高血压 1~2 级) / 80 ~ 89 | ≥ 180 (高血压危象) 或 ≤ 70 | < 40 或 > 300 | 1 (整数) |
-| `diastolicBP` | 舒张压 | mmHg | 60 ~ 89 | 90 ~ 109 / 50 ~ 59 | ≥ 110 或 ≤ 40 | < 20 或 > 200 | 1 (整数) |
-| `heartRate` | 心率 | 次/分 | 60 ~ 100 | 101 ~ 140 (窦速) / 50 ~ 59 (心动过缓) | ≥ 160 或 ≤ 40 | < 20 或 > 300 | 1 (整数) |
-| `fastingGlucose` / `glucose` | 空腹血糖 | mmol/L | 3.9 ~ 6.1 | 6.2 ~ 13.9 (空腹受损/糖尿病) | ≥ 16.7 (高血糖酮症危象) 或 ≤ 2.8 (重度低血糖) | < 1.0 或 > 35.0 | 0.1 (1位小数) |
-| `postprandialGlucose` | 餐后血糖 | mmol/L | 3.9 ~ 7.8 | 7.9 ~ 16.6 | ≥ 16.7 或 ≤ 3.9 | < 1.0 或 > 35.0 | 0.1 (1位小数) |
-| `temperature` / `bodyTemperature` | 体温 (腋温) | °C | 36.1 ~ 37.2 | 37.3 ~ 39.0 (发热) / 35.5 ~ 36.0 | ≥ 40.0 (超高热) 或 ≤ 35.0 (体温过低) | < 34.0 或 > 43.0 | 0.1 (1位小数) |
-| `bloodOxygen` | 血氧饱和度 | % | 95 ~ 100 | 91 ~ 94 (轻度缺氧) | ≤ 90 (严重低氧血症) | < 50 或 > 100 | 1 (整数) |
-| `weight` | 体重 | kg | 取决于身高 (BMI 18.5~23.9) | 40 ~ 150 | ≥ 200 或 ≤ 30 | < 2 或 > 500 | 0.1 (1位小数) |
-| `bmi` | 体质指数 | kg/m² | 18.5 ~ 23.9 | 24.0 ~ 27.9 (超重) / 28.0 ~ 34.9 (肥胖) | ≥ 35.0 或 ≤ 15.0 | < 5.0 或 > 70.0 | 0.1 (1位小数) |
-| `sleepDuration` | 睡眠时长 | 小时 | 6.0 ~ 9.0 | 4.0 ~ 5.9 / 9.1 ~ 12.0 | ≤ 2.0 或 ≥ 16.0 | < 0 或 > 24.0 | 0.5 (半小时) |
-| `steps` | 今日步数 | 步 | 6000 ~ 10000 | 1000 ~ 5999 / 10001 ~ 30000 | ≥ 50000 | < 0 或 > 150000 | 1 (整数) |
-| `waterIntake` | 饮水量 | ml | 1500 ~ 2500 | 500 ~ 1499 / 2501 ~ 4000 | ≥ 6000 或 ≤ 300 | < 0 或 > 20000 | 50 (整数) |
-| `mood` | 心情评分 | 分 | 3 ~ 5 (按1~5档) | 2 | 1 (极度沮丧) | < 1 或 > 5 (统一口径) | 1 (整数) |
-| `energy` | 精力评分 | 分 | 3 ~ 5 (按1~5档) | 2 | 1 (精疲力竭) | < 1 或 > 5 (统一口径) | 1 (整数) |
+**Priority key:** P1 = launch this milestone; P2 = next iteration; P3 = future.
 
 ---
 
 ## Competitor Feature Analysis
 
-| Feature | Apple Health (苹果健康) | 华为运动健康 (Huawei Health) | 欧姆龙健康 (Omron Connect) | HHS 计划实现方案 |
-|---------|-----------------------|----------------------------|--------------------------|------------------|
-| **录入前引导** | 极简数字输入键盘，输入框旁始终固定显示单位（如 mmHg、mmol/L），附带医学说明折叠卡片。 | 输入界面展示色彩渐变区间条（优/良/轻度/偏高），直观指示各区间数值。 | 录入前提示标准测量姿势（手臂与心脏齐平、静坐5分钟、空腹测定等）。 | **融合优势：** 输入框常态化展示标准生理参考区间与单位；附带针对指标的关键测量条件提示语；支持精准 step 步长递进。 |
-| **超范围处理机制** | 绝不阻止病理值录入；仅在明显打字笔误（如超出人体存活范围）时震动并提示无效。 | 超出正常范围的值以黄色/橙色高亮标记，录入后立即展示健康建议（如低盐饮食）。 | 血压按欧洲/中国高血压指南严格分级（理想、正常高值、1级、2级、3级高血压），不阻止入库。 | **四级阶梯模型：** 正常（绿色）→ 异常警告（黄色内联提示，正常保存）→ 危急值（橙色弹窗二次核对后保存并直通预警）→ 生理极限（红色拦截）。彻底剔除失焦清空。 |
-| **输入失误容错** | 支持轻扫删除，自动记忆上一次所选单位标准。 | 血压支持拍照识别与设备同步；手动输入若高压低于低压会提示调换。 | 严格校验脉压差，若收缩压与舒张压差值小于 10 mmHg 提示“可能测量错误，建议重测”。 | **智能诊断反馈：** 血压自动双向关联，高低压反向时一键对调；识别华氏度输入并提供一键换算；退格友好，绝不自动冲刷输入框。 |
-| **多通道一致性** | 手动录入与外部 HealthKit API 校验机制完全一致。 | 手动录入、手环同步、智慧生活设备数据遵循统一数据字典。 | 蓝牙血压计传输与手动补录共用一套临床预警阈值。 | **全栈单点真相 (SSOT)：** 后端统一字典 API 供 Web 手动录入、AI 文本解析、OCR 报告识别、设备同步共享，杜绝各端规则割裂。 |
+| Capability | Apple Health / Watch | Fitbit / Google | MyFitnessPal | Bearable | HHS approach |
+|------------|----------------------|-----------------|--------------|----------|--------------|
+| Threshold setup | Heart-rate notifications ship with defaults and an explainer; users adjust from a recommended baseline | Heart-rate zones derived from age (max HR) and presented as named zones, not raw boundaries | Signup collects height/weight/age/sex because BMR needs them; safe-goal guardrails | Users define custom metrics and goals from scratch; no age/sex by design | THR-02 recommended values + THR-03 definitions + THR-09 presets; four-tier model retained |
+| Profile completeness | Health Checklist surfaces setup tasks with completion states; details editable in one place | Profile collected during device setup | Profile collected at signup with a stated purpose | Deliberately minimizes personal data; lets users hide metrics | PRF-01 score + PRF-09 checklist + PRF-02 purpose copy |
+| Missing-data behavior | Personalization degrades but the app stays usable | Uses defaults; goal suggestions are pre-filled | Explains what the data is for | N/A (data minimization) | PRF-05 disclose defaults + PRF-06 estimated badge + PRF-07 prompt |
+| Error copy | Dynamic validation, feedback as soon as a problem is detected, input preserved (HIG) | — | — | — | ERR-02/03/04 + ERR-08 inline+summary |
+| Error presentation | Inline field-level | — | — | — | GOV.UK pattern: inline + summary, never toast-only |
 
 ---
 
 ## Sources
 
-1. **国家卫生健康委员会 / 中华医学会心血管病学分会**：《中国高血压防治指南（2024年修订版）》— 明确血压分级（收缩压 ≥ 140 mmHg 或舒张压 ≥ 90 mmHg 为高血压；≥ 180 mmHg 为高血压急症/危象）。
-2. **中华医学会糖尿病学分会**：《中国2型糖尿病防治指南（2020版）》— 空腹血糖正常范围 3.9 ~ 6.1 mmol/L，餐后2小时血糖 < 7.8 mmol/L；空腹血糖 ≥ 7.0 mmol/L 或餐后 ≥ 11.1 mmol/L 为糖尿病诊断临界；≤ 2.8 mmol/L 为非糖尿病患者低血糖危急标准。
-3. **世界卫生组织 (WHO) 生理指标安全规范**：人体极限体温（34.0°C ~ 43.0°C）、静息心率界限（20 ~ 300 bpm）、血氧严重缺氧警戒线（≤ 90%）。
-4. **Apple Developer HealthKit Human Interface Guidelines**：健康数据采集交互设计原则——“Respect user condition without false alarms”、“Never discard user inputs on validation errors”。
-5. **HHS 代码库实测审查**：
-   - `hhs-frontend-v2/src/views/data-input/components/QuickInputDialog.vue`（存在失焦暴力清空 `form.value.value = undefined`、硬编码范围割裂缺陷）
-   - `hhs-backend/src/main/java/com/hhs/service/impl/AiParseServiceImpl.java`（存在 `METRIC_RANGES` 范围与前端不同步、部分指标命名不一致缺陷）
-   - `hhs-frontend-v2/src/utils/format.ts` 与 `hhs-backend/src/main/java/com/hhs/service/domain/MetricDisplayFormatter.java`（缺少下划线 snake_case 映射导致英文泄漏缺陷）
+### Directly fetched, HIGH confidence
+
+- Apple Human Interface Guidelines — **Onboarding** (`developer.apple.com/design/human-interface-guidelines/onboarding.md`): postpone nonessential setup, provide reasonable defaults, context-specific tips over one long flow.
+- Apple Human Interface Guidelines — **Privacy** (`.../privacy.md`): request permission only when the feature needs it; purpose strings must be specific active sentences with a stated benefit.
+- Apple Human Interface Guidelines — **Entering data** (`.../entering-data.md`): pre-gather data, prefill reasonable defaults, dynamically validate and give feedback as soon as a problem is detected, make required data understood before proceeding.
+- GOV.UK Design System — **Error message**: explain what went wrong and how to fix it; plain language; echo the label; inline plus summary; never wipe the entry; avoid "invalid"/"please"/"sorry".
+- GOV.UK Design System — **Error summary**: "There is a problem" heading, linked entries, matching wording, focus moved to the summary.
+- GOV.UK Design System — **Check answers**: shows completeness before submit, `Change` links, "Not provided" for optional blanks.
+- Nielsen Norman Group — **Errors in forms**: validate on blur, inline below the field, explicit/actionable/polite, avoid tooltips and modals, 3+ identical errors indicates a design problem.
+- Nielsen Norman Group — **Empty-state interface design**: never leave blank; explain what would appear and how to populate it; link directly to the action; avoid misleading "no records" while loading.
+- Nielsen Norman Group — **Progressive disclosure**: two levels max; defer secondary material; label the control clearly.
+- Nielsen Norman Group — **Required fields**: per-field marking beats an upfront "all fields required" note.
+
+### Fetched, MEDIUM confidence (partial content)
+
+- MyFitnessPal official FAQ — signup collects height, weight, age, sex for BMR; safe weight-goal guardrails. Onboarding order and progress indicators not stated on the page.
+- Bearable official site — deliberately does not ask for name/age/sex; custom metrics; reminders for re-engagement. Full onboarding flow not available.
+
+### Attempted but unavailable (LOW confidence — do not over-claim)
+
+- Apple Health "Health Checklist" and "edit health details" user-guide pages (JS-gated; only CSS returned).
+- Apple Watch high/low heart-rate notification thresholds pages (JS-gated).
+- Fitbit heart-rate-zone and activity-goal help pages (404 / redirect).
+- Samsung Health goal/threshold support pages (404 / redirect).
+- Withings, Omron Connect, Oura profile pages (404 / redirect).
+
+### Verified HHS codebase facts (HIGH confidence)
+
+- `hhs-frontend-v2/src/views/health/Thresholds.vue` — 6 hardcoded options, 4 unlabeled numeric inputs, no cross-field rules.
+- `hhs-frontend-v2/src/constants/metricMeta.ts` + `hhs-backend/.../HealthMetricMetaRegistry.java` — 23 metrics with normal/hard ranges, units, guidance.
+- `hhs-backend/src/main/resources/sql/schema.sql` lines 514–521 — seeded `alert_rule` defaults for 7 metrics; no controller exposes them.
+- `hhs-backend/.../RiskAssessmentServiceImpl.java` — age default 35, BMI default 22, fixed scores 30/25/25 when profile absent.
+- `hhs-backend/.../ProfileScorer.java` — neutral 70; −10 gender/birthDate, −15 height/weight, −10 BMI, −15 lifestyle.
+- `hhs-backend/.../UserThresholdRequest.java` — only `@DecimalMin(0)`; no ordering constraints.
+- `hhs-backend/.../GlobalExceptionHandler.java` — localizes `ErrorCode`, but DTO messages and several literals remain English.
+- `hhs-frontend-v2/src/utils/request.ts` — global toast on every non-200; 84 view-level `ElMessage.error` sites create duplicates.
+- `hhs-frontend-v2/src/views/prevention/Profile.vue` — only gender + birthDate required; all fields presented identically.
+- `hhs-frontend-v2/src/App.vue` — `useMetricMetaStore().fetchMetadata()` is already globally preloaded.
 
 ---
-*Feature research for: HHS Intelligent Metric Input Guidance & Friendly Validation (v1.1 Milestone)*  
-*Researched: 2026-11-04*
+
+*Feature research for: HHS v1.1+ guided metric input, threshold configuration, profile completeness, and friendly validation*
+*Researched: 2026-11-05*
+*Status: ready for roadmap consumption; P1 items are directly implementable against existing HHS APIs and stores*

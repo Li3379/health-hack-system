@@ -1,19 +1,22 @@
 # Project Research Summary
 
-**Project:** Health Hack System (HHS) — Milestone v1.1  
-**Domain:** Intelligent Health Metric Input, Unified Range Validation & Pre-guidance System  
-**Researched:** 2026-11-04  
-**Confidence:** HIGH  
+**Project:** Health Hack System (HHS)
+**Milestone:** v1.3 — 引导式配置与友好错误反馈 (Guided Configuration & Friendly Error Feedback)
+**Domain:** Retrofitting configuration guidance and error UX into a live Spring Boot 3.2 + Vue 3 consumer health platform
+**Researched:** 2026-11-05
+**Confidence:** HIGH
+
+> This file SUPERSEDES the previous SUMMARY.md, which described the already-shipped v1.1 milestone. All content below reflects the four v1.3 research documents dated 2026-11-05.
 
 ---
 
 ## Executive Summary
 
-Health Hack System (HHS) Milestone v1.1 focuses on transforming health metric input and validation from a rigid, fragmented form-checking mechanism into an intelligent, medically accurate, and friendly guidance pipeline. Clinical data entry differs fundamentally from generic web forms: human vital signs represent a continuous physiological spectrum ranging from optimal baseline to pathological abnormalities, life-threatening clinical emergencies, and physical impossibilities. Prior HHS implementations suffered from four major systemic flaws: scattered hardcoded threshold definitions across UI dialogs and backend services, destructive client-side blur handlers that wiped user input upon out-of-range detection (`form.value = undefined`), rigid server validation that rejected acute clinical crises (e.g. hypertensive crisis or diabetic ketoacidosis) with generic 400 errors, and inconsistent metric key naming (`camelCase` vs `snake_case` vs aliases) that silently broke scoring calculations and leaked raw English codes to the UI.
+HHS is an already-deployed, feature-complete health platform (metric entry, AI advice, preventive risk, alerting). v1.3 is **not greenfield**: it is an incremental UX/correctness retrofit into three specific surfaces — the threshold configuration page (`views/health/Thresholds.vue`), health-profile completeness guidance across risk/score/AI, and a site-wide unified friendly-error layer. The research converges on a single conclusion: **zero new runtime dependencies, zero new database objects, zero new Maven artifacts are required.** Everything needed (Element Plus 2.14.0 already installed, `useMetricMetaStore`, `thresholdApi`, `preventionApi.getProfile()`, `spring-boot-starter-validation`, the existing `GlobalExceptionHandler`) is already in the tree. The work is integration, refactoring, and copy — not acquisition.
 
-The recommended architectural approach establishes a centralized **Single Source of Truth (SSOT)** in the backend (`MetricMetadataRegistry`) managing 19+ standardized health and wellness metrics, without introducing third-party dependency bloat. This registry powers a four-tier graduated validation pipeline (Normal, Warning, Critical, Hard Limit) enforced at the DTO level via custom Jakarta validation (`@ValidMetricRecord`). On the client side, a dedicated Pinia store (`useMetricMetaStore`) caches metadata and feeds reactive Vue 3 composables (`useMetricValidation`). Form controls dynamically configure placeholders, units, precision steps, and non-destructive warning banners. A bidirectional normalization bridge (`MetricKeyNormalizer`) unifies key casing across manual input, IoT wearables, Baidu OCR, and Tongyi Qianwen AI parsing, completely eliminating English code leakage.
+The recommended approach is a strictly ordered build. **Error feedback must land first** because the other two features add new call sites; shipping them first would multiply the duplicate-toast debt the milestone exists to remove. The error layer is a "translate-don't-display" refactor: `request.ts` stops toasting and instead rejects a typed `ApiError`; a single `showError()` owns non-form presentation, and `useFormServerErrors` projects backend `fieldErrors[]` onto `el-form-item :error`. Second is the threshold wizard, built on the proven `DeviceConfigWizard.vue` pattern with options sourced from `useMetricMetaStore` — and, critically, **server-side canonical-key normalization plus a data repair**, because the existing hardcoded options (`glucose`, `temperature`) and the seeded `alert_rule` rows are non-canonical, meaning those thresholds are **already silently dead today**. Third is profile completeness, which must be **non-blocking guidance, never a route gate**. Fourth is a sitewide sweep of ~105 error call sites with a migration ledger.
 
-The primary project risks involve data integrity and operational resilience: cross-channel unit discrepancies (such as IoT glucometers submitting `mg/dL` into a `mmol/L` database), blood pressure half-record persistence or inverted systolic/diastolic values, and synchronous bulk IoT sync failures caused by noisy sensor points. These risks are mitigated through a canonical storage unit contract with automated ingestion conversion, atomic composite blood pressure endpoints with cross-field validation (`systolicBP >= diastolicBP + 15`), and a partial-success quarantine pattern for batch IoT ingestion.
+The key risks are all correctness risks, not UX risks. (1) Silent dead alerts from non-canonical `metric_key` values — highest severity, and the wizard would create more dead rows if normalization is deferred. (2) An inverted condition in `ThresholdRangeChecker.isWarningRange` that makes warnings between `warningHigh` and `criticalHigh` evaluate as NORMAL. (3) A centralized error handler that toasts on user cancellation (`'cancel'` sentinel strings, `AbortError`) or swallows caller contracts that stores depend on (`stores/push.ts` returning `false`). (4) Hard-gating features on optional profile fields, which would regress existing users. (5) Breaking the 90-test frontend suite via eager store fetches or new Element Plus components without stubs. Each has a concrete, verified prevention in the architecture and pitfalls research.
 
 ---
 
@@ -21,142 +24,134 @@ The primary project risks involve data integrity and operational resilience: cro
 
 ### Recommended Stack
 
-The entire guidance and validation infrastructure is built on top of the validated existing foundation (Spring Boot 3.2.0, Java 17, Vue 3.4.15, Element Plus 2.5.6, Pinia 2.1.7) with zero additional Maven dependencies or npm packages.
+Every capability is covered by the installed tree; the milestone's installation delta is **zero packages, zero Maven artifacts, zero migrations**.
 
-**Core technologies:**
-- **Jakarta Bean Validation 3.0 (Hibernate Validator 8.0.1.Final via `spring-boot-starter-validation`):** Implements dynamic, class-level constraints (`@ValidMetricRecord`) to validate payloads against runtime registry boundaries while providing contextual error diagnostics.
-- **Spring Boot Web MVC + Jackson 2.15.3:** Exposes the `/api/metrics/metadata` dictionary endpoint and leverages custom setter normalization and `@JsonAlias` to accept both `snake_case` and `camelCase` payloads seamlessly.
-- **Vue 3 (Composition API & `<script setup>`):** Delivers sub-millisecond reactive input feedback (`ref`, `computed`, `watch`) for real-time health status chips and non-blocking advice banners before form submission.
-- **Element Plus 2.5.6 Form & Input Controls (`el-form`, `el-input-number`, `el-alert`):** Integrates native `async-validator` rules for physiological hard limits while avoiding destructive blur wipes and relaxing restrictive numeric steppers.
-- **Pinia Store 2.1.7 (`useMetricMetaStore`):** Caches centralized metric definitions on the client, backed by localStorage/sessionStorage and fallback static constants (`metricMetaDefaults.ts`), ensuring zero UI lag and offline resilience.
-- **Hutool Core 5.8.28 (`cn.hutool:hutool-all`):** Supplies defensive fallback casing conversions (`StrUtil.toCamelCase`) for unregistered dynamic keys.
+**Core technologies (verify, do not install):**
+- **Element Plus 2.14.0 installed** (declared `^2.5.6`) — `ElSteps`/`ElStep` for the wizard, `ElSlider range` + `marks` for zone editing, `ElProgress` + `ElResult` + `ElAlert` for completeness/empty states, `ElMessage` (`grouping`, `max`) and `ElMessageBox` for feedback, `ElTour` if first-run guidance is ever needed. All verified present at the declared 2.5.6 floor except `ElSegmented` (2.7.0+) — do not use it without bumping the floor.
+- **Vue 3.5.34 (declared `^3.4.15`)** — wizard step state is `ref<number>` + `canNextStep`; no state-machine library is justified.
+- **Pinia 2.3.1** — `useMetricMetaStore` is the SSOT for the threshold picker, units, precision, and `hardMin`/`hardMax`. Stay on v2; do not jump to Pinia 4.
+- **Axios 1.16.1** — `request.ts` is the single error seam. Add a `silent?: boolean` module augmentation on `AxiosRequestConfig`; do not add a second client.
+- **Spring Boot Validation 3.2.0 / Hibernate Validator 8** — class-level constraint (`@ValidThresholdRange`) mirrors the existing `@ValidMetricRecord` → `MetricRecordValidator` precedent; no new validation framework.
+
+**Explicit do-not-add list:** a second UI library, `vue-i18n` (Chinese-only product; `ErrorCode` already carries zh/en), VeeValidate/Zod/Yup (fights `ElForm`'s async-validator), `driver.js`/`intro.js` (`ElTour` is bundled), `xstate`, `axios-retry` (would risk duplicate POSTs), `pinia-plugin-persistedstate`, a `threshold_template` table or Flyway (migration strategy is explicitly deferred), a new `CompletenessController`, and **direct imports of `@vueuse/core`** (it is transitive via Element Plus only; a direct import breaks on lockfile re-resolve).
 
 ### Expected Features
 
-Features are categorized according to digital health standards (Apple Health, Huawei Health, Omron Connect) and national clinical practice guidelines (Hypertension 2024, Diabetes 2020).
+Feature IDs below are stable and intended for direct use in REQUIREMENTS/ROADMAP.
 
-**Must have (table stakes):**
-- **Unified Metric Metadata SSOT (`UNIFIED-METRIC-META`):** Single authoritative registry in backend covering 19+ health and wellness metrics, exposed via `/api/metrics/metadata` to replace all scattered hardcoded dictionaries.
-- **Pre-Input Range & Unit Guidance (`INPUT-GUIDE`):** Constant visibility of clinical reference ranges in input placeholders, pinned unit labels (`mmol/L`, `mmHg`), and metric-appropriate precision steppers (e.g., glucose: 0.1, steps: 500).
-- **Non-Destructive Soft-Boundary Feedback (`FRIENDLY-FEEDBACK`):** Total abolition of blur-clearing logic (`form.value = undefined`). Pathological values outside normal reference are accepted with amber/yellow status tags and educational guidance.
-- **Metric Key Normalization & Display Mapping (`KEY-NORMALIZATION`):** Bidirectional dictionary normalizing `camelCase`, `snake_case`, and `SCREAMING_SNAKE` keys, guaranteeing zero English codes leak into UI tables, charts, or alert logs.
-- **Blood Pressure Dual-Metric Association (`BP-DUAL-ASSOCIATION`):** Simultaneous SBP/DBP input with cross-field physiological validation (`systolicBP >= diastolicBP + 15`) and one-click inversion swap.
-- **Biologically Impossible Hard-Block:** Blocking form submission exclusively for physiologically impossible extremes (e.g. body temperature > 45°C or < 30°C; heart rate > 300 bpm), while keeping user text intact for backspace correction.
+**Must have (launch this milestone, P1):**
+- **THR-01** metadata-driven metric picker from `useMetricMetaStore` (replaces 6 hardcoded options; restrict to alert-capable metrics, not all 23)
+- **THR-02** recommended values pre-filled with a `推荐` tag / "使用推荐值"
+- **THR-03** plain-language definition + unit per input ("警告高值：高于此值发出黄色提醒")
+- **THR-05** ordering/physiological guardrails on both client and server
+- **THR-06** generated confirmation sentence stating the behavioral outcome
+- **THR-07** teaching empty state ("当前使用系统默认规则" + defaults + CTA)
+- **PRF-01** completeness score/tier on Profile and dashboard
+- **PRF-02** "why we ask" helper per field
+- **PRF-03** 必需/推荐/可选 criticality labels (no new required fields)
+- **PRF-04** missing-data impact banner naming concrete downstream effects
+- **PRF-05** backend discloses applied defaults (additive `assumptions[]` / completeness signal)
+- **PRF-06** "基于不完整档案估算" badge on Risk and Score
+- **PRF-07** dismissible dashboard prompt with snooze
+- **ERR-01** single error presentation (foundation; `silent` + typed error)
+- **ERR-02** all user-facing messages Chinese and human
+- **ERR-03** inline field errors bound from backend `fieldErrors[]`
+- **ERR-04** specific copy replacing "操作失败"
+- **ERR-06** duplicate suppression (`grouping: true`)
 
-**Should have (competitive differentiators):**
-- **Critical/Panic Range Double-Confirmation (`CRITICAL-CONFIRM-MODAL`):** Interactive confirmation modal when readings breach clinical crisis limits (e.g., SBP ≥ 180 mmHg, glucose ≥ 16.7 mmol/L), prompting confirmation while routing data to high-priority emergency alerts.
-- **Intelligent Explanatory Feedback & Diagnosis:** Medical context-aware suggestions (e.g., detecting temperature 98.6 as Fahrenheit and offering one-click conversion to 37.0°C; suggesting fasting vs postprandial glucose categorization).
-- **Cross-Channel Rule Convergence:** Unifying manual entry, AI text parsing (`AiParseServiceImpl`), OCR report recognition (`OcrServiceImpl`), and IoT telemetry under the exact same domain validator and warning messages.
-- **Real-Time Health Status Chip Preview:** Dynamic visual badges ("Ideal", "Normal", "Pre-hypertension", "Crisis") rendered inline without server round-trips.
+**Should have (v1.x, P2):**
+- **THR-04** live 4-zone preview bar; **THR-08** duplicate-threshold recovery action; **THR-09** 宽松/标准/严格 preset mode
+- **PRF-08** feature-gate explanation; **PRF-09** completion checklist card; **PRF-10** just-in-time field prompt
+- **ERR-07** distinct network/auth/validation presentation; **ERR-08** error summary block; **ERR-09** recovery-action buttons; **ERR-10** `ErrorState.vue`
 
 **Defer (v2+):**
-- **Time & Context-Aware Smart Suggestions (v1.2):** Auto-highlighting morning fasting glucose or evening step counts based on time of day.
-- **Personal Historical Baseline Comparison (v1.2):** Deviation alerts calculated against personal 30-day moving averages instead of population standards.
-- **Multi-Day Cross-Metric Anomaly Synthesis (v2.0+):** Correlating rapid weight gain with pulse and edema indicators for heart failure warnings.
-- **Continuous CGM/Telemetry Waveform Filtering (v2.0+):** Real-time pulse noise filtering for continuous monitoring devices.
+- **THR-10** condition-aware presets (needs clinical sign-off); **THR-11/12** explanatory disclosure + reset; **PRF-11** before/after impact receipt; **PRF-12** completeness-aware AI advice; **ERR-11** repeated-error analytics; **ERR-12** formalized shared copy patterns
+
+**Anti-features (do not build):** single target range replacing the four-tier model (breaks the alert engine contract); auto-creating thresholds silently (health alerts must be consensual); exposing all 23 metrics in the picker (dead settings for non-alertable metrics); a blocking profile modal at login; making free-text medical history required; re-prompting on every page load; removing silent defaults in favor of errors; toast-only validation; collapsing everything into "操作失败，请稍后重试"; surfacing raw English/field names/stack traces.
 
 ### Architecture Approach
 
-The architecture enforces strict separation between domain metadata, validation logic, presentation state, and ingestion channels.
+The milestone is an **integration question, not a greenfield design**. Three cross-cutting flows must be introduced without breaking v1.0–v1.2 behavior:
 
-**Major components:**
-1. **`MetricMetadataRegistry` (Backend SSOT):** In-memory Spring `@Component` holding immutable `MetricDefinition` records for 19+ metrics. Manages canonical keys, aliases, units, precisions, steppers, and four-tier boundaries.
-2. **`MetricKeyNormalizer` (Backend & Frontend Bridge):** Authoritative lookup dictionaries mapping aliases (`heart_rate`, `HEART_RATE`, `pulse`) to canonical keys (`heartRate`) with acronym preservation (`systolicBP` rather than `systolicBp`).
-3. **`MetricValidationPipeline` (Backend Core):** Pure domain validation service evaluating four severity tiers (`NORMAL`, `WARNING`, `CRITICAL`, `HARD_LIMIT`) and generating structured results with localized medical explanations.
-4. **`ValidMetricRecord` / `MetricRecordValidator` (Backend DTO Constraint):** Jakarta class-level constraint integrating the validation pipeline directly into Spring MVC `@Valid` lifecycle.
-5. **`MetricMetadataController` (REST API):** High-performance controller exposing `/api/metrics/metadata` with HTTP caching (`Cache-Control`, `ETag`) and Redis caching.
-6. **`useMetricMetaStore` & `useMetricValidation` (Frontend Store & Composable):** Client-side metadata cache and reactive validation logic coordinating Element Plus forms and non-destructive alerts.
+1. **Translate-don't-display error flow.** `request.ts` normalizes both failure channels (HTTP-400 validation and HTTP-200-with-`code!=200` business errors) into one `ApiError {kind, message, status, code, fieldErrors, formField}` and rejects — it no longer toasts (401 logout is the sole exception). `showError()` is the only non-form toast outlet; `useFormServerErrors` maps `fieldErrors` to `el-form-item :error`. The backend envelope gains `errorCode` and structured `fieldErrors: [{field,message,code?}]` (replacing `"field: msg"` strings), and `Result.code`'s existing numeric semantics are preserved to protect existing tests.
+2. **Derived-readiness flow.** One `GET /api/prevention/profile/readiness` (new endpoint on the existing `PreventionController`) reads the profile once, runs a pure `ProfileCompletenessCalculator`, and returns `{completeness, dependencies[]}` from a static dependency matrix. A session-scoped `useProfileReadinessStore` serves a single global `ProfileReadinessBanner` plus Risk/Score/Dashboard consumers — no N+1, no per-page probing.
+3. **Threshold ordering flow.** `@ValidThresholdRange` class-level constraint on `UserThresholdRequest` (authoritative) plus a mirror pure frontend function for instant UX feedback. No DB CHECK constraint (no migration framework; existing rows may violate ordering).
+
+**Major components (new):** `ApiError`/`normalizeApiError`/`showError` (`utils/appError.ts`), `useFormServerErrors` composable, `@ValidThresholdRange` + `ThresholdRangeValidator`, `utils/thresholdValidation.ts`, `ProfileCompletenessCalculator` (pure domain), `ProfileReadinessService(Impl)` + `ProfileReadinessVO` + `GET /profile/readiness`, `useProfileReadinessStore`, `ProfileReadinessBanner.vue`, `FieldErrorVO`.
+
+**Major components (modified):** `Result.java`, `GlobalExceptionHandler`, `request.ts`, `types/api.ts`, `UserThresholdRequest`, `ProfileScorer` (delegates to the new calculator so weights exist in exactly one place), `ThresholdRangeChecker` (defect fix), `Thresholds.vue`, `Profile.vue`, `Risk.vue`, `Score.vue`, `MainLayout.vue`.
+
+**Verified defects that must be fixed (the foundation is not sound without them):**
+- **D-1 `ThresholdRangeChecker.isWarningRange` inverted conditions (HIGH)** — both intervals are empty for legal data, so values between `warningHigh` and `criticalHigh` (e.g. HR 110 with 100/120) classify as NORMAL and **alerts are lost**. Fix by extracting a single mutually-exclusive `classify()`.
+- **D-2 `Thresholds.vue` form items lack `prop` (HIGH)** — blocks any field-level error injection or `validateField`.
+- **D-5 risk assessment fabricates scores with no profile (HIGH, needs product sign-off)** — `RiskAssessmentServiceImpl` returns 30/25/25 from thin air when `profile == null`; should become BLOCKED with a CTA.
+- **D-3 business error codes degrade to 500**, **D-4 background requests still toast**, **D-6 unreachable `res.code` checks in 4 stores**.
 
 ### Critical Pitfalls
 
-1. **Hard-Rejecting Clinical Emergencies ("Dying Patient Rejection" Trap):** Confusing optimal reference ranges with biological life limits. Mitigated by the four-tier graduated boundary model where clinical crises (e.g., SBP 220 mmHg) are preserved, confirmed, and escalated to urgent alerts rather than rejected with a 400 error.
-2. **Disastrous Cross-Channel Unit Mismatch:** Ingesting divergent units (e.g., Huawei mock glucose generating `80-140 mg/dL` vs canonical `3.9-6.1 mmol/L`; cups vs mL) causing catastrophic 18x health score miscalculations. Mitigated by defining canonical storage units and embedding an automated `UnitConverter` in the ingestion pipeline.
-3. **Multi-Format Key Drift Breaking Downstream Scorers & Rule Engines:** Persistence of non-canonical keys (`heart_rate`, `temp`, `spo2`) falling through switch statements in `MetricsScorer` and failing exact-match queries in `AlertRuleEngine`. Mitigated by mandatory normalization before persistence and an idempotent database backfill script.
-4. **Destructive Client-Side Blur Clearing & Rigid Input Steppers:** Auto-wiping input values on blur (`form.value = undefined`) and restrictive min/max stepper bindings preventing smooth multi-digit typing. Mitigated by non-destructive reactive guidance banners and submission-time async-validation.
-5. **Broken Blood Pressure Atomicity & Independent Validation:** Submitting SBP and DBP in separate uncoordinated HTTP requests or accepting inverted blood pressure (SBP 80 / DBP 120). Mitigated by composite validation rules (`systolicBP >= diastolicBP + 15`) and atomic batch endpoints.
-6. **IoT Ingestion Pipeline Meltdown on Synchronous Hard Validation:** Dropping entire 120-point telemetry batches due to a single noisy sensor blip. Mitigated by segregating interactive form validation from machine stream ingestion, adopting a partial-success + quarantine log pattern.
+1. **Duplicate toasts — interceptor toasts, page toasts again.** ~105 `ElMessage.error` sites across 29 files; `request.ts` already toasts every failure. Make the interceptor transport-only, add `silent`, provide one `useErrorFeedback().show()`, enable `ElMessage({grouping:true})`, and leave success toasts in callers. This must land *before* new features add call sites.
+2. **Cancellation/abort misclassified as failure.** `ElMessageBox.confirm` rejects with the string `'cancel'`/`'close'` at 11 hand-guarded sites, and `Score.vue` deliberately ignores `CanceledError`/`AbortError`. Classify dismissals → aborts → real errors, in that order, before rendering.
+3. **Centralized layer swallows caller contracts.** `stores/push.ts` returns `false` on failure but `PushSettings.vue` shows "已启用" anyway; `stores/ai.ts`, `Score.vue` (`response.data.message`), `AIInput.vue` (429) all depend on failure detail. Always propagate a typed envelope, toast **and** rethrow; never `return undefined`.
+4. **Non-canonical `metric_key` → thresholds silently never fire.** The wizard's hardcoded options and the seeded `alert_rule` rows use `glucose`/`temperature`/`bmi`, while evaluation matches exact-equal canonical keys (`bloodGlucose`/`bodyTemperature`). Normalize server-side on write, repair existing rows, align seeds, and add a contract test — the UI looks healthy while alerts are dead.
+5. **First-visit profile 404 becomes a red toast.** `PreventionController` returns HTTP 200 with body `code=404`; the interceptor shows "请求的资源不存在" for every new user, and completeness guidance multiplies the callers. Treat absence as a normal state (`silent: true` or `success(null)`).
+
+Additional critical items: ordering/partial-set validation gaps (including the "only criticalHigh set → nothing fires" case), toast storms from 10s polling and 401 cascades (needs a session latch + `silent`), hard-gating optional profile fields (never gate the action, gate result quality), raw English/field-name leakage, wizard state loss (`destroy-on-close` + step-local state), over-nagging/banner blindness, and breaking the 90-test suite via eager fetches, changed exports, or unstubbed components.
 
 ---
 
 ## Implications for Roadmap
 
-Based on research findings, architectural boundaries, and pitfall prevention dependencies, the milestone should be executed in a structured 5-phase sequence:
+The research independently converges (ARCHITECTURE's Waves 0–5 and PITFALLS' Phases 11–14) on the same order. Recommended: **a defect-fix task that can start immediately, then four phases, error layer first, with wizard and profile independent after the helper API freezes.**
 
-### Phase 1: Backend Metadata Core & Single Source of Truth Registry
-**Rationale:** All downstream layers (validation, normalizer, DTO annotations, API controllers, and frontend stores) depend on an authoritative definition of metric properties and boundaries. Building the domain metadata foundation first guarantees zero disruption to existing systems.  
-**Delivers:**
-- `MetricDefinition` Java Record encapsulating 19+ health and wellness metrics.
-- `MetricMetadataRegistry` Spring `@Component` with sub-millisecond lookup and alias indexes.
-- Canonical storage unit declarations and baseline multi-tier boundary definitions.
-- Comprehensive JUnit 5 test suite verifying metadata completeness and lookup performance.  
-**Addresses:** `UNIFIED-METRIC-META` (Backend Core).  
-**Avoids:** Pitfall 7 (Split-Brain Hardcoded Range Constants), Pitfall 2 (Unit Mismatch baseline).
+### Phase 11a / Task 0: Threshold Evaluation Correctness (can start immediately)
+**Rationale:** Independent of everything else, and it is the foundation of the threshold feature. Fixing the wrong alert behavior must precede adding configuration UI on top of it.
+**Delivers:** `ThresholdRangeChecker.classify()` refactor + new `ThresholdRangeCheckerTest` covering warning/critical bands, null bounds, and inverted inputs.
+**Addresses:** Groundwork for THR-05.
+**Avoids:** Pitfall 5 (partial-set gaps); D-1. Note this changes alert output (previously lost alerts now fire) — needs a UAT entry and a check of existing threshold data distribution.
 
-### Phase 2: Multi-Tier Validation Pipeline, Unit Conversion & REST Metadata API
-**Rationale:** With the central registry established, the system requires domain validation logic, key normalizer utilities, unit conversion adapters, and client-facing metadata endpoints before frontend components can be refactored.  
-**Delivers:**
-- `MetricKeyNormalizer` supporting camelCase, snake_case, and medical acronym preservation.
-- `MetricValidationPipeline` evaluating four severity tiers (Normal, Warning, Critical, Hard Limit).
-- Composite metric validation rules (`systolicBP >= diastolicBP + 15`) and atomic compound submission support.
-- `UnitConverter` adapter (supporting `mg/dL` $\leftrightarrow$ `mmol/L`, cups $\leftrightarrow$ mL, °F $\leftrightarrow$ °C).
-- Jakarta constraint `@ValidMetricRecord` and `MetricRecordValidator`.
-- `MetricMetadataController` exposing `GET /api/metrics/metadata` with Redis/HTTP cache headers.  
-**Addresses:** `KEY-NORMALIZATION` (Backend), `BP-DUAL-ASSOCIATION` (Backend), Ingestion Resilience.  
-**Avoids:** Pitfall 1 (Hard-Rejecting Emergencies), Pitfall 2 (Cross-Channel Unit Mismatch), Pitfall 3 (Scoring Calculation Black Hole), Pitfall 5 (Broken BP Atomicity).
+### Phase 11: Unified Friendly Error Feedback Foundation
+**Rationale:** Both other features write error-handling code. Without the helper API frozen first, Phases 12–13 create new double-toast debt and get re-broken piecemeal. Lowest-numbered foundation in the error workstream.
+**Delivers:** Backend `Result.errorCode` + `FieldErrorVO` + `GlobalExceptionHandler` producing structured `fieldErrors` (including `GlobalError` handling); frontend `ApiError` + `normalizeApiError` + `showError`; `request.ts` translate-only with `silent` and fixed `Accept-Language: zh-CN`; cancel/abort classification; Chinese copy whitelist (no English tokens); 401 session latch; `ElMessage` grouping/max; `useFormServerErrors`; test scaffolding (lazy stores, shared stubs, `vi.mock` for `ElMessage`).
+**Addresses:** ERR-01, ERR-02, ERR-04, ERR-06 (and enables ERR-03, ERR-07, ERR-09).
+**Avoids:** Pitfalls 1, 2, 3, 7, 9, 12, 14, 19; D-3, D-4, D-6.
 
-### Phase 3: Frontend Store, Client Normalizer & Display Shield
-**Rationale:** Before altering user-facing forms, the client application needs the data infrastructure to consume metadata, resolve aliases, and format display labels without regression.  
-**Delivers:**
-- `api/metricMeta.ts` for fetching metadata from the backend.
-- `stores/metricMeta.ts` Pinia store with memory caching, localStorage persistence, and offline fallback (`metricMetaDefaults.ts`).
-- `utils/metricNormalizer.ts` client-side key normalizer.
-- Refactored `utils/format.ts` bridging `getMetricDisplayName` and `getMetricUnit` through the normalizer, completely eliminating raw English key leaks.
-- Vitest unit test suite covering key normalization and format mappings.  
-**Addresses:** `UNIFIED-METRIC-META` (Frontend Store), `KEY-NORMALIZATION` (Frontend Shield).  
-**Avoids:** Pitfall 3 (Frontend English Key Leaks), Pitfall 7 (Split-Brain Frontend Constants).
+### Phase 12: Threshold Configuration Wizard
+**Rationale:** Highest correctness risk and highest data-integrity cost — silent dead alerts and inverted ranges. Needs the `fieldErrors` contract from Phase 11 for inline feedback. Must ship backend normalization and data repair *in the same phase*, or users create more dead rows.
+**Delivers:** Parent-owned reactive draft + `sessionStorage` persistence + dirty-close guard (NOT the `destroy-on-close`/step-local anti-pattern); metadata-driven picker with canonical keys; recommended-value prefill; plain-language labels + units; ordering/partial validation on both tiers; server-side key normalization in `UserThresholdServiceImpl` + `metric_key` repair + `alert_rule` seed alignment; post-save confirmation summary; duplicate-key mapping to "打开编辑"; `:loading` guards.
+**Addresses:** THR-01, THR-02, THR-03, THR-05, THR-06, THR-07 (THR-04/08/09 as stretch).
+**Uses:** `useMetricMetaStore`, `ElSteps`, `ElSlider`, `ReferenceGuideCard`, `thresholdApi` (upsert via `getByMetricKey`; the unique key makes `create` throw on an existing row).
+**Avoids:** Pitfalls 4, 5, 10, 15, 16; D-2.
 
-### Phase 4: Non-Destructive Input Guidance, Friendly Feedback & BP Dual Association
-**Rationale:** With backend validation endpoints and frontend store ready, the UI layer can be completely overhauled to eliminate aggressive input wipes and deliver rich educational feedback.  
-**Delivers:**
-- `composables/useMetricValidation.ts` providing real-time health status chips and non-blocking advice.
-- Complete overhaul of `QuickInputDialog.vue`: removal of `form.value = undefined` blur handler, dynamic step/precision/placeholder binding, and inline explanatory alert banners.
-- Blood pressure dual-metric synchronized input with inversion detection and one-click swap.
-- Critical value secondary confirmation modal (`CRITICAL-CONFIRM-MODAL`) with urgent medical advice.
-- Refactored `QuickInput.vue`, `views/health/Metrics.vue`, and `Thresholds.vue` binding to dynamic store options.  
-**Addresses:** `INPUT-GUIDE`, `FRIENDLY-FEEDBACK`, `BP-DUAL-ASSOCIATION` (Frontend UI), `CRITICAL-CONFIRM-MODAL`.  
-**Avoids:** Pitfall 4 (Destructive Blur Clearing & Stepper Lock), Pitfall 1 (Friendly UI Handling of Crisis Values), Pitfall 5 (Inverted Pressure Bug).
+### Phase 13: Health-Profile Completeness Guidance
+**Rationale:** Depends on Phase 11's `silent` flag and on the profile-404 decision. Independent of Phase 12, so it may run in parallel once the helper API is frozen. Must be non-blocking throughout.
+**Delivers:** `ProfileCompletenessCalculator` + `ProfileScorer` delegation (lock existing score output with a regression test) → `ProfileReadinessVO` + `GET /profile/readiness` + service/impl → `useProfileReadinessStore` (single fetch, essential vs. enhanced levels) → global dismissible banner in `MainLayout` with 7-day suppression → `Risk.vue` BLOCKED/DEGRADED CTA, `Score.vue` "基于不完整档案估算" badge, `Profile.vue` missing-field list + "why we ask" copy + save-triggered refresh → backend `assumptions[]` disclosure (additive/backward-compatible).
+**Addresses:** PRF-01, PRF-02, PRF-03, PRF-04, PRF-05, PRF-06, PRF-07 (PRF-08/09/10 as stretch).
+**Avoids:** Pitfalls 6, 8, 11, 17; D-5 (product sign-off required — this is a behavior change, flag it explicitly).
 
-### Phase 5: Cross-Channel Convergence, Resilient Batch Quarantine & Historical Backfill
-**Rationale:** To complete the milestone, legacy background services, external ingestion pipelines, and historical database rows must be aligned to the new canonical standard.  
-**Delivers:**
-- Refactored `AiParseServiceImpl` and `OcrServiceImpl` consuming `MetricMetadataRegistry` and retiring redundant internal range maps.
-- Resilient batch sync handling for `HuaweiHealthServiceImpl` and `XiaomiHealthServiceImpl` with unit conversion and an anomaly quarantine pattern.
-- Database migration script backfilling legacy metric keys (`temperature` $\to$ `bodyTemperature`, `spo2` $\to$ `bloodOxygen`) across `health_metric`, `realtime_metric`, and `alert_rule`.
-- Updated scoring logic in `MetricsScorer` and `DimensionScoreCalculator` supporting normalized sub-keys.
-- End-to-end regression verification across manual, AI, OCR, and IoT ingestion paths.  
-**Addresses:** Cross-Channel Alignment, Data Integrity, End-to-End System Polish.  
-**Avoids:** Pitfall 3 (Historical Data Black Hole), Pitfall 6 (IoT Batch Meltdown).
-
----
+### Phase 14: Sitewide Submit-Path Sweep & Regression
+**Rationale:** Mechanical but semantic work across 29 files; needs the frozen helper and the two feature surfaces in place. Doing it earlier means doing it twice.
+**Delivers:** Complete migration ledger (file:line | double-toasted today | silent-by-design | success copy | new behavior | verification); removal of residual raw `ElMessage.error` outside the helper; failure-injection matrix per surface; prompt-inventory UX audit; full `npm run test:run` (90 + new) and `mvn clean verify -DskipITs`; E2E `quick-input.spec.ts` success-copy contract preserved.
+**Addresses:** ERR-03/ERR-07/ERR-09 adoption across all pages; remaining ERR copy quality.
+**Avoids:** Pitfalls 11, 13, 16, 17.
 
 ### Phase Ordering Rationale
 
-- **Dependency flow:** Domain Metadata Registry (Phase 1) $\to$ Validation Pipeline & REST API (Phase 2) $\to$ Client Store & Normalizer (Phase 3) $\to$ UI Form Overhaul (Phase 4) $\to$ External Pipeline & DB Convergence (Phase 5).
-- **Zero-downtime safety:** Backend APIs and normalizers are backward-compatible, meaning existing frontend builds and external IoT mocks remain fully functional during intermediate phases.
-- **Risk isolation:** Heavy refactoring of AI prompts, OCR matchers, and database backfills is deferred to Phase 5 after the core validation engine and UI workflows are thoroughly verified with automated tests.
-
----
+- **Error envelope before any consumer.** Phases 12–13 require `fieldErrors`, `silent`, and typed `ApiError`; building them first produces zero-feedback or re-broken UI and rework.
+- **Calculator before readiness service.** `ProfileCompletenessCalculator` must precede `ProfileReadinessService`, or completeness weights exist in two places and drift ("banner says 85, score computes 70").
+- **BLOCKED behavior last.** The `RiskAssessmentServiceImpl` change must follow the banner/annotation work, or users see an error with no guidance.
+- **Wizard normalization bundled with the wizard.** Shipping UI first lets users create dead threshold rows that require a second migration.
+- **Grouping:** error contract → feature surfaces → sweep. This matches the architecture's "契约 → 消费 → 领域" and PITFALLS' explicit phase mapping.
 
 ### Research Flags
 
-**Phases with standard patterns (skip research-phase):**
-- **Phase 1 (Backend Metadata Core):** Pure Java 17 Records, Spring `@Component`, and ConcurrentHashMap caching. Well-established in-memory registry pattern.
-- **Phase 3 (Frontend Store & Normalizer):** Standard Pinia setup syntax and TypeScript dictionary utilities with Vitest coverage.
-- **Phase 4 (Frontend Form Refactoring):** Standard Vue 3 Composition API reactive patterns and Element Plus form validation configurations.
+Phases likely needing deeper research during planning:
+- **Phase 12 (Threshold Wizard):** canonical-key migration scope is unknown — the existing `user_threshold` and `alert_rule` rows must be audited for aliases and impossible orderings before the repair script is written; historical alert impact needs assessment.
+- **Phase 14 (Sitewide Sweep):** 105 call sites with heterogeneous semantics; a per-site decision ledger is required, and some stores' `boolean` contracts may need redesign.
+- **Phase 13 (product decision):** whether `riskAssessment` should be BLOCKED vs. disclosed-and-degraded is a product call, not a research gap.
 
-**Phases likely needing targeted research during planning:**
-- **Phase 2 (Validation Pipeline & Composite Rules):** Dynamic Jakarta class-level constraint implementation (`@ValidMetricRecord`) validating polymorphic/multi-field requests, and designing clean atomic transaction semantics for compound blood pressure.
-- **Phase 5 (Cross-Channel Convergence & DB Backfill):** Auditing existing foreign keys and index performance on `health_metric` prior to SQL backfill, plus designing the partial-success quarantine log schema without disrupting device sync response formats.
+Phases with standard patterns (skip research-phase):
+- **Phase 11:** the error envelope/`ApiError`/`useFormServerErrors` patterns are fully specified in ARCHITECTURE.md with code examples; Element Plus APIs verified in local typings.
+- **Phase 11a / Task 0:** the `classify()` bands are fully specified; pure TDD against the existing `ThresholdRangeChecker` interface.
 
 ---
 
@@ -164,42 +159,41 @@ Based on research findings, architectural boundaries, and pitfall prevention dep
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| **Stack** | HIGH | Based on verified versions in `pom.xml` and `package.json`. Zero new dependencies required. Standard Jakarta Validation, Pinia, and Element Plus patterns. |
-| **Features** | HIGH | Aligned with national clinical guidelines (China Hypertension 2024, Diabetes 2020), WHO biological boundaries, and standard digital health app interaction paradigms. |
-| **Architecture** | HIGH | Grounded in extensive codebase audit of 35 tables, 25 controllers, DTO constraints, and existing data flow bottlenecks across frontend and backend. |
-| **Pitfalls** | HIGH | Verified against actual code defects currently in repository (`QuickInputDialog.vue` blur clearing, `HuaweiHealthServiceImpl` mg/dL mock, switch default 0 in `MetricsScorer`). |
-
-**Overall confidence:** HIGH
+| Stack | **HIGH** | Installed versions read from `node_modules` + `package-lock.json`, not providers. Component availability at the declared 2.5.6 floor verified per-component via unpkg. "Latest version" claims are MEDIUM/advisory and justify no change. |
+| Features | **HIGH** | Interaction standards from Apple HIG, GOV.UK, and NN/g (fetched directly) plus repo-verified gaps. Competitor flow details are MEDIUM (several vendor pages JS-gated/404); anti-features are grounded in engine contracts, not competitor inference. |
+| Architecture | **HIGH** | Every integration point located to file and line by direct audit; Element Plus `FormItem.error` confirmed in local typings. No external sources used or needed. |
+| Pitfalls | **HIGH** | All 19 pitfalls verified against cited files; baseline measured (13 test files / 90 tests passing; 105 error sites across 29 files; 39 generic messages; 11 `'cancel'` guards; 10s polling). Library behavior checked in the local install. |
+| **Overall** | **HIGH** | Internal retrofit with first-hand code evidence for every claim; no speculative technology bets. |
 
 ### Gaps to Address
 
-- **Historical Database Key Inventory:** Prior to running Phase 5 migration scripts, execute read-only queries (`SELECT DISTINCT metric_key, unit FROM health_metric`) to catalog all historical anomalous keys and units currently in production.
-- **AI Prompt Token Optimization:** Ensure the prompt template generated dynamically from `MetricMetadataRegistry` for `AiParseServiceImpl` remains concise to minimize LLM token overhead and latency.
-- **Composite Metric Schema Evolution:** In v1.1, blood pressure is stored as two associated records (`systolicBP` and `diastolicBP`). If v2.0 introduces a dedicated compound table, the registry must support forward migration.
+- **Canonical-key repair scope:** unknown how many `user_threshold` rows use aliases and how many `alert_rule` seeds are non-canonical. Audit before Phase 12 planning; decide whether to notify affected users.
+- **Class-level constraint routing:** whether `@ValidThresholdRange` violations land in `getFieldErrors` or `getGlobalErrors` must be confirmed at implementation time; the handler must consume both.
+- **Risk-engine accuracy caveat:** `RiskAssessmentServiceImpl` looks metrics up by Chinese labels against canonical English keys, so metric contributions are effectively always null today. Guidance copy must not promise accuracy it cannot deliver; fixing this is adjacent scope and should be explicitly decided.
+- **i18n depth:** the decision is Chinese-only for this milestone with `Accept-Language: zh-CN` fixed; DTO Bean Validation messages should be switched to Chinese values rather than building a message catalog.
+- **Element Plus floor drift:** `package.json` declares `^2.5.6`, CI runs `npm install`, the installed tree is 2.14.0. Either stay within floor-verified components or bump the declaration in the same commit that uses newer ones — decide explicitly.
+- **Existing test suite blind spots:** the 90 tests cannot detect duplicate toasts or alert-loss regressions; manual failure-injection and UAT walkthroughs are mandatory, not optional.
 
 ---
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- **HHS Production Codebase Audit:**
-  - `hhs-backend/src/main/java/com/hhs/service/impl/AiParseServiceImpl.java` (verified `METRIC_RANGES`)
-  - `hhs-backend/src/main/java/com/hhs/service/impl/OcrServiceImpl.java` (verified `REFERENCE_RANGES`)
-  - `hhs-backend/src/main/java/com/hhs/service/impl/HuaweiHealthServiceImpl.java` (verified `mg/dL` glucose and `spo2` key)
-  - `hhs-backend/src/main/java/com/hhs/service/domain/MetricDisplayFormatter.java` & `MetricsScorer.java`
-  - `hhs-frontend-v2/src/views/data-input/components/QuickInputDialog.vue` (verified destructive blur wipe)
-  - `hhs-frontend-v2/src/utils/format.ts` & `views/health/Metrics.vue`
-- **Clinical & Regulatory Standards:**
-  - 《中国高血压防治指南（2024年修订版）》— National Hypertension Prevention & Treatment Guidelines
-  - 《中国2型糖尿病防治指南（2020版）》— National Type 2 Diabetes Management Standards
-  - World Health Organization (WHO) Biological Plausibility Limits for Physiological Telemetry
-- **Official Specifications:**
-  - Jakarta Bean Validation 3.0 (Hibernate Validator 8.0.1.Final Specification)
-  - Element Plus 2.5.6 Form & Async-Validator Documentation
+- **Frontend code (direct read):** `src/utils/request.ts`, `src/views/health/Thresholds.vue`, `src/views/health/Score.vue`, `src/views/prevention/{Profile,Risk}.vue`, `src/views/user/PushSettings.vue`, `src/views/realtime/Monitor.vue`, `src/stores/{metricMeta,push,ai,alert}.ts`, `src/types/api.ts`, `src/constants/metricMeta.ts`, `src/utils/metricValidation.ts`, `src/views/data-input/components/{DeviceConfigWizard,ReferenceGuideCard}.vue`, `src/components/metric/UniversalMetricDialog.vue`, `src/__tests__/**`, `e2e/quick-input.spec.ts`
+- **Backend code (direct read):** `exception/GlobalExceptionHandler.java`, `common/Result.java`, `common/constant/ErrorCode.java`, `controller/PreventionController.java`, `service/impl/UserThresholdServiceImpl.java`, `service/impl/HealthMetricServiceImpl.java`, `service/domain/{ThresholdRangeChecker,ThresholdEvaluator,ProfileScorer,ScoreCalculator}.java`, `service/impl/{RiskAssessmentServiceImpl,HealthReportServiceImpl,AIChatServiceImpl}.java`, `dto/{UserThresholdRequest,HealthProfileRequest}.java`, `resources/sql/schema.sql`
+- **Installed artifacts:** `hhs-frontend-v2/package-lock.json`, `node_modules/{element-plus,vue,pinia,axios}/package.json`, Element Plus component typings (`form-item.d.ts`, `message.d.ts`, `slider.d.ts`)
+- **Design guidance:** Apple Human Interface Guidelines (Onboarding, Privacy, Entering data); GOV.UK Design System (Error message, Error summary, Check answers); Nielsen Norman Group (Errors in forms, Empty-state design, Progressive disclosure, Required fields)
+- **Project docs:** `.planning/PROJECT.md` (stack constraints, manual-migration decision)
 
 ### Secondary (MEDIUM confidence)
-- Apple HealthKit Human Interface Guidelines & Huawei Health SDK Integration Guide regarding non-destructive input tolerance and unit synchronization.
+- npm registry dist-tags for "latest version" claims (advisory only; no change justified)
+- MyFitnessPal FAQ and Bearable site for competitor onboarding signals (partial content)
+
+### Tertiary (LOW confidence — not used to justify decisions)
+- Vendor help pages (Apple Health Checklist, Fitbit zones, Samsung Health) were JS-gated or 404; competitor flow claims are limited accordingly.
 
 ---
-*Research completed: 2026-11-04*  
-*Ready for roadmap: yes*  
+
+*Research completed: 2026-11-05*
+*Supersedes: prior SUMMARY.md content for v1.1*
+*Ready for roadmap: yes*
