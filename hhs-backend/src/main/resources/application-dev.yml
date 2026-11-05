@@ -3,7 +3,7 @@ spring:
     # Port 3307 comes from docker-compose.override.yml (3306 is often taken by other local MySQL instances)
     url: jdbc:mysql://localhost:3307/hhs?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
     username: root
-    password: ${DB_PASSWORD:dev_password}
+    password: ${HHS_DB_PASSWORD:dev_password}
     driver-class-name: com.mysql.cj.jdbc.Driver
   data:
     redis:
@@ -11,7 +11,7 @@ spring:
       # Port 6380 comes from docker-compose.override.yml (6379 is often taken by other local Redis instances)
       port: 6380
       database: 0
-      password: ${REDIS_PASSWORD:dev_redis_password}
+      password: ${HHS_REDIS_PASSWORD:dev_redis_password}
   jackson:
     timezone: Asia/Shanghai
     date-format: yyyy-MM-dd HH:mm:ss
