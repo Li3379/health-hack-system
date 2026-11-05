@@ -14,6 +14,10 @@ import com.hhs.exception.BusinessException;
 import com.hhs.mapper.*;
 import com.hhs.security.PathValidationUtil;
 import com.hhs.service.*;
+import com.hhs.service.domain.HealthMetricMetaRegistry;
+import com.hhs.service.domain.LabRoutineMetricRegistry;
+import com.hhs.service.domain.MetricDefinition;
+import com.hhs.service.domain.MetricKeyNormalizer;
 import com.hhs.vo.HealthMetricVO;
 import com.hhs.vo.OcrHealthResultVO;
 import com.hhs.vo.OcrHistoryVO;
@@ -69,118 +73,14 @@ public class OcrServiceImpl implements OcrService {
         钠 400 mg
         """;
 
-    // Metric key mappings for OCR recognition
-    private static final Map<String, String> METRIC_KEY_MAP = Map.ofEntries(
-        // Health metrics
-        Map.entry("血糖", "glucose"),
-        Map.entry("空腹血糖", "fastingGlucose"),
-        Map.entry("餐后血糖", "postprandialGlucose"),
-        Map.entry("心率", "heartRate"),
-        Map.entry("收缩压", "systolicBP"),
-        Map.entry("舒张压", "diastolicBP"),
-        Map.entry("血压", "bloodPressure"),
-        Map.entry("体重", "weight"),
-        Map.entry("体温", "bodyTemperature"),
-        Map.entry("血氧", "bloodOxygen"),
-        Map.entry("总胆固醇", "totalCholesterol"),
-        Map.entry("甘油三酯", "triglycerides"),
-        // Lipid panel metrics
-        Map.entry("高密度脂蛋白", "hdlCholesterol"),
-        Map.entry("高密度脂蛋白胆固醇", "hdlCholesterol"),
-        Map.entry("低密度脂蛋白", "ldlCholesterol"),
-        Map.entry("低密度脂蛋白胆固醇", "ldlCholesterol"),
-        // Kidney function metrics
-        Map.entry("肌酐", "creatinine"),
-        Map.entry("尿酸", "uricAcid"),
-        // Blood routine metrics
-        Map.entry("血红蛋白", "hemoglobin"),
-        Map.entry("白细胞", "wbc"),
-        Map.entry("白细胞计数", "wbc"),
-        Map.entry("红细胞", "rbc"),
-        Map.entry("红细胞计数", "rbc"),
-        Map.entry("血小板", "platelet"),
-        Map.entry("血小板计数", "platelet"),
-        // Wellness metrics
-        Map.entry("步数", "steps"),
-        Map.entry("睡眠", "sleepDuration"),
-        Map.entry("运动", "exerciseMinutes"),
-        Map.entry("饮水", "waterIntake")
-    );
-
-    // Unit mappings - use Map.ofEntries for more than 10 entries
-    private static final Map<String, String> DEFAULT_UNITS = Map.ofEntries(
-        Map.entry("glucose", "mmol/L"),
-        Map.entry("fastingGlucose", "mmol/L"),
-        Map.entry("postprandialGlucose", "mmol/L"),
-        Map.entry("heartRate", "次/分"),
-        Map.entry("systolicBP", "mmHg"),
-        Map.entry("diastolicBP", "mmHg"),
-        Map.entry("weight", "kg"),
-        Map.entry("bodyTemperature", "℃"),
-        Map.entry("bloodOxygen", "%"),
-        Map.entry("totalCholesterol", "mmol/L"),
-        Map.entry("triglycerides", "mmol/L"),
-        // Lipid panel units
-        Map.entry("hdlCholesterol", "mmol/L"),
-        Map.entry("ldlCholesterol", "mmol/L"),
-        // Kidney function units
-        Map.entry("creatinine", "μmol/L"),
-        Map.entry("uricAcid", "μmol/L"),
-        // Blood routine units
-        Map.entry("hemoglobin", "g/L"),
-        Map.entry("wbc", "10^9/L"),
-        Map.entry("rbc", "10^12/L"),
-        Map.entry("platelet", "10^9/L"),
-        // Wellness units
-        Map.entry("steps", "步"),
-        Map.entry("sleepDuration", "小时"),
-        Map.entry("exerciseMinutes", "分钟"),
-        Map.entry("waterIntake", "毫升")
-    );
-
-    // Health metric keys
-    private static final Set<String> HEALTH_KEYS = Set.of(
-        "glucose", "fastingGlucose", "postprandialGlucose",
-        "heartRate", "systolicBP", "diastolicBP", "bloodPressure",
-        "weight", "bodyTemperature", "bloodOxygen", "bmi",
-        "totalCholesterol", "triglycerides",
-        "hdlCholesterol", "ldlCholesterol",
-        "creatinine", "uricAcid",
-        "hemoglobin", "wbc", "rbc", "platelet"
-    );
-
-    // Wellness metric keys
-    private static final Set<String> WELLNESS_KEYS = Set.of(
-        "sleepDuration", "sleepQuality", "steps",
-        "exerciseMinutes", "waterIntake", "mood", "energy"
-    );
-
-    // Reference ranges for confidence calculation (min, max)
-    private static final Map<String, BigDecimal[]> REFERENCE_RANGES = Map.ofEntries(
-        // Blood glucose
-        Map.entry("glucose", new BigDecimal[]{new BigDecimal("3.9"), new BigDecimal("6.1")}),
-        Map.entry("fastingGlucose", new BigDecimal[]{new BigDecimal("3.9"), new BigDecimal("6.1")}),
-        Map.entry("postprandialGlucose", new BigDecimal[]{new BigDecimal("3.9"), new BigDecimal("7.8")}),
-        // Vital signs
-        Map.entry("heartRate", new BigDecimal[]{new BigDecimal("60"), new BigDecimal("100")}),
-        Map.entry("systolicBP", new BigDecimal[]{new BigDecimal("90"), new BigDecimal("140")}),
-        Map.entry("diastolicBP", new BigDecimal[]{new BigDecimal("60"), new BigDecimal("90")}),
-        Map.entry("bloodOxygen", new BigDecimal[]{new BigDecimal("95"), new BigDecimal("100")}),
-        Map.entry("bodyTemperature", new BigDecimal[]{new BigDecimal("36.0"), new BigDecimal("37.5")}),
-        // Lipid panel
-        Map.entry("totalCholesterol", new BigDecimal[]{new BigDecimal("0"), new BigDecimal("5.2")}),
-        Map.entry("triglycerides", new BigDecimal[]{new BigDecimal("0"), new BigDecimal("1.7")}),
-        Map.entry("hdlCholesterol", new BigDecimal[]{new BigDecimal("1.0"), new BigDecimal("2.0")}),
-        Map.entry("ldlCholesterol", new BigDecimal[]{new BigDecimal("0"), new BigDecimal("3.4")}),
-        // Kidney function
-        Map.entry("creatinine", new BigDecimal[]{new BigDecimal("44"), new BigDecimal("133")}),
-        Map.entry("uricAcid", new BigDecimal[]{new BigDecimal("150"), new BigDecimal("420")}),
-        // Blood routine
-        Map.entry("hemoglobin", new BigDecimal[]{new BigDecimal("120"), new BigDecimal("160")}),
-        Map.entry("wbc", new BigDecimal[]{new BigDecimal("4"), new BigDecimal("10")}),
-        Map.entry("rbc", new BigDecimal[]{new BigDecimal("4.0"), new BigDecimal("5.5")}),
-        Map.entry("platelet", new BigDecimal[]{new BigDecimal("100"), new BigDecimal("300")})
-    );
+    private record ResolvedMetricDef(
+            String canonicalKey,
+            String displayName,
+            String defaultUnit,
+            BigDecimal normalMin,
+            BigDecimal normalMax,
+            String category
+    ) {}
 
     @Value("${file.upload.path:./uploads}")
     private String uploadPath;
@@ -194,6 +94,8 @@ public class OcrServiceImpl implements OcrService {
     private final HealthMetricService healthMetricService;
     private final WellnessService wellnessService;
     private final ObjectMapper objectMapper;
+    private final HealthMetricMetaRegistry metaRegistry;
+    private final LabRoutineMetricRegistry labRegistry;
 
     public OcrServiceImpl(ExaminationReportMapper examinationReportMapper,
                           LabResultMapper labResultMapper,
@@ -203,7 +105,9 @@ public class OcrServiceImpl implements OcrService {
                           ReportStatusService reportStatusService,
                           HealthMetricService healthMetricService,
                           WellnessService wellnessService,
-                          ObjectMapper objectMapper) {
+                          ObjectMapper objectMapper,
+                          HealthMetricMetaRegistry metaRegistry,
+                          LabRoutineMetricRegistry labRegistry) {
         this.examinationReportMapper = examinationReportMapper;
         this.labResultMapper = labResultMapper;
         this.ocrRecognizeLogMapper = ocrRecognizeLogMapper;
@@ -213,6 +117,8 @@ public class OcrServiceImpl implements OcrService {
         this.healthMetricService = healthMetricService;
         this.wellnessService = wellnessService;
         this.objectMapper = objectMapper;
+        this.metaRegistry = metaRegistry != null ? metaRegistry : new HealthMetricMetaRegistry();
+        this.labRegistry = labRegistry != null ? labRegistry : new LabRoutineMetricRegistry();
     }
 
     // =====================================================
@@ -505,14 +411,14 @@ public class OcrServiceImpl implements OcrService {
         LocalDate today = LocalDate.now();
 
         // Pattern for metrics: name + number + unit
-        // Updated to include lipid panel, kidney function, and blood routine metrics
+        // Matches standard health, lipid panel, kidney function, CBC, and blood pressure (120/80)
         Pattern metricPattern = Pattern.compile(
             "(血糖|空腹血糖|餐后血糖|心率|收缩压|舒张压|血压|体重|体温|血氧|" +
             "总胆固醇|甘油三酯|高密度脂蛋白|高密度脂蛋白胆固醇|低密度脂蛋白|低密度脂蛋白胆固醇|" +
             "肌酐|尿酸|血红蛋白|白细胞|白细胞计数|红细胞|红细胞计数|血小板|血小板计数|" +
             "步数|睡眠|运动|饮水)" +
-            "\\s*([\\d.]+)\\s*" +
-            "(mmol/L|mmHg|次/分|kg|℃|%|步|小时|分钟|毫升|g|mg|kJ|μmol/L|umol/L|10\\^9/L|10\\^12/L)?"
+            "\\s*([\\d./]+)\\s*" +
+            "(mmol/L|mmHg|次/分|kg|℃|%|步|小时|分钟|毫升|g/L|g|mg|kJ|μmol/L|umol/L|10\\^9/L|10\\^12/L)?"
         );
 
         Matcher matcher = metricPattern.matcher(rawText);
@@ -521,8 +427,34 @@ public class OcrServiceImpl implements OcrService {
             String valueStr = matcher.group(2);
             String unit = matcher.group(3);
 
-            String metricKey = METRIC_KEY_MAP.get(name);
-            if (metricKey == null) {
+            // 血压特殊处理 (例如 "120/80") 强制拆分为收缩压和舒张压
+            if ("血压".equals(name) || "bloodPressure".equalsIgnoreCase(name)) {
+                if (valueStr.contains("/")) {
+                    String[] parts = valueStr.split("/");
+                    if (parts.length == 2) {
+                        try {
+                            BigDecimal sbpVal = new BigDecimal(parts[0].trim());
+                            BigDecimal dbpVal = new BigDecimal(parts[1].trim());
+
+                            ResolvedMetricDef sbpDef = resolveMetric("systolicBP");
+                            ResolvedMetricDef dbpDef = resolveMetric("diastolicBP");
+
+                            metrics.add(createMetric("systolicBP", "收缩压", sbpVal,
+                                    unit != null ? unit : (sbpDef != null ? sbpDef.defaultUnit() : "mmHg"),
+                                    sbpDef, today));
+                            metrics.add(createMetric("diastolicBP", "舒张压", dbpVal,
+                                    unit != null ? unit : (dbpDef != null ? dbpDef.defaultUnit() : "mmHg"),
+                                    dbpDef, today));
+                        } catch (Exception ex) {
+                            log.warn("无法解析血压复合数值: {}", valueStr);
+                        }
+                    }
+                }
+                continue;
+            }
+
+            ResolvedMetricDef def = resolveMetric(name);
+            if (def == null) {
                 continue;
             }
 
@@ -533,41 +465,68 @@ public class OcrServiceImpl implements OcrService {
                 continue;
             }
 
-            // Handle blood pressure specially (e.g., "120/80")
-            if ("bloodPressure".equals(metricKey)) {
-                // Split into systolic and diastolic
-                if (valueStr.contains("/")) {
-                    String[] parts = valueStr.split("/");
-                    if (parts.length == 2) {
-                        // Add systolic
-                        metrics.add(createMetric("systolicBP", "收缩压",
-                                new BigDecimal(parts[0]), "mmHg", today));
-                        // Add diastolic
-                        metrics.add(createMetric("diastolicBP", "舒张压",
-                                new BigDecimal(parts[1]), "mmHg", today));
-                    }
-                }
-                continue;
-            }
-
-            // Use default unit if not specified
             if (unit == null) {
-                unit = DEFAULT_UNITS.get(metricKey);
+                unit = def.defaultUnit();
             }
 
-            String category = determineCategory(metricKey);
-
-            metrics.add(createMetric(metricKey, name, value, unit, today));
+            metrics.add(createMetric(def.canonicalKey(), def.displayName(), value, unit, def, today));
         }
 
         return metrics;
     }
 
-    private OcrHealthResultVO.RecognizedMetric createMetric(
-            String metricKey, String name, BigDecimal value, String unit, LocalDate recordDate) {
+    private ResolvedMetricDef resolveMetric(String rawName) {
+        if (rawName == null || rawName.isBlank()) {
+            return null;
+        }
+        String trimmed = rawName.trim();
 
-        // Calculate dynamic confidence
-        BigDecimal confidence = calculateConfidence(metricKey, value, unit);
+        // 1. 优先查核心健康/保健指标注册中心 (支持 canonicalKey 与英文别名)
+        String canonicalKey = MetricKeyNormalizer.toCanonicalKey(trimmed);
+        Optional<MetricDefinition> coreOpt = metaRegistry.getDefinition(canonicalKey);
+        if (coreOpt.isPresent()) {
+            MetricDefinition def = coreOpt.get();
+            return new ResolvedMetricDef(
+                    def.canonicalKey(), def.displayName(), def.unit(),
+                    def.normalMin(), def.normalMax(), def.category().name()
+            );
+        }
+
+        // 2. 遍历核心注册表按中文名称与语义匹配
+        for (MetricDefinition def : metaRegistry.getAllDefinitions().values()) {
+            if (def.displayName().equalsIgnoreCase(trimmed)
+                    || def.displayName().startsWith(trimmed)
+                    || trimmed.startsWith(def.displayName())
+                    || (trimmed.equals("睡眠") && def.canonicalKey().equals("sleepDuration"))
+                    || (trimmed.equals("运动") && def.canonicalKey().equals("exerciseMinutes"))
+                    || (trimmed.equals("饮水") && def.canonicalKey().equals("waterIntake"))
+                    || (trimmed.contains("高密度") && def.canonicalKey().equals("hdlCholesterol"))
+                    || (trimmed.contains("低密度") && def.canonicalKey().equals("ldlCholesterol"))) {
+                return new ResolvedMetricDef(
+                        def.canonicalKey(), def.displayName(), def.unit(),
+                        def.normalMin(), def.normalMax(), def.category().name()
+                );
+            }
+        }
+
+        // 3. 次查化验单血常规扩展注册中心
+        Optional<LabRoutineMetricRegistry.LabDefinition> labOpt = labRegistry.getDefinition(trimmed);
+        if (labOpt.isPresent()) {
+            var lab = labOpt.get();
+            return new ResolvedMetricDef(
+                    lab.key(), lab.displayName(), lab.unit(),
+                    lab.normalMin(), lab.normalMax(), "HEALTH"
+            );
+        }
+
+        return null;
+    }
+
+    private OcrHealthResultVO.RecognizedMetric createMetric(
+            String metricKey, String name, BigDecimal value, String unit,
+            ResolvedMetricDef def, LocalDate recordDate) {
+
+        BigDecimal confidence = calculateConfidence(def, value, unit);
 
         return OcrHealthResultVO.RecognizedMetric.builder()
                 .metricKey(metricKey)
@@ -575,7 +534,7 @@ public class OcrServiceImpl implements OcrService {
                 .value(value)
                 .unit(unit)
                 .confidence(confidence)
-                .category(determineCategory(metricKey))
+                .category(def != null ? def.category() : determineCategory(metricKey))
                 .recordDate(recordDate.format(DateTimeFormatter.ISO_LOCAL_DATE))
                 .selected(true)
                 .build();
@@ -588,25 +547,24 @@ public class OcrServiceImpl implements OcrService {
      * - Value in normal range: +0.1 if value falls within reference range
      * - Final score clamped between 0.5 and 0.95
      */
-    private BigDecimal calculateConfidence(String metricKey, BigDecimal value, String detectedUnit) {
+    private BigDecimal calculateConfidence(ResolvedMetricDef def, BigDecimal value, String detectedUnit) {
         BigDecimal confidence = new BigDecimal("0.75");
 
         // Check unit match
-        String expectedUnit = DEFAULT_UNITS.get(metricKey);
-        if (expectedUnit != null && detectedUnit != null) {
-            // Normalize units for comparison
+        if (def != null && def.defaultUnit() != null && detectedUnit != null) {
             String normalizedDetected = normalizeUnit(detectedUnit);
-            String normalizedExpected = normalizeUnit(expectedUnit);
+            String normalizedExpected = normalizeUnit(def.defaultUnit());
             if (normalizedDetected.equals(normalizedExpected)) {
                 confidence = confidence.add(new BigDecimal("0.10"));
             }
         }
 
-        // Check if value is within normal range
-        BigDecimal[] range = REFERENCE_RANGES.get(metricKey);
-        if (range != null && value != null) {
-            if (value.compareTo(range[0]) >= 0 && value.compareTo(range[1]) <= 0) {
-                confidence = confidence.add(new BigDecimal("0.10"));
+        // Check if value is within normal reference range
+        if (def != null && value != null) {
+            if (def.normalMin() != null && def.normalMax() != null) {
+                if (value.compareTo(def.normalMin()) >= 0 && value.compareTo(def.normalMax()) <= 0) {
+                    confidence = confidence.add(new BigDecimal("0.10"));
+                }
             }
         }
 
@@ -634,12 +592,15 @@ public class OcrServiceImpl implements OcrService {
     }
 
     private String determineCategory(String metricKey) {
-        if (HEALTH_KEYS.contains(metricKey)) {
-            return "HEALTH";
-        } else if (WELLNESS_KEYS.contains(metricKey)) {
-            return "WELLNESS";
+        String canonicalKey = MetricKeyNormalizer.toCanonicalKey(metricKey);
+        Optional<MetricDefinition> defOpt = metaRegistry.getDefinition(canonicalKey);
+        if (defOpt.isPresent()) {
+            return defOpt.get().category().name();
         }
-        return "HEALTH"; // Default to HEALTH
+        if (labRegistry.contains(canonicalKey)) {
+            return "HEALTH";
+        }
+        return "HEALTH";
     }
 
     private Long saveMetric(Long userId, OcrConfirmRequest.MetricItem item, String category) {
@@ -647,9 +608,11 @@ public class OcrServiceImpl implements OcrService {
                 ? LocalDate.parse(item.getRecordDate())
                 : LocalDate.now();
 
+        String canonicalKey = MetricKeyNormalizer.toCanonicalKey(item.getMetricKey());
+
         if ("WELLNESS".equals(category)) {
             WellnessMetricRequest request = new WellnessMetricRequest();
-            request.setMetricKey(item.getMetricKey());
+            request.setMetricKey(canonicalKey);
             request.setValue(item.getValue());
             request.setRecordDate(recordDate);
             request.setUnit(item.getUnit());
@@ -659,7 +622,7 @@ public class OcrServiceImpl implements OcrService {
         } else {
             HealthMetricRequest request = new HealthMetricRequest();
             request.setUserId(userId);
-            request.setMetricKey(item.getMetricKey());
+            request.setMetricKey(canonicalKey);
             request.setValue(item.getValue());
             request.setRecordDate(recordDate);
             request.setUnit(item.getUnit());
