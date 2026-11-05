@@ -430,9 +430,9 @@ const handleAddMetricKeyChange = (key: string) => {
   const def = metricMetaStore.getDefinition(key)
   addForm.unit = def?.unit || ''
   if (key === 'mood') {
-    if (!addForm.value || addForm.value < 1 || addForm.value > 5) {
-      addForm.value = 3
-    }
+    addForm.value = 3
+  } else {
+    addForm.value = undefined
   }
   addFormRef.value?.clearValidate('value')
 }
@@ -528,6 +528,7 @@ const addCriticalMetricUnit = computed(() => {
 })
 
 const handleAddMetric = async () => {
+  if (adding.value) return
   if (!addFormRef.value) return
 
   await addFormRef.value.validate(async valid => {
@@ -543,6 +544,7 @@ const handleAddMetric = async () => {
 }
 
 const executeAddSave = async () => {
+  if (adding.value) return
   adding.value = true
   try {
     const canonicalKey = addDefinition.value?.canonicalKey || addForm.metricKey
