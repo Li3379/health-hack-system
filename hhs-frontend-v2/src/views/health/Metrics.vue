@@ -40,7 +40,7 @@
             />
           </el-form-item>
           <el-form-item>
-            <el-button type="primary" @click="fetchMetrics">查询</el-button>
+            <el-button type="primary" @click="handleFilterQuery">查询</el-button>
             <el-button @click="resetFilters">重置</el-button>
           </el-form-item>
         </el-form>
@@ -284,16 +284,19 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, watch, toRef, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { Plus, Check, Warning, Bell, CircleClose, Switch, InfoFilled } from '@element-plus/icons-vue'
 import { healthApi } from '@/api/health'
 import { formatDateTime, formatDate, getMetricLabel } from '@/utils/format'
+import { toCanonicalKey } from '@/utils/metricNormalizer'
 import { useMetricMetaStore } from '@/stores/metricMeta'
 import { useMetricValidation } from '@/composables/useMetricValidation'
 import ReferenceGuideCard from '@/views/data-input/components/ReferenceGuideCard.vue'
 import CriticalConfirmDialog from '@/views/data-input/components/CriticalConfirmDialog.vue'
 import type { HealthMetricVO, HealthMetricRequest } from '@/types/api'
 
+const route = useRoute()
 const metricMetaStore = useMetricMetaStore()
 const loading = ref(false)
 const submitting = ref(false)
@@ -475,11 +478,14 @@ const rules: FormRules = {
   recordDate: [{ required: true, message: '请选择记录日期', trigger: 'change' }]
 }
 
-// 指标切换时动态读取单位 (HEALTH-01)
+// 指标切换时动态读取单位并重置数值，避免跨指标数值污染 (HEALTH-01, WR-01)
 const handleMetricKeyChange = (value: string) => {
   const key = value === 'bloodPressure' ? 'systolicBP' : value
   const def = metricMetaStore.getDefinition(key)
-  form.unit = def?.unit || ''
+  form.unit = def?.unit || (value === 'bloodPressure' ? 'mmHg' : '')
+  form.value = undefined
+  form.diastolicValue = undefined
+  formRef.value?.clearValidate()
 }
 
 // 趋势规范化工具
@@ -495,6 +501,12 @@ const toBackendTrend = (trend?: string) => {
   if (upper === 'STABLE') return 'stable'
   if (upper === 'NORMAL') return 'normal'
   return trend.toLowerCase()
+}
+
+// 筛选查询处理（重置页码 - WR-04）
+const handleFilterQuery = () => {
+  pagination.page = 1
+  fetchMetrics()
 }
 
 // 拉取列表数据
@@ -546,13 +558,14 @@ const showAddDialog = () => {
   }, 0)
 }
 
-// 打开编辑弹窗 (单项指标精准适配 - HEALTH-02)
+// 打开编辑弹窗 (单项指标精准适配与 Key 规范化 - HEALTH-02, WR-02)
 const handleEdit = (row: HealthMetricVO) => {
   dialogTitle.value = '编辑健康指标'
   editingId.value = row.id
-  const def = metricMetaStore.getDefinition(row.metricKey)
+  const canonicalKey = toCanonicalKey(row.metricKey)
+  const def = metricMetaStore.getDefinition(canonicalKey)
   Object.assign(form, {
-    metricKey: row.metricKey,
+    metricKey: canonicalKey,
     value: row.value,
     diastolicValue: undefined,
     recordDate: row.recordDate,
@@ -595,8 +608,9 @@ const criticalMetricUnit = computed(() => {
   return definition.value?.unit || form.unit || ''
 })
 
-// 提交入口：遇急危重症触发二次确认模态窗
+// 提交入口：遇急危重症触发二次确认模态窗 (防重入 - WR-03)
 const handleSubmit = async () => {
+  if (submitting.value) return
   if (!formRef.value) return
 
   await formRef.value.validate(async valid => {
@@ -611,8 +625,9 @@ const handleSubmit = async () => {
   })
 }
 
-// 真正的数据入库执行 (HEALTH-02: 血压协同提交 Promise.all, 编辑单项精准更新)
+// 真正的数据入库执行 (HEALTH-02: 血压协同提交 Promise.all, 编辑单项精准更新, 防重入 - WR-03)
 const executeSave = async () => {
+  if (submitting.value) return
   submitting.value = true
   try {
     if (isCollaborative.value && form.diastolicValue !== undefined) {
@@ -675,7 +690,7 @@ const handleDelete = async (row: HealthMetricVO) => {
     ElMessage.success('删除成功')
     fetchMetrics()
   } catch (error) {
-    if (error !== 'cancel') {
+    if (error !== 'cancel' && error !== 'close') {
       ElMessage.error('删除失败')
     }
   }
@@ -684,6 +699,9 @@ const handleDelete = async (row: HealthMetricVO) => {
 onMounted(() => {
   metricMetaStore.fetchMetadata()
   fetchMetrics()
+  if (route.query.action === 'add') {
+    showAddDialog()
+  }
 })
 </script>
 
