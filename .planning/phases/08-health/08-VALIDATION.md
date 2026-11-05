@@ -38,9 +38,10 @@ created: "2026-11-05"
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 08-01-01 | 01 | 1 | HEALTH-01 | T-08-01 | 筛选栏和对话框动态渲染 16 项指标且无硬编码字典 | unit/component | `cd hhs-frontend-v2 && npm run test:run -- src/__tests__/views/Metrics.spec.ts` | ❌ W0 | ⬜ pending |
-| 08-01-02 | 01 | 1 | HEALTH-02 | T-08-02 | 新增时血压双字段协同对调与编辑单项适配 | unit/component | `cd hhs-frontend-v2 && npm run test:run -- src/__tests__/views/Metrics.spec.ts` | ❌ W0 | ⬜ pending |
-| 08-02-01 | 02 | 2 | HEALTH-03 | T-08-03 | 四梯度宽容放行、危急值确认与失焦非破坏性保留 | unit/component | `cd hhs-frontend-v2 && npm run test:run -- src/__tests__/views/Metrics.spec.ts` | ❌ W0 | ⬜ pending |
+| 08-01-01 | 01 | 1 | HEALTH-01 | T-08-01 | 筛选栏和对话框动态渲染 16 项指标且无硬编码字典 | unit/component | `cd hhs-frontend-v2 && npm run test:run -- src/__tests__/composables/useMetricValidation.spec.ts` | ✅ | ⬜ pending |
+| 08-01-02 | 01 | 1 | HEALTH-02 | T-08-02 | 新增时血压双字段协同对调与编辑单项适配 | component/build | `cd hhs-frontend-v2 && npm run build` | ✅ | ⬜ pending |
+| 08-02-01 | 02 | 2 | HEALTH-03 | T-08-03 | 四梯度宽容放行、危急值确认与失焦非破坏性保留 | component/build | `cd hhs-frontend-v2 && npm run build` | ✅ | ⬜ pending |
+| 08-02-02 | 02 | 2 | HEALTH-01,02,03 | T-08-01..03 | 全流程组件自动化集成与断言覆盖 | integration | `cd hhs-frontend-v2 && npm run test:run -- src/__tests__/views/Metrics.spec.ts` | ❌ W0 | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 

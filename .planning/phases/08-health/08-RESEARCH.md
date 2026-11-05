@@ -712,12 +712,12 @@ export function useMetricValidation(
 | A1 | 数据库中历史记录的血压数据是以单条 `systolicBP` 和 `diastolicBP` 分开存储的行记录 | Architecture Patterns | 极低（已在 `HealthMetricVO`、`HealthMetricRequest` 及后端 Controller 中核实） |
 | A2 | 用户在表格中点击单行“编辑”时，仅需更新该行的单一指标值，无需强制关联修改另一行血压数据 | Architecture Patterns / D-02 | 极低（已在 D-02 锁定决策中明确约定编辑模式精准适配单项记录） |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **表格中血压指标行是否需要在未来版本聚合成单一复合行？**
    - What we know: 数据库中每条记录有唯一的 `id`，历史数据各自带时间戳。目前列表中分别显示收缩压行和舒张压行。
    - What's unclear: 是否需要把同一时间段记录的收缩压与舒张压前端聚合成“血压 120/80 mmHg”。
-   - Recommendation: 本阶段严格聚焦于“录入与编辑对齐”，表格展示继续按行渲染，在 Phase 10 通用组件或后续里程碑中再考虑视图聚合展示。
+   - RESOLVED: 本阶段严格聚焦于“录入与编辑对齐”，表格展示继续按单行渲染，避免破坏表格原有的删除/编辑行契约；聚合展示延后至 Phase 10 通用组件或后续里程碑中统一评估。
 
 ## Environment Availability
 
