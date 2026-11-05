@@ -8,6 +8,7 @@ import com.hhs.dto.WellnessMetricRequest;
 import com.hhs.entity.AiParseHistory;
 import com.hhs.exception.BusinessException;
 import com.hhs.mapper.AiParseHistoryMapper;
+import com.hhs.service.domain.HealthMetricMetaRegistry;
 import com.hhs.service.impl.AiParseServiceImpl;
 import com.hhs.vo.AiParseHistoryVO;
 import com.hhs.vo.HealthMetricVO;
@@ -63,6 +64,9 @@ class AiParseServiceTest {
 
     @Spy
     private ObjectMapper objectMapper = new ObjectMapper();
+
+    @Spy
+    private HealthMetricMetaRegistry metaRegistry = new HealthMetricMetaRegistry();
 
     @InjectMocks
     private AiParseServiceImpl aiParseService;
@@ -139,7 +143,7 @@ class AiParseServiceTest {
 
         // 验证第一个指标
         MetricParseResultVO.ParsedMetric glucose = result.getMetrics().get(0);
-        assertEquals("glucose", glucose.getMetricKey());
+        assertEquals("bloodGlucose", glucose.getMetricKey());
         assertEquals("血糖", glucose.getMetricName());
         assertEquals(new BigDecimal("5.6"), glucose.getValue());
         assertEquals("mmol/L", glucose.getUnit());
@@ -336,7 +340,7 @@ class AiParseServiceTest {
 
         // Then: 无效key被过滤，只保留有效指标
         assertEquals(1, result.getMetrics().size());
-        assertEquals("glucose", result.getMetrics().get(0).getMetricKey());
+        assertEquals("bloodGlucose", result.getMetrics().get(0).getMetricKey());
     }
 
     @Test
@@ -814,5 +818,66 @@ class AiParseServiceTest {
         assertEquals(1, result.getMetrics().size());
         assertNotNull(result.getMetrics().get(0).getConfidence());
         assertEquals(new BigDecimal("0.8"), result.getMetrics().get(0).getConfidence());
+    }
+
+    @Test
+    @DisplayName("测试7.1：动态提示词生成 - 包含23项权威指标且无旧Key glucose")
+    void testDynamicPromptGeneration() {
+        String prompt = aiParseService.getCachedSystemPrompt();
+        assertNotNull(prompt, "动态提示词不应为空");
+        assertTrue(prompt.contains("bloodGlucose"), "提示词应包含标准小驼峰Key bloodGlucose");
+        assertFalse(prompt.contains("| glucose |"), "提示词不应包含旧Key glucose");
+        assertTrue(prompt.contains("systolicBP"), "提示词应包含 systolicBP");
+        assertTrue(prompt.contains("diastolicBP"), "提示词应包含 diastolicBP");
+        assertTrue(prompt.contains("sleepDuration"), "提示词应包含保健指标 sleepDuration");
+        assertTrue(prompt.contains("waterIntake"), "提示词应包含保健指标 waterIntake");
+        assertTrue(prompt.contains("指标对照表"), "提示词应包含指标对照表");
+    }
+
+    @Test
+    @DisplayName("测试7.2：生理四梯度预警 - 区分正常、偏离、危急与物理极限")
+    void testPhysiologicalFourTierWarnings() {
+        // Given: AI返回不同生理梯度的数值 (Tier 1 正常, Tier 2 偏高, Tier 3 严重偏离, Tier 4 物理超限)
+        String aiResponse = """
+            {
+              "metrics": [
+                {"metricKey": "heartRate", "metricName": "心率", "value": 75, "unit": "次/分", "category": "HEALTH"},
+                {"metricKey": "systolicBP", "metricName": "收缩压", "value": 150, "unit": "mmHg", "category": "HEALTH"},
+                {"metricKey": "bloodGlucose", "metricName": "血糖", "value": 18.0, "unit": "mmol/L", "category": "HEALTH"},
+                {"metricKey": "bodyTemperature", "metricName": "体温", "value": 55.0, "unit": "℃", "category": "HEALTH"}
+              ],
+              "summary": "解析完成",
+              "warnings": []
+            }
+            """;
+
+        AiMessage aiMessage = mock(AiMessage.class);
+        when(aiMessage.text()).thenReturn(aiResponse);
+        Response<AiMessage> mockResponse = mock(Response.class);
+        when(mockResponse.content()).thenReturn(aiMessage);
+        when(chatModel.generate(anyList())).thenReturn(mockResponse);
+
+        MetricParseRequest request = new MetricParseRequest();
+        request.setInput("测试多梯度数据");
+
+        // When: 执行解析
+        MetricParseResultVO result = aiParseService.parseMetrics(testUserId, request);
+
+        // Then: 验证结果与梯度警告
+        assertNotNull(result);
+        assertEquals(4, result.getMetrics().size());
+
+        List<String> warnings = result.getWarnings();
+        // Tier 1 (heartRate 75) 不应产生警告
+        assertFalse(warnings.stream().anyMatch(w -> w.contains("心率")), "心率75为正常值，不应产生警告");
+
+        // Tier 2 (systolicBP 150) 应产生偏高警告
+        assertTrue(warnings.stream().anyMatch(w -> w.contains("收缩压") && w.contains("偏高")), "收缩压150应产生偏高警告");
+
+        // Tier 3 (bloodGlucose 18.0) 应产生急危重症预警
+        assertTrue(warnings.stream().anyMatch(w -> w.contains("血糖") && (w.contains("急危重症") || w.contains("偏高"))), "血糖18.0应产生预警");
+
+        // Tier 4 (bodyTemperature 55.0) 应产生人类生理极限警告
+        assertTrue(warnings.stream().anyMatch(w -> w.contains("体温") && w.contains("人类生理极限")), "体温55.0应产生生理极限警告");
     }
 }
