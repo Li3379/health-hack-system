@@ -100,4 +100,23 @@ describe('useMetricValidation', () => {
     expect(hasCritical.value).toBe(true)
     expect(isSaveBlocked.value).toBe(false)
   })
+
+  it('should disable blood pressure collaboration when collaborativeRef is false', () => {
+    const metricKey = ref<string | undefined>('systolicBP')
+    const systolic = ref<number | undefined>(120)
+    const diastolic = ref<number | undefined>(80)
+    const collaborative = ref(false)
+
+    const {
+      isBloodPressure,
+      diastolicDef,
+      diastolicEval,
+      isInverted
+    } = useMetricValidation(metricKey, systolic, diastolic, collaborative)
+
+    expect(isBloodPressure.value).toBe(false)
+    expect(diastolicDef.value).toBeUndefined()
+    expect(diastolicEval.value).toBeNull()
+    expect(isInverted.value).toBe(false)
+  })
 })

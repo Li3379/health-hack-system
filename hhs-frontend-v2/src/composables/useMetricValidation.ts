@@ -11,7 +11,8 @@ import type { MetricDefinitionVO } from '@/types/api'
 export function useMetricValidation(
   metricKeyRef: Ref<string | undefined>,
   valueRef: Ref<number | undefined>,
-  diastolicRef?: Ref<number | undefined>
+  diastolicRef?: Ref<number | undefined>,
+  collaborativeRef?: Ref<boolean>
 ) {
   const metaStore = useMetricMetaStore()
 
@@ -24,8 +25,11 @@ export function useMetricValidation(
     return toCanonicalKey(raw)
   })
 
-  // 判定是否为血压协同指标
+  // 判定是否为血压协同指标 (若 collaborativeRef 显式设为 false，则关闭协同模式)
   const isBloodPressure = computed<boolean>(() => {
+    if (collaborativeRef && !collaborativeRef.value) {
+      return false
+    }
     return canonicalKey.value === 'systolicBP'
   })
 
