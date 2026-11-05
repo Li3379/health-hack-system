@@ -300,7 +300,7 @@ public class WellnessServiceImpl implements WellnessService {
                 "sleepQuality", new BigDecimal[]{new BigDecimal("1"), new BigDecimal("5")},
                 "steps", new BigDecimal[]{BigDecimal.ZERO, new BigDecimal("100000")},
                 "exerciseMinutes", new BigDecimal[]{BigDecimal.ZERO, new BigDecimal("1440")},
-                "waterIntake", new BigDecimal[]{BigDecimal.ZERO, new BigDecimal("20")},
+                "waterIntake", new BigDecimal[]{BigDecimal.ZERO, new BigDecimal("20000")},
                 "mood", new BigDecimal[]{new BigDecimal("1"), new BigDecimal("5")},
                 "energy", new BigDecimal[]{new BigDecimal("1"), new BigDecimal("5")}
         );
