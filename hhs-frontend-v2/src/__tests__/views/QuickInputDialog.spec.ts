@@ -196,6 +196,40 @@ describe('QuickInputDialog.vue', () => {
     expect(healthApi.createMetric).toHaveBeenCalledTimes(2) // Systolic and Diastolic
   })
 
+  it('CR-01 & CR-02: should resolve definition for bloodPressure key and format dual critical readings', async () => {
+    const wrapper = mount(QuickInputDialog, {
+      props: {
+        modelValue: true,
+        metric: { key: 'bloodPressure', name: '血压', unit: 'mmHg' }
+      },
+      global: { stubs: globalStubs }
+    })
+
+    const vm = wrapper.vm as any
+    expect(vm.isBloodPressure).toBe(true)
+    expect(vm.definition?.displayName).toBe('收缩压')
+    expect(vm.diastolicDef?.displayName).toBe('舒张压')
+
+    // Both are critical (190 / 115)
+    vm.form.value = 190
+    vm.form.diastolicValue = 115
+    await flushPromises()
+
+    expect(vm.hasCritical).toBe(true)
+    expect(vm.criticalMetricName).toBe('血压 (收缩压与舒张压)')
+    expect(vm.criticalMetricValue).toBe('190 / 115')
+
+    await vm.executeSave()
+    await flushPromises()
+
+    expect(healthApi.createMetric).toHaveBeenCalledWith(
+      expect.objectContaining({ metricKey: 'systolicBP', value: 190 })
+    )
+    expect(healthApi.createMetric).toHaveBeenCalledWith(
+      expect.objectContaining({ metricKey: 'diastolicBP', value: 115 })
+    )
+  })
+
   it('VAL-02: Tier 4 hard biological bounds should block save', async () => {
     const wrapper = mount(QuickInputDialog, {
       props: {

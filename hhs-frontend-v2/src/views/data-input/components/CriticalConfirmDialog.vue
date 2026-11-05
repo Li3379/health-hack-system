@@ -54,7 +54,7 @@ import { BellFilled, FirstAidKit } from '@element-plus/icons-vue'
 const props = defineProps<{
   modelValue: boolean
   metricName: string
-  value: number
+  value: number | string
   unit: string
 }>()
 
