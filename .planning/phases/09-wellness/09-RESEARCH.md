@@ -617,11 +617,11 @@ const handleSubmit = async () => {
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **保健指标 Panic Limits 的统一定义范围**
+   - RESOLVED: 在 `src/utils/metricValidation.ts` 中针对 `sleepDuration`（`< 3.0` 或 `> 16.0` 小时）与 `waterIntake`（`> 5000` ml）补充 Panic Limits 规则，既保持架构纯洁性，又能满足用户二次确认防误触的需求。所有生活方式极端阈值由统一字典驱动。
    - 现状：当前 `PANIC_LIMITS` 仅包含 8 项医疗指标。根据 CONTEXT.md D-03，需要防止严重超负荷饮水和极度缺觉误触入库。
-   - 建议：在 `src/utils/metricValidation.ts` 中针对 `sleepDuration`（`< 3.0` 或 `> 16.0` 小时）与 `waterIntake`（`> 5000` ml）补充 Panic Limits 规则，既保持架构纯洁性，又能满足用户二次确认防误触的需求。
 
 ---
 
