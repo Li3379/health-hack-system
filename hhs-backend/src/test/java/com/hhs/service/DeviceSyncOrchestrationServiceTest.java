@@ -282,7 +282,7 @@ class DeviceSyncOrchestrationServiceTest {
 
             // Then: Should return failed result
             assertEquals("failed", result.getStatus());
-            assertTrue(result.getErrorMessage().contains("Unknown platform"));
+            assertTrue(result.getErrorMessage().contains("暂不支持该设备平台"));
         }
 
         @Test
@@ -298,7 +298,7 @@ class DeviceSyncOrchestrationServiceTest {
 
             // Then: Should return failed result
             assertEquals("failed", result.getStatus());
-            assertTrue(result.getErrorMessage().contains("not configured"));
+            assertTrue(result.getErrorMessage().contains("尚未配置"));
         }
 
         @Test
@@ -622,8 +622,9 @@ class DeviceSyncOrchestrationServiceTest {
             DeviceSyncOrchestrationServiceImpl service = createService(services);
 
             // When & Then: Should throw exception
-            assertThrows(IllegalArgumentException.class,
+            IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
                     () -> service.handleCallback("unknown", "test-code", "test-state"));
+            assertEquals("暂不支持该设备平台", ex.getMessage());
         }
 
         @Test

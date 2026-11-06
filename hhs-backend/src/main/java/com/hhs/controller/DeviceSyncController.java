@@ -112,20 +112,20 @@ public class DeviceSyncController {
         // Check if platform is registered
         if (!orchestrationService.isPlatformRegistered(platform)) {
             log.warn("Unknown platform: {}", platform);
-            return Result.failure(400, "未知平台: " + platform);
+            return Result.failure(400, "暂不支持该设备平台，请返回应用重新选择");
         }
 
         // Check if platform is configured
         if (!orchestrationService.isPlatformConfigured(platform)) {
             log.warn("Platform {} is not configured", platform);
-            return Result.failure(400, platform + " 平台未配置");
+            return Result.failure(400, "该设备平台尚未配置，请联系管理员");
         }
 
         // Get authorization URL via orchestration service
         String authUrl = orchestrationService.getAuthorizationUrl(userId, platform);
 
         if (authUrl == null) {
-            return Result.failure(400, platform + " 平台暂不支持或未配置");
+            return Result.failure(400, "该设备平台暂不支持或未配置");
         }
 
         return Result.success(authUrl);
@@ -166,7 +166,7 @@ public class DeviceSyncController {
         // Check if platform is registered
         if (!orchestrationService.isPlatformRegistered(platform)) {
             log.warn("Unknown platform in callback: {}", platform);
-            return buildErrorPage("invalid_platform", "Unknown platform: " + platform);
+            return buildErrorPage("invalid_platform", "暂不支持该设备平台，请返回应用重新选择");
         }
 
         try {
@@ -274,7 +274,7 @@ public class DeviceSyncController {
         // Check if platform is registered
         if (!orchestrationService.isPlatformRegistered(platform)) {
             log.warn("Unknown platform: {}", platform);
-            return Result.failure(400, "未知平台: " + platform);
+            return Result.failure(400, "暂不支持该设备平台，请返回应用重新选择");
         }
 
         // Sync via orchestration service

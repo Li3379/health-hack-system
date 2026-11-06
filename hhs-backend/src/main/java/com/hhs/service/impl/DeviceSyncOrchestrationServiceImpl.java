@@ -66,12 +66,12 @@ public class DeviceSyncOrchestrationServiceImpl implements DeviceSyncOrchestrati
         DevicePlatformService service = getPlatformService(platform);
         if (service == null) {
             log.warn("Unknown platform requested: {}", platform);
-            return SyncResultVO.failed(platform, "Unknown platform: " + platform, 0);
+            return SyncResultVO.failed(platform, "暂不支持该设备平台，请返回应用重新选择", 0);
         }
 
         if (!service.isConfigured()) {
             log.warn("Platform {} is not configured", platform);
-            return SyncResultVO.failed(platform, "Platform not configured", 0);
+            return SyncResultVO.failed(platform, "该设备平台尚未配置，请联系管理员", 0);
         }
 
         try {
@@ -176,7 +176,7 @@ public class DeviceSyncOrchestrationServiceImpl implements DeviceSyncOrchestrati
 
         DevicePlatformService service = getPlatformService(platform);
         if (service == null) {
-            throw new IllegalArgumentException("Unknown platform: " + platform);
+            throw new IllegalArgumentException("暂不支持该设备平台");
         }
 
         service.handleCallback(code, state);
