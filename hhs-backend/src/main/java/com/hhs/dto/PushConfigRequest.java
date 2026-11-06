@@ -14,7 +14,7 @@ public class PushConfigRequest {
      * Channel type: EMAIL, WECOM, FEISHU, WEBSOCKET
      * Optional - typically provided via URL path variable
      */
-    @Pattern(regexp = "^(EMAIL|WECOM|FEISHU|WEBSOCKET)$", message = "Invalid channel type")
+    @Pattern(regexp = "^(EMAIL|WECOM|FEISHU|WEBSOCKET)$", message = "推送渠道类型无效")
     private String channelType;
 
     /**

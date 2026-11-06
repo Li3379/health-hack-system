@@ -10,13 +10,13 @@ import lombok.Data;
 @Data
 public class AIClassifyRequest {
 
-    @NotBlank(message = "Content is required")
-    @Size(min = 1, max = 10000, message = "Content must be between 1 and 10000 characters")
+    @NotBlank(message = "内容不能为空")
+    @Size(min = 1, max = 10000, message = "内容长度需在 1 至 10000 个字符之间")
     private String content;
 
-    @Size(max = 100, message = "Category must not exceed 100 characters")
+    @Size(max = 100, message = "分类长度不能超过 100 个字符")
     private String category;
 
-    @Size(max = 500, message = "Context must not exceed 500 characters")
+    @Size(max = 500, message = "上下文长度不能超过 500 个字符")
     private String context;
 }

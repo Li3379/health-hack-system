@@ -26,17 +26,17 @@ public class HealthMetricRequest implements MetricValueProvider {
     // userId is obtained from SecurityUtils.getCurrentUserId(), not from request body
     private Long userId;
 
-    @NotNull(message = "Metric key is required")
-    @Size(min = 1, max = 32, message = "Metric key must be between 1 and 32 characters")
-    @Pattern(regexp = "^[a-zA-Z0-9_\\-]+$", message = "Metric key must contain only letters, numbers, hyphens, and underscores")
+    @NotNull(message = "指标类型不能为空")
+    @Size(min = 1, max = 32, message = "指标类型长度需在 1 至 32 个字符之间")
+    @Pattern(regexp = "^[a-zA-Z0-9_\\-]+$", message = "指标类型只能包含字母、数字、连字符与下划线")
     private String metricKey;
 
-    @NotNull(message = "Value is required")
-    @DecimalMin(value = "0.0", message = "Value must be non-negative")
+    @NotNull(message = "指标数值不能为空")
+    @DecimalMin(value = "0.0", message = "指标数值不能为负数")
     private BigDecimal value;
 
-    @NotNull(message = "Record date is required")
-    @PastOrPresent(message = "Record date cannot be in the future")
+    @NotNull(message = "记录日期不能为空")
+    @PastOrPresent(message = "记录日期不能晚于今天")
     private LocalDate recordDate;
 
     /**
@@ -46,11 +46,11 @@ public class HealthMetricRequest implements MetricValueProvider {
      */
     private LocalDateTime recordTime;
 
-    @Size(max = 32, message = "Unit must not exceed 32 characters")
+    @Size(max = 32, message = "单位长度不能超过 32 个字符")
     private String unit;
 
-    @Size(max = 16, message = "Trend must not exceed 16 characters")
-    @Pattern(regexp = "^(up|down|stable|normal)?$", message = "Trend must be up, down, stable, normal, or empty")
+    @Size(max = 16, message = "趋势长度不能超过 16 个字符")
+    @Pattern(regexp = "^(up|down|stable|normal)?$", message = "趋势只能是上升、下降、平稳、正常或留空")
     private String trend;
 
     /**

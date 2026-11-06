@@ -11,9 +11,9 @@ import java.math.BigDecimal;
 @Data
 public class RealtimeMetricRequest {
 
-    @NotBlank(message = "Metric key is required")
-    @Size(min = 1, max = 32, message = "Metric key must be between 1 and 32 characters")
-    @Pattern(regexp = "^[a-zA-Z0-9_\\-]+$", message = "Metric key must contain only letters, numbers, hyphens, and underscores")
+    @NotBlank(message = "指标类型不能为空")
+    @Size(min = 1, max = 32, message = "指标类型长度需在 1 至 32 个字符之间")
+    @Pattern(regexp = "^[a-zA-Z0-9_\\-]+$", message = "指标类型只能包含字母、数字、连字符与下划线")
     private String metricKey;
 
     /**
@@ -21,26 +21,26 @@ public class RealtimeMetricRequest {
      */
     private String metricType;
 
-    @NotNull(message = "Value is required")
-    @DecimalMin(value = "0.0", message = "Value must be non-negative")
-    @DecimalMax(value = "1000.0", message = "Value must not exceed 1000")
+    @NotNull(message = "指标数值不能为空")
+    @DecimalMin(value = "0.0", message = "指标数值不能为负数")
+    @DecimalMax(value = "1000.0", message = "指标数值不能超过 1000")
     private BigDecimal value;
 
-    @Size(max = 32, message = "Unit must not exceed 32 characters")
+    @Size(max = 32, message = "单位长度不能超过 32 个字符")
     private String unit;
 
     /**
      * Data source: manual, device, api
      * Default is manual
      */
-    @Size(max = 32, message = "Source must not exceed 32 characters")
-    @Pattern(regexp = "^(manual|device|api)?$", message = "Source must be manual, device, api, or empty")
+    @Size(max = 32, message = "数据来源长度不能超过 32 个字符")
+    @Pattern(regexp = "^(manual|device|api)?$", message = "数据来源只能是手动、设备、API 或留空")
     private String source = "manual";
 
     /**
      * Quality score for device-entered metrics (0-1)
      */
-    @DecimalMin(value = "0.0", message = "Quality score must be at least 0")
-    @DecimalMax(value = "1.0", message = "Quality score must not exceed 1")
+    @DecimalMin(value = "0.0", message = "数据质量评分不能小于 0")
+    @DecimalMax(value = "1.0", message = "数据质量评分不能大于 1")
     private BigDecimal qualityScore;
 }

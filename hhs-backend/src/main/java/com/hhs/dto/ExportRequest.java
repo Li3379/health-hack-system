@@ -11,13 +11,13 @@ import lombok.Data;
 @Data
 public class ExportRequest {
 
-    @NotBlank(message = "exportType is required")
-    @Pattern(regexp = "^(csv|excel)$", message = "exportType must be csv or excel")
+    @NotBlank(message = "导出类型不能为空")
+    @Pattern(regexp = "^(csv|excel)$", message = "导出类型只能是 CSV 或 Excel")
     private String exportType;
 
-    @NotBlank(message = "contentType is required")
+    @NotBlank(message = "导出内容类型不能为空")
     @Pattern(regexp = "^(metrics|scores|screenings)$",
-            message = "contentType must be metrics, scores, or screenings")
+            message = "导出内容类型只能是指标、评分或筛查记录")
     private String contentType;
 
     /** Optional start date filter (yyyy-MM-dd). */

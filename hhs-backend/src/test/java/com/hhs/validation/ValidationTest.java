@@ -55,7 +55,7 @@ public class ValidationTest {
         Set<ConstraintViolation<HealthMetricRequest>> violations = validator.validate(request);
         assertFalse(violations.isEmpty());
         assertTrue(violations.stream()
-            .anyMatch(v -> v.getMessage().contains("Metric key is required")));
+            .anyMatch(v -> v.getMessage().contains("指标类型不能为空")));
     }
 
     @Test
@@ -68,7 +68,7 @@ public class ValidationTest {
         Set<ConstraintViolation<HealthMetricRequest>> violations = validator.validate(request);
         assertFalse(violations.isEmpty());
         assertTrue(violations.stream()
-            .anyMatch(v -> v.getMessage().contains("letters, numbers, hyphens, and underscores")));
+            .anyMatch(v -> v.getMessage().contains("字母、数字、连字符与下划线")));
     }
 
     @Test
@@ -81,7 +81,7 @@ public class ValidationTest {
         Set<ConstraintViolation<HealthMetricRequest>> violations = validator.validate(request);
         assertFalse(violations.isEmpty());
         assertTrue(violations.stream()
-            .anyMatch(v -> v.getMessage().contains("non-negative")));
+            .anyMatch(v -> v.getMessage().contains("不能为负数")));
     }
 
     @Test
@@ -93,8 +93,10 @@ public class ValidationTest {
 
         Set<ConstraintViolation<HealthMetricRequest>> violations = validator.validate(request);
         assertFalse(violations.isEmpty());
+        // Since Phase 4, value bounds are enforced by @ValidMetricRecord (registry-derived
+        // hard max), not by a DTO-level @DecimalMax. The message names the physiological range.
         assertTrue(violations.stream()
-            .anyMatch(v -> v.getMessage().contains("not exceed 1000")));
+            .anyMatch(v -> v.getMessage().contains("有效生理区间为")));
     }
 
     @Test
@@ -107,7 +109,7 @@ public class ValidationTest {
         Set<ConstraintViolation<HealthMetricRequest>> violations = validator.validate(request);
         assertFalse(violations.isEmpty());
         assertTrue(violations.stream()
-            .anyMatch(v -> v.getMessage().contains("future")));
+            .anyMatch(v -> v.getMessage().contains("晚于今天")));
     }
 
     @Test
@@ -121,7 +123,7 @@ public class ValidationTest {
         Set<ConstraintViolation<HealthMetricRequest>> violations = validator.validate(request);
         assertFalse(violations.isEmpty());
         assertTrue(violations.stream()
-            .anyMatch(v -> v.getMessage().contains("up, down, stable, normal")));
+            .anyMatch(v -> v.getMessage().contains("上升、下降、平稳、正常")));
     }
 
     // ==================== HealthProfileRequest Tests ====================
@@ -148,7 +150,7 @@ public class ValidationTest {
         Set<ConstraintViolation<HealthProfileRequest>> violations = validator.validate(request);
         assertFalse(violations.isEmpty());
         assertTrue(violations.stream()
-            .anyMatch(v -> v.getMessage().contains("male, female, other")));
+            .anyMatch(v -> v.getMessage().contains("男、女、其他")));
     }
 
     @Test
@@ -160,7 +162,7 @@ public class ValidationTest {
         Set<ConstraintViolation<HealthProfileRequest>> violations = validator.validate(request);
         assertFalse(violations.isEmpty());
         assertTrue(violations.stream()
-            .anyMatch(v -> v.getMessage().contains("valid type")));
+            .anyMatch(v -> v.getMessage().contains("血型格式不正确")));
     }
 
     @Test
@@ -172,7 +174,7 @@ public class ValidationTest {
         Set<ConstraintViolation<HealthProfileRequest>> violations = validator.validate(request);
         assertFalse(violations.isEmpty());
         assertTrue(violations.stream()
-            .anyMatch(v -> v.getMessage().contains("at least 50")));
+            .anyMatch(v -> v.getMessage().contains("不能低于 50 厘米")));
     }
 
     @Test
@@ -184,7 +186,7 @@ public class ValidationTest {
         Set<ConstraintViolation<HealthProfileRequest>> violations = validator.validate(request);
         assertFalse(violations.isEmpty());
         assertTrue(violations.stream()
-            .anyMatch(v -> v.getMessage().contains("not exceed 500")));
+            .anyMatch(v -> v.getMessage().contains("不能超过 500 千克")));
     }
 
     @Test
@@ -195,7 +197,7 @@ public class ValidationTest {
         Set<ConstraintViolation<HealthProfileRequest>> violations = validator.validate(request);
         assertFalse(violations.isEmpty());
         assertTrue(violations.stream()
-            .anyMatch(v -> v.getMessage().contains("past")));
+            .anyMatch(v -> v.getMessage().contains("早于今天")));
     }
 
     // ==================== AIClassifyRequest Tests ====================
@@ -227,7 +229,7 @@ public class ValidationTest {
         Set<ConstraintViolation<AIClassifyRequest>> violations = validator.validate(request);
         assertFalse(violations.isEmpty());
         assertTrue(violations.stream()
-            .anyMatch(v -> v.getMessage().contains("10000")));
+            .anyMatch(v -> v.getMessage().contains("10000 个字符")));
     }
 
     @Test
@@ -239,7 +241,7 @@ public class ValidationTest {
         Set<ConstraintViolation<AIClassifyRequest>> violations = validator.validate(request);
         assertFalse(violations.isEmpty());
         assertTrue(violations.stream()
-            .anyMatch(v -> v.getMessage().contains("100")));
+            .anyMatch(v -> v.getMessage().contains("100 个字符")));
     }
 
     // ==================== RealtimeMetricRequest Tests ====================
@@ -264,7 +266,7 @@ public class ValidationTest {
         Set<ConstraintViolation<RealtimeMetricRequest>> violations = validator.validate(request);
         assertFalse(violations.isEmpty());
         assertTrue(violations.stream()
-            .anyMatch(v -> v.getMessage().contains("non-negative")));
+            .anyMatch(v -> v.getMessage().contains("不能为负数")));
     }
 
     @Test
@@ -276,7 +278,7 @@ public class ValidationTest {
         Set<ConstraintViolation<RealtimeMetricRequest>> violations = validator.validate(request);
         assertFalse(violations.isEmpty());
         assertTrue(violations.stream()
-            .anyMatch(v -> v.getMessage().contains("letters, numbers, hyphens, and underscores")));
+            .anyMatch(v -> v.getMessage().contains("字母、数字、连字符与下划线")));
     }
 
     @Test
@@ -289,7 +291,7 @@ public class ValidationTest {
         Set<ConstraintViolation<RealtimeMetricRequest>> violations = validator.validate(request);
         assertFalse(violations.isEmpty());
         assertTrue(violations.stream()
-            .anyMatch(v -> v.getMessage().contains("manual, device, api")));
+            .anyMatch(v -> v.getMessage().contains("手动、设备、API")));
     }
 
     @Test
@@ -302,7 +304,7 @@ public class ValidationTest {
         Set<ConstraintViolation<RealtimeMetricRequest>> violations = validator.validate(request);
         assertFalse(violations.isEmpty());
         assertTrue(violations.stream()
-            .anyMatch(v -> v.getMessage().contains("not exceed 1")));
+            .anyMatch(v -> v.getMessage().contains("不能大于 1")));
     }
 
     // ==================== AlertVO Tests ====================
@@ -330,7 +332,7 @@ public class ValidationTest {
         Set<ConstraintViolation<AlertVO>> violations = validator.validate(alert);
         assertFalse(violations.isEmpty());
         assertTrue(violations.stream()
-            .anyMatch(v -> v.getMessage().contains("CRITICAL, WARNING, INFO, TREND, or RECOVERY")));
+            .anyMatch(v -> v.getMessage().contains("危急、警告、提示、趋势或恢复")));
     }
 
     @Test
@@ -344,7 +346,7 @@ public class ValidationTest {
         Set<ConstraintViolation<AlertVO>> violations = validator.validate(alert);
         assertFalse(violations.isEmpty());
         assertTrue(violations.stream()
-            .anyMatch(v -> v.getMessage().contains("HIGH, MEDIUM, or LOW")));
+            .anyMatch(v -> v.getMessage().contains("高、中、低")));
     }
 
     @Test
@@ -385,7 +387,7 @@ public class ValidationTest {
         Set<ConstraintViolation<AlertVO>> violations = validator.validate(alert);
         assertFalse(violations.isEmpty());
         assertTrue(violations.stream()
-            .anyMatch(v -> v.getMessage().contains("not exceed 1000")));
+            .anyMatch(v -> v.getMessage().contains("不能超过 1000")));
     }
 
     // ==================== Custom Validator Tests ====================
