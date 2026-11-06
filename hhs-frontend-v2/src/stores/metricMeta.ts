@@ -52,15 +52,20 @@ export const useMetricMetaStore = defineStore('metricMeta', () => {
   /**
    * 异步拉取后端权威元数据并增量更新
    * 静默处理网络异常与离线超时，绝不阻断前端渲染 (per D-01)
+   *
+   * `silent` 只决定请求是否抑制展示（D-09），store 的降级逻辑与 reject 语义均不变（D-10）：
+   * 失败仍由本函数的 catch 兜底到本地静态字典，不 resolve 假空值。
    */
-  const fetchMetadata = async (): Promise<void> => {
+  const fetchMetadata = async (options: { silent?: boolean } = {}): Promise<void> => {
     if (loading.value) {
       return
     }
 
     try {
       loading.value = true
-      const res = await metricMetaApi.getMetadata()
+      const res = await metricMetaApi.getMetadata(
+        options.silent ? { silent: true } : undefined
+      )
       if (res && res.data) {
         metadataMap.value = {
           ...metadataMap.value,

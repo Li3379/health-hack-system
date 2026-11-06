@@ -115,4 +115,31 @@ describe('useMetricMetaStore', () => {
     expect(store.allDefinitions.length).toBe(23)
     expect(store.getDefinition('heartRate')?.displayName).toBe('心率')
   })
+
+  it('should pass { silent: true } to the API when fetchMetadata opts in', async () => {
+    vi.mocked(metricMetaApi.getMetadata).mockRejectedValue(new Error('Network timeout'))
+
+    const store = useMetricMetaStore()
+    await store.fetchMetadata({ silent: true })
+
+    expect(metricMetaApi.getMetadata).toHaveBeenCalledTimes(1)
+    expect(metricMetaApi.getMetadata).toHaveBeenCalledWith({ silent: true })
+    // silent 只抑制展示：store 降级逻辑不变，仍回落到本地静态字典。
+    expect(store.isLoaded).toBe(false)
+    expect(store.getDefinition('heartRate')?.displayName).toBe('心率')
+  })
+
+  it('should pass undefined to the API when fetchMetadata is called without options', async () => {
+    vi.mocked(metricMetaApi.getMetadata).mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: {}
+    })
+
+    const store = useMetricMetaStore()
+    await store.fetchMetadata()
+
+    expect(metricMetaApi.getMetadata).toHaveBeenCalledTimes(1)
+    expect(metricMetaApi.getMetadata).toHaveBeenCalledWith(undefined)
+  })
 })
