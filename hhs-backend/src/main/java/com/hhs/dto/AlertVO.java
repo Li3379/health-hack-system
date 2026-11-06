@@ -18,36 +18,36 @@ public class AlertVO {
     /**
      * Alert type: CRITICAL, WARNING, INFO, TREND, RECOVERY
      */
-    @NotBlank(message = "Alert type is required")
-    @Size(min = 1, max = 50, message = "Alert type must be between 1 and 50 characters")
-    @Pattern(regexp = "^(CRITICAL|WARNING|INFO|TREND|RECOVERY)$", message = "Alert type must be CRITICAL, WARNING, INFO, TREND, or RECOVERY")
+    @NotBlank(message = "提醒类型不能为空")
+    @Size(min = 1, max = 50, message = "提醒类型长度需在 1 至 50 个字符之间")
+    @Pattern(regexp = "^(CRITICAL|WARNING|INFO|TREND|RECOVERY)$", message = "提醒类型只能是危急、警告、提示、趋势或恢复")
     private String alertType;
 
     /**
      * Alert level: HIGH, MEDIUM, LOW
      */
-    @NotBlank(message = "Alert level is required")
-    @Size(min = 1, max = 16, message = "Alert level must be between 1 and 16 characters")
-    @Pattern(regexp = "^(HIGH|MEDIUM|LOW)$", message = "Alert level must be HIGH, MEDIUM, or LOW")
+    @NotBlank(message = "提醒级别不能为空")
+    @Size(min = 1, max = 16, message = "提醒级别长度需在 1 至 16 个字符之间")
+    @Pattern(regexp = "^(HIGH|MEDIUM|LOW)$", message = "提醒级别只能是高、中、低")
     private String alertLevel;
 
-    @NotBlank(message = "Title is required")
-    @Size(min = 1, max = 200, message = "Title must be between 1 and 200 characters")
+    @NotBlank(message = "标题不能为空")
+    @Size(min = 1, max = 200, message = "标题长度需在 1 至 200 个字符之间")
     private String title;
 
-    @NotBlank(message = "Message is required")
-    @Size(min = 1, max = 500, message = "Message must be between 1 and 500 characters")
+    @NotBlank(message = "提醒内容不能为空")
+    @Size(min = 1, max = 500, message = "提醒内容长度需在 1 至 500 个字符之间")
     private String message;
 
-    @Size(max = 32, message = "Metric key must not exceed 32 characters")
+    @Size(max = 32, message = "指标类型长度不能超过 32 个字符")
     private String metricKey;
 
-    @DecimalMin(value = "0.0", message = "Current value must be non-negative")
-    @DecimalMax(value = "1000.0", message = "Current value must not exceed 1000")
+    @DecimalMin(value = "0.0", message = "当前值不能为负数")
+    @DecimalMax(value = "1000.0", message = "当前值不能超过 1000")
     private BigDecimal currentValue;
 
-    @DecimalMin(value = "0.0", message = "Threshold value must be non-negative")
-    @DecimalMax(value = "1000.0", message = "Threshold value must not exceed 1000")
+    @DecimalMin(value = "0.0", message = "阈值不能为负数")
+    @DecimalMax(value = "1000.0", message = "阈值不能超过 1000")
     private BigDecimal thresholdValue;
 
     /**

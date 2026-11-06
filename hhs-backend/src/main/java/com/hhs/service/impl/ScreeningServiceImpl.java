@@ -84,7 +84,7 @@ public class ScreeningServiceImpl implements ScreeningService {
 
         // Validate filename is safe before processing
         if (!PathValidationUtil.isFilenameSafe(originalFilename)) {
-            throw new BusinessException(ErrorCode.VALIDATION_INVALID_PARAMETER, "Invalid file path: " + originalFilename);
+            throw new BusinessException(ErrorCode.VALIDATION_INVALID_PARAMETER, "文件路径无效，请重新上传");
         }
 
         String ext = "";
@@ -107,7 +107,7 @@ public class ScreeningServiceImpl implements ScreeningService {
             Files.copy(file.getInputStream(), target, StandardCopyOption.REPLACE_EXISTING);
         } catch (IOException e) {
             log.error("Failed to save file for upload: {}", originalFilename, e);
-            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "文件保存失败: " + e.getMessage(), e);
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "文件保存失败", e);
         }
 
         String fileUrl = "/uploads/reports/" + safeFilename;

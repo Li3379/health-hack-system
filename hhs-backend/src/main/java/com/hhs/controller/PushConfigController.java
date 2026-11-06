@@ -79,7 +79,7 @@ public class PushConfigController {
         try {
             type = ChannelType.valueOf(channelType.toUpperCase());
         } catch (IllegalArgumentException e) {
-            return Result.failure(400, "Invalid channel type: " + channelType);
+            return Result.failure(400, "推送渠道类型无效");
         }
 
         UserPushConfig config = userPushConfigMapper.findByUserIdAndChannelType(userId, type.name());
@@ -105,13 +105,13 @@ public class PushConfigController {
         try {
             type = ChannelType.valueOf(channelType.toUpperCase());
         } catch (IllegalArgumentException e) {
-            return Result.failure(400, "Invalid channel type: " + channelType);
+            return Result.failure(400, "推送渠道类型无效");
         }
 
         // Validate config value for offline channels
         if (type.isOfflineSupported() && Boolean.TRUE.equals(request.getEnabled())) {
             if (request.getConfigValue() == null || request.getConfigValue().isBlank()) {
-                return Result.failure(400, "Configuration value is required for " + type.getLabel());
+                return Result.failure(400, "开启该推送渠道前，请先填写配置内容");
             }
         }
 
@@ -162,7 +162,7 @@ public class PushConfigController {
         try {
             type = ChannelType.valueOf(channelType.toUpperCase());
         } catch (IllegalArgumentException e) {
-            return Result.failure(400, "Invalid channel type: " + channelType);
+            return Result.failure(400, "推送渠道类型无效");
         }
 
         UserPushConfig config = userPushConfigMapper.findByUserIdAndChannelType(userId, type.name());
@@ -186,18 +186,18 @@ public class PushConfigController {
         try {
             type = ChannelType.valueOf(channelType.toUpperCase());
         } catch (IllegalArgumentException e) {
-            return Result.failure(400, "Invalid channel type: " + channelType);
+            return Result.failure(400, "推送渠道类型无效");
         }
 
         // Check if channel is available
         if (!pushChannelManager.hasChannel(type)) {
-            return Result.failure(400, "Channel " + type.getLabel() + " is not configured on server");
+            return Result.failure(400, "该推送渠道尚未在服务端配置，请联系管理员");
         }
 
         // Check if user has enabled this channel
         UserPushConfig config = userPushConfigMapper.findByUserIdAndChannelType(userId, type.name());
         if (config == null || config.getEnabled() != 1) {
-            return Result.failure(400, "Please enable " + type.getLabel() + " channel first");
+            return Result.failure(400, "请先启用该推送渠道后再发送测试");
         }
 
         // Create test alert
@@ -222,7 +222,7 @@ public class PushConfigController {
             return Result.success(response);
         } else {
             log.warn("Test push failed for user {} channel {}: {}", userId, type, result.getMessage());
-            return Result.failure(400, "Push failed: " + result.getMessage());
+            return Result.failure(400, "推送发送失败，请稍后重试");
         }
     }
 
