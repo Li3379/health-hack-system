@@ -214,3 +214,12 @@ None — 无新增网络端点、认证路径或文件访问模式；改动方�
 
 *Phase: 11-error-foundation*
 *Completed: 2026-11-06*
+
+## Self-Check: PASSED
+
+- FOUND: `hhs-backend/src/test/java/com/hhs/controller/DeviceSyncControllerPageTest.java`
+- FOUND: `hhs-backend/src/main/java/com/hhs/service/impl/HuaweiHealthServiceImpl.java`
+- FOUND: `hhs-backend/src/main/java/com/hhs/service/impl/XiaomiHealthServiceImpl.java`
+- FOUND: `.planning/phases/11-error-foundation/11-08-SUMMARY.md`
+- FOUND: `1c3f006`, `5d95e1f`, `e96a45d` (task commits), `cd921f1` (metadata commit)
+- CONFIRMED: `.planning/STATE.md` 与 `.planning/ROADMAP.md` 在本计划提交中零改动
