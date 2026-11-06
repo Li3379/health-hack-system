@@ -12,6 +12,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -161,12 +162,16 @@ class XiaomiHealthServiceTest {
         void shouldReturnFailedResultWhenDeviceNotConnected() {
             when(connectionService.getConnection(1L, "xiaomi")).thenReturn(null);
             when(syncHistoryService.createFailedRecord(anyLong(), anyString(), anyString(), anyString(), anyInt()))
-                    .thenReturn(SyncResultVO.failed("xiaomi", "Device not connected", 0));
+                    .thenReturn(SyncResultVO.failed("xiaomi", "尚未连接小米运动，请先在设备页绑定账号", 0));
 
             SyncResultVO result = service.syncData(1L);
 
             assertNotNull(result);
             assertEquals("failed", result.getStatus());
+            ArgumentCaptor<String> messageCaptor = ArgumentCaptor.forClass(String.class);
+            verify(syncHistoryService).createFailedRecord(
+                    eq(1L), eq("xiaomi"), eq("manual"), messageCaptor.capture(), anyInt());
+            assertEquals("尚未连接小米运动，请先在设备页绑定账号", messageCaptor.getValue());
         }
 
         @Test
@@ -177,12 +182,16 @@ class XiaomiHealthServiceTest {
 
             when(connectionService.getConnection(1L, "xiaomi")).thenReturn(connection);
             when(syncHistoryService.createFailedRecord(anyLong(), anyString(), anyString(), anyString(), anyInt()))
-                    .thenReturn(SyncResultVO.failed("xiaomi", "Connection not active", 0));
+                    .thenReturn(SyncResultVO.failed("xiaomi", "设备连接已失效，请重新绑定账号", 0));
 
             SyncResultVO result = service.syncData(1L);
 
             assertNotNull(result);
             assertEquals("failed", result.getStatus());
+            ArgumentCaptor<String> messageCaptor = ArgumentCaptor.forClass(String.class);
+            verify(syncHistoryService).createFailedRecord(
+                    eq(1L), eq("xiaomi"), eq("manual"), messageCaptor.capture(), anyInt());
+            assertEquals("设备连接已失效，请重新绑定账号", messageCaptor.getValue());
         }
     }
 
