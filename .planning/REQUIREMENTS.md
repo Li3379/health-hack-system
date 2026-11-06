@@ -40,12 +40,12 @@
 
 ### ERR — 全站友好错误反馈 (Site-wide Friendly Error Feedback)
 
-- [ ] **ERR-01**: `utils/request.ts` 改为只翻译不呈现 — 失败时抛出类型化 `ApiError`（含 code、message、fieldErrors），由调用方或统一呈现层决定是否提示，保证一次失败只出现一次提示
-- [ ] **ERR-02**: 所有面向用户的错误文案为中文且人性化，清除英文校验原文（如 `User ID is required`、`Threshold already exists for this metric`）
+- [x] **ERR-01**: `utils/request.ts` 改为只翻译不呈现 — 失败时抛出类型化 `ApiError`（含 code、message、fieldErrors），由调用方或统一呈现层决定是否提示，保证一次失败只出现一次提示
+- [x] **ERR-02**: 所有面向用户的错误文案为中文且人性化，清除英文校验原文（如 `User ID is required`、`Threshold already exists for this metric`）
 - [ ] **ERR-03**: 后端字段校验错误（`GlobalExceptionHandler` 返回的 `errors[]`）解析并内联回填到对应 `el-form-item`，字段名映射为中文标签
-- [ ] **ERR-04**: 建立统一错误文案字典，替换全站 100+ 处泛化的"操作失败/请求失败"，改为说明"什么失败了 + 下一步怎么做"
+- [x] **ERR-04**: 建立统一错误文案字典，替换全站 100+ 处泛化的"操作失败/请求失败"，改为说明"什么失败了 + 下一步怎么做"
 - [ ] **ERR-05**: 校验失败或服务端报错后不清空用户已输入内容，弹窗保持打开且值保留
-- [ ] **ERR-06**: 短时间内的相同错误提示自动合并，避免重试或多请求叠加产生多条重复 toast
+- [x] **ERR-06**: 短时间内的相同错误提示自动合并，避免重试或多请求叠加产生多条重复 toast
 - [ ] **ERR-07**: 网络错误、校验错误、权限错误在呈现方式与文案上可区分（校验内联、网络 toast 可重试、403/404 解释性状态）
 - [ ] **ERR-08**: 清理用户取消操作（`'cancel'` 哨兵值、`AbortError`）被误判为失败并弹出红色提示的问题
 
@@ -113,21 +113,23 @@
 | PRF-06 | Phase 13 | Pending |
 | PRF-07 | Phase 13 | Pending |
 | PRF-08 | Phase 13 | Pending |
-| ERR-01 | Phase 11 | Pending |
-| ERR-02 | Phase 11 | Pending |
+| ERR-01 | Phase 11 | Complete |
+| ERR-02 | Phase 11 | Complete |
 | ERR-03 | Phase 14 | Pending |
-| ERR-04 | Phase 11 | Pending |
+| ERR-04 | Phase 11 | Complete |
 | ERR-05 | Phase 14 | Pending |
-| ERR-06 | Phase 11 | Pending |
+| ERR-06 | Phase 11 | Complete |
 | ERR-07 | Phase 14 | Pending |
 | ERR-08 | Phase 14 | Pending |
 
 **Coverage:**
+
 - v1.3 requirements: 29 total
 - Mapped to phases: 29
 - Unmapped: 0
 
 **Phase distribution:**
+
 - Phase 11 全站统一友好错误反馈地基: ERR-01, ERR-02, ERR-04, ERR-06 (4)
 - Phase 12 阈值配置向导化与告警正确性修复: FIX-01..05, THR-01..08 (13)
 - Phase 13 健康档案完善引导（非阻塞）: PRF-01..08 (8)
