@@ -52,6 +52,12 @@
   --warning: #FB923C;
   --info: #8d909c;
 
+  /* ---- Error semantics (Phase 11) ----
+     单一错误色：全部错误文案/图标走 --hhs-color-error-text，不复用上面的 --error
+     （--error 是另一个红，会让错误信号分叉）。 */
+  --hhs-color-error-text: #f56c6c;              /* 6.45:1 on #111217 */
+  --hhs-color-error-tint: rgba(245, 108, 108, 0.12);
+
   /* ---- Health Score Colors ---- */
   --color-health-excellent: #22c55e;
   --color-health-good: #84cc16;
@@ -154,6 +160,12 @@
   --error: #ef4444;
   --warning: #f59e0b;
   --info: #6b7280;
+
+  /* ---- Error semantics (Phase 11) ----
+     亮色是项目的实际首屏默认主题：#f56c6c 在纯白上只有 2.90:1（AA 不达标），
+     因此亮色统一用更深的 #b91c1c。 */
+  --hhs-color-error-text: #b91c1c;              /* 6.47:1 on #ffffff */
+  --hhs-color-error-tint: #fef0f0;
 
   /* ---- Shadows ---- */
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
@@ -1163,4 +1175,76 @@ p { margin: 0; }
 
 [data-theme='light'] .el-popper {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06) !important;
+}
+
+/* ============================================
+   Error Presentation — Global Overrides (Phase 11)
+
+   ElMessage 渲染在被 teleport 到 document.body 的节点上，组件 <style scoped> 无法触达，
+   因此这些规则必须留在全局样式表。
+
+   本文件在 main.ts 中于 element-plus/dist/index.css 之后加载，
+   同特异性下后者胜出 —— 这四条规则刻意不加 !important。
+   ============================================ */
+
+/* EP 默认 --el-message-padding: 11px 15px 不在 4 的倍数网格上（目标值对齐 sm-3 12px / md 16px）。 */
+.el-message {
+  --el-message-padding: 12px 16px;
+}
+
+/* EP 的 type="error" 文本色是 #f56c6c，在亮色 tint 上仅 2.61:1。
+   限定 error 修饰符：不带修饰符会以同特异性覆盖 success / warning 的 EP 配色。 */
+.el-message--error {
+  --el-message-text-color: var(--hhs-color-error-text);
+}
+
+/* EP 默认 .el-message__content { line-height: 1 } 会裁切中文字形下缘。
+   VNode（retry / action）也渲染在这个 <p> 里，一条规则覆盖全部 toast 形态。 */
+.el-message__content {
+  line-height: 1.5;
+}
+
+/* EP default / small 尺寸的 el-form-item__error 发 padding-top: 2px（只有 large 是 4px），
+   归一化到 xs token；行高同理避免中文字形裁切。 */
+.el-form-item__error {
+  line-height: 1.4;
+  padding-top: 4px;
+  color: var(--hhs-color-error-text);
+}
+
+/* ---- In-toast controls (retry / recovery action) ----
+   showError 用 h('div', { class: 'error-toast' }, ...) 构造消息体。
+   与 toast 根节点一样，这些类名必须定义在全局样式表里。 */
+.error-toast {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.error-toast__text {
+  flex: 1;
+}
+
+.error-toast__retry,
+.error-toast__action {
+  flex: none;
+  background: none;
+  border: 0;
+  padding: 4px 8px;
+  color: var(--hhs-color-error-text);
+  font: 600 14px/1.5 var(--font-ui);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+
+.error-toast__retry:hover,
+.error-toast__action:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.error-toast__retry:focus-visible,
+.error-toast__action:focus-visible {
+  outline: 2px solid var(--hhs-color-error-text);
+  outline-offset: 2px;
 }
