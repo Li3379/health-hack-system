@@ -149,18 +149,18 @@ public class DeviceSyncController {
         // Handle OAuth error from provider
         if (error != null) {
             log.error("OAuth error from {}: {} - {}", platform, error, errorDescription);
-            return buildErrorPage(error, errorDescription);
+            return buildErrorPage("provider_error", "授权未完成，请返回应用重新发起授权");
         }
 
         // Validate required parameters
         if (code == null || code.isEmpty()) {
             log.error("Missing authorization code in callback");
-            return buildErrorPage("invalid_request", "Missing authorization code");
+            return buildErrorPage("invalid_request", "授权回调缺少必要参数，请重新发起授权");
         }
 
         if (state == null || state.isEmpty()) {
             log.error("Missing state parameter in callback");
-            return buildErrorPage("invalid_request", "Missing state parameter");
+            return buildErrorPage("invalid_request", "授权回调缺少校验信息，请重新发起授权");
         }
 
         // Check if platform is registered
@@ -175,10 +175,10 @@ public class DeviceSyncController {
             return buildSuccessPage();
         } catch (IllegalArgumentException e) {
             log.error("Invalid platform in callback: {}", platform);
-            return buildErrorPage("invalid_platform", e.getMessage());
+            return buildErrorPage("invalid_platform", "暂不支持该设备平台，请返回应用重新选择");
         } catch (Exception e) {
             log.error("Error processing OAuth callback for {}: {}", platform, e.getMessage(), e);
-            return buildErrorPage("server_error", e.getMessage());
+            return buildErrorPage("server_error", "授权过程中出现问题，请稍后重试或重新发起授权");
         }
     }
 

@@ -308,14 +308,15 @@ class DeviceSyncOrchestrationServiceTest {
             List<DevicePlatformService> services = List.of(huaweiService);
             DeviceSyncOrchestrationServiceImpl service = createService(services);
             when(huaweiService.isConfigured()).thenReturn(true);
-            when(huaweiService.syncData(testUserId)).thenThrow(new RuntimeException("Sync error"));
+            when(huaweiService.syncData(testUserId)).thenThrow(new RuntimeException("RAW_SYNC_DETAIL"));
 
             // When: Sync platform
             SyncResultVO result = service.syncPlatform(testUserId, "huawei");
 
             // Then: Should return failed result
             assertEquals("failed", result.getStatus());
-            assertTrue(result.getErrorMessage().contains("Sync error"));
+            assertEquals("同步失败，请稍后重试", result.getErrorMessage());
+            assertFalse(result.getErrorMessage().contains("RAW_SYNC_DETAIL"));
         }
 
         @Test
@@ -513,7 +514,7 @@ class DeviceSyncOrchestrationServiceTest {
             // Then: Should return failed result
             assertEquals(1, results.size());
             assertEquals("failed", results.get(0).getStatus());
-            assertTrue(results.get(0).getErrorMessage().contains("not available"));
+            assertTrue(results.get(0).getErrorMessage().contains("暂不可用"));
         }
 
         @Test
