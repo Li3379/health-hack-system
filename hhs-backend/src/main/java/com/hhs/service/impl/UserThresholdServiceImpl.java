@@ -48,7 +48,7 @@ public class UserThresholdServiceImpl implements UserThresholdService {
         // Check if threshold already exists for this user and metric key
         UserThreshold existing = getByUserAndMetricKey(userId, request.getMetricKey());
         if (existing != null) {
-            throw new BusinessException(ErrorCode.RESOURCE_ALREADY_EXISTS, "Threshold already exists for this metric");
+            throw new BusinessException(ErrorCode.RESOURCE_ALREADY_EXISTS, "该指标已存在阈值，请直接编辑");
         }
 
         UserThreshold threshold = new UserThreshold();
@@ -71,7 +71,7 @@ public class UserThresholdServiceImpl implements UserThresholdService {
 
         UserThreshold threshold = userThresholdMapper.selectById(id);
         if (threshold == null) {
-            throw new BusinessException(ErrorCode.HEALTH_THRESHOLD_INVALID, "Threshold not found");
+            throw new BusinessException(ErrorCode.HEALTH_THRESHOLD_INVALID, "未找到该条阈值设置");
         }
 
         // Enforce ownership
@@ -84,7 +84,7 @@ public class UserThresholdServiceImpl implements UserThresholdService {
         if (!threshold.getMetricKey().equals(request.getMetricKey())) {
             UserThreshold existing = getByUserAndMetricKey(userId, request.getMetricKey());
             if (existing != null && !existing.getId().equals(id)) {
-                throw new BusinessException(ErrorCode.RESOURCE_ALREADY_EXISTS, "Threshold already exists for this metric");
+                throw new BusinessException(ErrorCode.RESOURCE_ALREADY_EXISTS, "该指标已存在阈值，请直接编辑");
             }
         }
 
@@ -105,7 +105,7 @@ public class UserThresholdServiceImpl implements UserThresholdService {
 
         UserThreshold threshold = userThresholdMapper.selectById(id);
         if (threshold == null) {
-            log.warn("Threshold not found for deletion: id={}", id);
+            log.warn("删除阈值时未找到该条记录：id={}", id);
             return;
         }
 

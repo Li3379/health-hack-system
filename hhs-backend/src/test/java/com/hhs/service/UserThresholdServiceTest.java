@@ -112,7 +112,7 @@ class UserThresholdServiceTest {
     @Test
     @DisplayName("测试1.3：创建用户阈值 - 阈值已存在")
     void testCreate_AlreadyExists() {
-        // Given: Threshold already exists for this metric
+        // Given: 该指标已存在阈值
         when(userThresholdMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(testThreshold);
 
         // When & Then: Should throw exception
@@ -120,7 +120,7 @@ class UserThresholdServiceTest {
             userThresholdService.create(testUserId, testRequest);
         });
 
-        assertTrue(exception.getMessage().contains("already exists") || exception.getMessage().contains("已存在"));
+        assertTrue(exception.getMessage().contains("该指标已存在阈值"));
         verify(userThresholdMapper, never()).insert(any(UserThreshold.class));
     }
 
@@ -151,7 +151,7 @@ class UserThresholdServiceTest {
             userThresholdService.update(999L, testUserId, testRequest);
         });
 
-        assertTrue(exception.getMessage().contains("not found") || exception.getMessage().contains("不存在"));
+        assertTrue(exception.getMessage().contains("未找到该条阈值设置"));
         verify(userThresholdMapper, never()).updateById(any(UserThreshold.class));
     }
 
@@ -180,7 +180,7 @@ class UserThresholdServiceTest {
             userThresholdService.update(1L, testUserId, testRequest);
         });
 
-        assertTrue(exception.getMessage().contains("already exists") || exception.getMessage().contains("已存在"));
+        assertTrue(exception.getMessage().contains("该指标已存在阈值"));
     }
 
     @Test
