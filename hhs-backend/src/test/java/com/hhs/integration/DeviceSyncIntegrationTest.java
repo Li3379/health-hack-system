@@ -288,17 +288,18 @@ public class DeviceSyncIntegrationTest extends AbstractIntegrationTest {
         @DisplayName("DEV-INT-014: OAuth回调 - 服务异常返回错误页面")
         void testHandleCallback_ServiceException() throws Exception {
             // Given: Service throws exception
-            doThrow(new RuntimeException("Token exchange failed"))
+            doThrow(new RuntimeException("RAW_PROVIDER_DETAIL"))
                     .when(orchestrationService)
                     .handleCallback(anyString(), anyString(), anyString());
 
             // When: OAuth callback causes exception
-            // Then: Should return error page
+            // Then: Should return error page without echoing the raw detail
             mockMvc.perform(get(API_BASE + "/callback/huawei")
                             .param("code", "test-auth-code")
                             .param("state", "test-state"))
                     .andExpect(status().isOk())
-                    .andExpect(content().string(containsString("授权失败")));
+                    .andExpect(content().string(containsString("授权失败")))
+                    .andExpect(content().string(not(containsString("RAW_PROVIDER_DETAIL"))));
         }
     }
 
@@ -376,7 +377,7 @@ public class DeviceSyncIntegrationTest extends AbstractIntegrationTest {
         @DisplayName("DEV-INT-019: 同步单个设备 - 同步失败返回失败状态")
         void testSyncSingleDevice_SyncFailed() throws Exception {
             // Given: Device sync fails
-            SyncResultVO failedResult = SyncResultVO.failed("huawei", "Device not connected", 0);
+            SyncResultVO failedResult = SyncResultVO.failed("huawei", "尚未连接华为运动健康，请先在设备页绑定账号", 0);
             when(orchestrationService.syncPlatform(anyLong(), eq("huawei")))
                     .thenReturn(failedResult);
 

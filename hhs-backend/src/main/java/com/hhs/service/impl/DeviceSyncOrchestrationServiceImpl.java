@@ -78,7 +78,7 @@ public class DeviceSyncOrchestrationServiceImpl implements DeviceSyncOrchestrati
             return service.syncData(userId);
         } catch (Exception e) {
             log.error("Error syncing platform {} for user {}: {}", platform, userId, e.getMessage());
-            return SyncResultVO.failed(platform, "Sync error: " + e.getMessage(), 0);
+            return SyncResultVO.failed(platform, "同步失败，请稍后重试", 0);
         }
     }
 
@@ -114,14 +114,14 @@ public class DeviceSyncOrchestrationServiceImpl implements DeviceSyncOrchestrati
             DevicePlatformService service = getPlatformService(platform);
             if (service == null) {
                 log.warn("No service registered for platform: {}", platform);
-                results.add(SyncResultVO.failed(platform, "Platform service not available", 0));
+                results.add(SyncResultVO.failed(platform, "该设备平台服务暂不可用，请稍后重试", 0));
                 failedPlatforms.add(platform);
                 continue;
             }
 
             if (!service.isConfigured()) {
                 log.warn("Platform {} is not configured, skipping", platform);
-                results.add(SyncResultVO.failed(platform, "Platform not configured", 0));
+                results.add(SyncResultVO.failed(platform, "该设备平台尚未配置，请联系管理员", 0));
                 failedPlatforms.add(platform);
                 continue;
             }
@@ -136,7 +136,7 @@ public class DeviceSyncOrchestrationServiceImpl implements DeviceSyncOrchestrati
                 }
             } catch (Exception e) {
                 log.error("Error syncing platform {} for user {}: {}", platform, userId, e.getMessage());
-                results.add(SyncResultVO.failed(platform, "Sync error: " + e.getMessage(), 0));
+                results.add(SyncResultVO.failed(platform, "同步失败，请稍后重试", 0));
                 failedPlatforms.add(platform);
                 // Continue to next platform - one failure shouldn't stop others
             }
