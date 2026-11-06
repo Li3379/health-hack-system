@@ -5,6 +5,7 @@ import com.hhs.dto.PushConfigRequest;
 import com.hhs.entity.UserPushConfig;
 import com.hhs.mapper.UserPushConfigMapper;
 import com.hhs.security.SecurityUtils;
+import com.hhs.security.WebhookUrlValidator;
 import com.hhs.service.PushHistoryService;
 import com.hhs.service.push.ChannelType;
 import com.hhs.service.push.PushChannelManager;
@@ -19,6 +20,7 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -77,7 +79,7 @@ public class PushConfigController {
         // Validate channel type
         ChannelType type;
         try {
-            type = ChannelType.valueOf(channelType.toUpperCase());
+            type = ChannelType.valueOf(channelType.toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException e) {
             return Result.failure(400, "推送渠道类型无效");
         }
@@ -103,7 +105,7 @@ public class PushConfigController {
         // Validate channel type
         ChannelType type;
         try {
-            type = ChannelType.valueOf(channelType.toUpperCase());
+            type = ChannelType.valueOf(channelType.toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException e) {
             return Result.failure(400, "推送渠道类型无效");
         }
@@ -113,6 +115,13 @@ public class PushConfigController {
             if (request.getConfigValue() == null || request.getConfigValue().isBlank()) {
                 return Result.failure(400, "开启该推送渠道前，请先填写配置内容");
             }
+        }
+
+        // SSRF hardening: webhook channels receive a server-issued POST, so the URL is validated
+        // before it is persisted. EMAIL holds an address, not a URL, and needs no such check.
+        if (isWebhookChannel(type) && request.getConfigValue() != null
+                && !request.getConfigValue().isBlank()) {
+            validateWebhookUrl(request.getConfigValue());
         }
 
         // Find existing or create new
@@ -160,7 +169,7 @@ public class PushConfigController {
         // Validate channel type
         ChannelType type;
         try {
-            type = ChannelType.valueOf(channelType.toUpperCase());
+            type = ChannelType.valueOf(channelType.toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException e) {
             return Result.failure(400, "推送渠道类型无效");
         }
@@ -184,7 +193,7 @@ public class PushConfigController {
         // Validate channel type
         ChannelType type;
         try {
-            type = ChannelType.valueOf(channelType.toUpperCase());
+            type = ChannelType.valueOf(channelType.toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException e) {
             return Result.failure(400, "推送渠道类型无效");
         }
@@ -257,5 +266,30 @@ public class PushConfigController {
         response.put("channels", channelStats);
 
         return Result.success(response);
+    }
+
+    /**
+     * Whether this channel receives a server-issued POST to a user-supplied URL.
+     *
+     * <p>Webhook channels are the SSRF sinks; EMAIL stores an address and WEBSOCKET is a
+     * connection keyed on the authenticated session, so neither needs URL validation here.
+     *
+     * @param type channel type
+     * @return true for {@link ChannelType#FEISHU} and {@link ChannelType#WECOM}
+     */
+    private boolean isWebhookChannel(ChannelType type) {
+        return type == ChannelType.FEISHU || type == ChannelType.WECOM;
+    }
+
+    /**
+     * Validate a webhook URL at write time.
+     *
+     * <p>{@link WebhookUrlValidator} raises a {@code BusinessException} with the Chinese detail
+     * that {@code GlobalExceptionHandler} projects into the response envelope.
+     *
+     * @param configValue the user-supplied URL
+     */
+    private void validateWebhookUrl(String configValue) {
+        WebhookUrlValidator.validate(configValue);
     }
 }

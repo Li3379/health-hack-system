@@ -3,6 +3,7 @@ package com.hhs.service.push.channel;
 import com.hhs.dto.AlertVO;
 import com.hhs.entity.UserPushConfig;
 import com.hhs.mapper.UserPushConfigMapper;
+import com.hhs.security.WebhookUrlValidator;
 import com.hhs.service.push.ChannelType;
 import com.hhs.service.push.PushChannel;
 import com.hhs.service.push.PushResult;
@@ -39,6 +40,16 @@ public class WeComPushChannel implements PushChannel {
         String webhookUrl = getWebhookUrl(userId);
         if (webhookUrl == null || webhookUrl.isEmpty()) {
             return PushResult.skipped(getChannelType(), "Webhook not configured");
+        }
+
+        // Defense in depth: the write path validates, but a value persisted before that guard
+        // (or by another path) must not be POSTed to either.
+        try {
+            WebhookUrlValidator.validate(webhookUrl);
+        } catch (RuntimeException e) {
+            log.warn("Refusing to push to an invalid webhook URL for user {}: {}", userId,
+                    e.getMessage());
+            return PushResult.failed(getChannelType(), "Webhook URL rejected");
         }
 
         try {
