@@ -98,8 +98,10 @@
           </el-col>
         </el-row>
 
-        <el-row v-if="bmi" :gutter="20">
-          <el-col :xs="24" :md="12">
+        <el-row :gutter="20">
+          <!-- BMI 只有在身高与体重都填写后才可计算；v-if 只作用于 BMI 列，
+               血型列必须始终可见/可选，否则 bloodType 的服务端错误无处显示（WR-11）。 -->
+          <el-col v-if="bmi" :xs="24" :md="12">
             <el-form-item label="BMI">
               <el-input :value="bmi" readonly>
                 <template #append>
@@ -187,6 +189,7 @@ import { preventionApi } from '@/api/prevention'
 import { useFormServerErrors } from '@/composables/useFormServerErrors'
 import FormErrorSummary from '@/components/common/FormErrorSummary.vue'
 import { showError } from '@/utils/showError'
+import { normalizeApiError } from '@/utils/appError'
 import type { HealthProfileRequest, HealthProfileVO } from '@/types/api'
 
 // Phase 14: 其余 toast 调用点待迁移（ERR-03/05/07/08）
@@ -260,9 +263,20 @@ const fetchProfile = async () => {
       lifestyleHabits: res.data.lifestyleHabits || ''
     })
   } catch (error) {
-    // 档案不存在是正常状态，silent 已抑制提示，此处只进入创建模式。
-    // 刻意不调用 showError：否则首次进入页面就会冒出一条红色 toast（Pitfall 6）。
-    editing.value = true
+    // 只有「档案不存在」（404 / health.profile_not_found）才进入创建模式；
+    // 网络故障或服务端错误进入创建模式会让人以为要新建，提交时才报「已存在」，或在
+    // 部分故障下创建出重复档案（WR-12）。
+    const err = normalizeApiError(error)
+    const notFound =
+      err.status === 404 ||
+      err.code === 'health.profile_not_found' ||
+      err.code === 'resource.not_found'
+    if (notFound) {
+      editing.value = true
+    } else {
+      // 非「不存在」失败不属于「正常状态」：走单一错误出口，让用户知道加载失败。
+      showError(err, 'profile.loadFailed')
+    }
   } finally {
     loading.value = false
   }
