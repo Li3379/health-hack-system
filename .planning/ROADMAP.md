@@ -227,7 +227,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 11-07-PLAN.md — 两个迁移样本接线：prevention/Profile.vue 双呈现、stores/push.ts 单一出口与返回值契约
+- [ ] 11-07-PLAN.md — 三个迁移样本接线：prevention/Profile.vue 双呈现、stores/push.ts 单一出口与返回值契约、health/Thresholds.vue 的 RESOURCE_ALREADY_EXISTS 恢复动作
 
 **UI hint**: yes
 
