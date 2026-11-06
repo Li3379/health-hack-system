@@ -1,8 +1,10 @@
 package com.hhs.controller;
 
 import com.hhs.common.Result;
+import com.hhs.common.constant.ErrorCode;
 import com.hhs.dto.ExportRequest;
 import com.hhs.entity.ExportJob;
+import com.hhs.exception.BusinessException;
 import com.hhs.security.SecurityUtils;
 import com.hhs.service.ExportService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -24,6 +26,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 
 /**
  * Data export controller.
@@ -89,6 +92,14 @@ public class ExportController {
         if (dateStr == null || dateStr.isBlank()) {
             return null;
         }
-        return LocalDate.parse(dateStr);
+        try {
+            return LocalDate.parse(dateStr);
+        } catch (DateTimeParseException e) {
+            // Pattern validation rejects most malformed input; this guards the remaining
+            // shape-valid but calendar-invalid cases (e.g. 2026-02-30) so they are reported
+            // as a bad request rather than as a server outage.
+            log.warn("Invalid export date: {}", dateStr);
+            throw new BusinessException(ErrorCode.VALIDATION_INVALID_PARAMETER, "导出日期格式不正确");
+        }
     }
 }

@@ -6,10 +6,17 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 /**
- * VO for push configuration response
+ * VO for push configuration response.
+ *
+ * <p>Webhook URLs embed secret tokens, so {@code configValue} is masked on read and never
+ * echoes a stored secret back to the browser. The mask marker ({@code ****}) is what the
+ * frontend tests for before accepting an edited value.
  */
 @Data
 public class PushConfigVO {
+
+    /** Marker inserted into every masked value; kept in sync with the frontend mask check. */
+    public static final String MASK_MARKER = "****";
 
     private Long id;
 
@@ -40,7 +47,7 @@ public class PushConfigVO {
             vo.setId(entity.getId());
             vo.setChannelType(entity.getChannelType());
             vo.setConfigKey(entity.getConfigKey());
-            vo.setConfigValue(entity.getConfigValue());
+            vo.setConfigValue(maskValue(entity.getConfigValue()));
             vo.setEnabled(entity.getEnabled() != null && entity.getEnabled() == 1);
             vo.setCreatedAt(entity.getCreatedAt());
             vo.setUpdatedAt(entity.getUpdatedAt());
@@ -61,6 +68,28 @@ public class PushConfigVO {
                 && !entity.getConfigValue().isBlank());
 
         return vo;
+    }
+
+    /**
+     * Mask a stored config value for transport.
+     *
+     * <p>Keeps a recognisable prefix and the last four characters so the user can tell which
+     * webhook is configured without being able to reuse the token.
+     *
+     * @param value stored value (webhook URL / address)
+     * @return masked value, or the original when blank
+     */
+    static String maskValue(String value) {
+        if (value == null || value.isBlank()) {
+            return value;
+        }
+        int keepEnd = Math.min(4, value.length());
+        String tail = value.substring(value.length() - keepEnd);
+        if (value.length() <= 8) {
+            return MASK_MARKER + tail;
+        }
+        int keepStart = Math.min(24, value.length() - keepEnd);
+        return value.substring(0, keepStart) + MASK_MARKER + tail;
     }
 
     /**
