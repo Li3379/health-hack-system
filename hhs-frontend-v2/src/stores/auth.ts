@@ -4,6 +4,7 @@ import { authApi } from '@/api/auth'
 import { userApi } from '@/api/user'
 import { storage } from '@/utils/storage'
 import { resetAuthLatch } from '@/utils/authSession'
+import { ERROR_MESSAGES } from '@/utils/errorMessages'
 import type { LoginRequest, RegisterRequest, UserVO } from '@/types/api'
 import { ElMessage } from 'element-plus'
 import router from '@/router'
@@ -36,13 +37,23 @@ export const useAuthStore = defineStore('auth', () => {
     router.push('/login')
   }
 
-  // 登出
-  const logout = () => {
+  /**
+   * 登出。
+   *
+   * @param options.reason `'expired'` 表示由 401 拦截器触发的会话过期；此时提示
+   *   「登录已过期」而不是「已退出登录」，用户主动退出时仍为中性提示（WR-14）。
+   */
+  const logout = (options: { reason?: 'manual' | 'expired' } = {}) => {
     token.value = null
     user.value = null
     storage.clear()
     router.push('/login')
-    ElMessage.info('已退出登录')
+    // 401 链路唯一可见提示由这里承担，showError 对 kind==='auth' 刻意静默。
+    if (options.reason === 'expired') {
+      ElMessage.warning(ERROR_MESSAGES['auth.expired'])
+    } else {
+      ElMessage.info('已退出登录')
+    }
   }
 
   // 更新用户信息
