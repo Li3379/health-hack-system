@@ -1,3 +1,4 @@
+import type { AxiosRequestConfig } from 'axios'
 import { request } from '@/utils/request'
 import type { AlertVO, PageResult } from '@/types/api'
 
@@ -7,9 +8,9 @@ export const alertApi = {
     return request.get<PageResult<AlertVO>>('/api/alerts', { params })
   },
 
-  // 获取未读数量
-  getUnreadCount() {
-    return request.get<number>('/api/alerts/unread-count')
+  // 获取未读数量（config 透传 `{ silent: true }`，后台轮询失败不打扰用户）
+  getUnreadCount(config?: AxiosRequestConfig) {
+    return request.get<number>('/api/alerts/unread-count', config)
   },
 
   // 获取最近预警

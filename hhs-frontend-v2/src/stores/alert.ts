@@ -8,12 +8,15 @@ export const useAlertStore = defineStore('alert', () => {
   const recentAlerts = ref<AlertVO[]>([])
 
   // 获取未读数量
-  const fetchUnreadCount = async () => {
+  // silent 只透传"失败不展示"，不改变 store 行为：计数失败时保持原值（D-10）。
+  const fetchUnreadCount = async (options: { silent?: boolean } = {}): Promise<void> => {
     try {
-      const res = await alertApi.getUnreadCount()
+      const res = await alertApi.getUnreadCount(
+        options.silent ? { silent: true } : undefined
+      )
       unreadCount.value = res.data
     } catch (error) {
-      // unread count fetch failed
+      // silent: 后台计数失败保持原值，由调用方决定是否提示
     }
   }
 
