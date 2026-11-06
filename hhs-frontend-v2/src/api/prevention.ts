@@ -1,3 +1,4 @@
+import type { AxiosRequestConfig } from 'axios'
 import { request } from '@/utils/request'
 import type {
   HealthProfileRequest,
@@ -14,8 +15,9 @@ export const preventionApi = {
     return request.post<HealthProfileVO>('/api/prevention/health-profile', data)
   },
 
-  getProfile() {
-    return request.get<HealthProfileVO>('/api/prevention/health-profile')
+  // config 透传调用点的 `{ silent: true }`（D-09）：档案不存在是正常状态，不弹红色提示。
+  getProfile(config?: AxiosRequestConfig) {
+    return request.get<HealthProfileVO>('/api/prevention/health-profile', config)
   },
 
   updateProfile(id: number, data: HealthProfileRequest) {

@@ -20,17 +20,33 @@
         label-width="120px"
         :disabled="!editing"
       >
+        <FormErrorSummary
+          ref="summaryRef"
+          :summary-items="summaryItems"
+          @focus-field="focusField"
+        />
+
         <el-row :gutter="20">
           <el-col :xs="24" :md="12">
-            <el-form-item label="性别" prop="gender">
-              <el-radio-group v-model="form.gender">
+            <el-form-item
+              label="性别"
+              prop="gender"
+              data-field="gender"
+              :error="fieldErrors['gender']"
+            >
+              <el-radio-group v-model="form.gender" @change="clearField('gender')">
                 <el-radio value="male">男</el-radio>
                 <el-radio value="female">女</el-radio>
               </el-radio-group>
             </el-form-item>
           </el-col>
           <el-col :xs="24" :md="12">
-            <el-form-item label="出生日期" prop="birthDate">
+            <el-form-item
+              label="出生日期"
+              prop="birthDate"
+              data-field="birthDate"
+              :error="fieldErrors['birthDate']"
+            >
               <el-date-picker
                 v-model="form.birthDate"
                 type="date"
@@ -38,6 +54,7 @@
                 value-format="YYYY-MM-DD"
                 :disabled-date="disabledDate"
                 style="width: 100%"
+                @change="clearField('birthDate')"
               />
             </el-form-item>
           </el-col>
@@ -45,12 +62,29 @@
 
         <el-row :gutter="20">
           <el-col :xs="24" :md="12">
-            <el-form-item label="身高(cm)" prop="heightCm">
-              <el-input-number v-model="form.heightCm" :min="50" :max="300" :disabled="!editing" style="width: 100%" />
+            <el-form-item
+              label="身高(cm)"
+              prop="heightCm"
+              data-field="heightCm"
+              :error="fieldErrors['heightCm']"
+            >
+              <el-input-number
+                v-model="form.heightCm"
+                :min="50"
+                :max="300"
+                :disabled="!editing"
+                style="width: 100%"
+                @change="clearField('heightCm')"
+              />
             </el-form-item>
           </el-col>
           <el-col :xs="24" :md="12">
-            <el-form-item label="体重(kg)" prop="weightKg">
+            <el-form-item
+              label="体重(kg)"
+              prop="weightKg"
+              data-field="weightKg"
+              :error="fieldErrors['weightKg']"
+            >
               <el-input-number
                 v-model="form.weightKg"
                 :min="20"
@@ -58,6 +92,7 @@
                 :precision="1"
                 :disabled="!editing"
                 style="width: 100%"
+                @change="clearField('weightKg')"
               />
             </el-form-item>
           </el-col>
@@ -74,8 +109,18 @@
             </el-form-item>
           </el-col>
           <el-col :xs="24" :md="12">
-            <el-form-item label="血型" prop="bloodType">
-              <el-select v-model="form.bloodType" placeholder="请选择" style="width: 100%">
+            <el-form-item
+              label="血型"
+              prop="bloodType"
+              data-field="bloodType"
+              :error="fieldErrors['bloodType']"
+            >
+              <el-select
+                v-model="form.bloodType"
+                placeholder="请选择"
+                style="width: 100%"
+                @change="clearField('bloodType')"
+              >
                 <el-option label="A型" value="A" />
                 <el-option label="B型" value="B" />
                 <el-option label="AB型" value="AB" />
@@ -85,30 +130,48 @@
           </el-col>
         </el-row>
 
-        <el-form-item label="过敏史" prop="allergyHistory">
+        <el-form-item
+          label="过敏史"
+          prop="allergyHistory"
+          data-field="allergyHistory"
+          :error="fieldErrors['allergyHistory']"
+        >
           <el-input
             v-model="form.allergyHistory"
             type="textarea"
             :rows="3"
             placeholder="请输入过敏史，如：青霉素过敏、花粉过敏等"
+            @input="clearField('allergyHistory')"
           />
         </el-form-item>
 
-        <el-form-item label="家族病史" prop="familyHistory">
+        <el-form-item
+          label="家族病史"
+          prop="familyHistory"
+          data-field="familyHistory"
+          :error="fieldErrors['familyHistory']"
+        >
           <el-input
             v-model="form.familyHistory"
             type="textarea"
             :rows="3"
             placeholder="请输入家族病史，如：父亲有高血压、母亲有糖尿病等"
+            @input="clearField('familyHistory')"
           />
         </el-form-item>
 
-        <el-form-item label="生活习惯" prop="lifestyleHabits">
+        <el-form-item
+          label="生活习惯"
+          prop="lifestyleHabits"
+          data-field="lifestyleHabits"
+          :error="fieldErrors['lifestyleHabits']"
+        >
           <el-input
             v-model="form.lifestyleHabits"
             type="textarea"
             :rows="3"
             placeholder="请输入生活习惯，如：吸烟、饮酒、运动频率等"
+            @input="clearField('lifestyleHabits')"
           />
         </el-form-item>
       </el-form>
@@ -121,12 +184,20 @@ import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { gsap, cleanupScrollTriggers, DUR, EASE } from '@/composables/useGsap'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { preventionApi } from '@/api/prevention'
+import { useFormServerErrors } from '@/composables/useFormServerErrors'
+import FormErrorSummary from '@/components/common/FormErrorSummary.vue'
+import { showError } from '@/utils/showError'
 import type { HealthProfileRequest, HealthProfileVO } from '@/types/api'
+
+// Phase 14: 其余 toast 调用点待迁移（ERR-03/05/07/08）
 
 const loading = ref(false)
 const editing = ref(false)
 const formRef = ref<FormInstance>()
+const summaryRef = ref<InstanceType<typeof FormErrorSummary> | null>(null)
 const profileData = ref<HealthProfileVO | null>(null)
+
+const { fieldErrors, summaryItems, apply, clearField, reset, focusField } = useFormServerErrors()
 
 const form = reactive<HealthProfileRequest>({
   gender: '',
@@ -175,7 +246,8 @@ const disabledDate = (time: Date) => {
 const fetchProfile = async () => {
   loading.value = true
   try {
-    const res = await preventionApi.getProfile()
+    // silent：档案不存在是正常状态，拦截器与 showError 都不打扰用户（D-09/D-10）。
+    const res = await preventionApi.getProfile({ silent: true })
     profileData.value = res.data
     Object.assign(form, {
       gender: res.data.gender || '',
@@ -188,7 +260,8 @@ const fetchProfile = async () => {
       lifestyleHabits: res.data.lifestyleHabits || ''
     })
   } catch (error) {
-    // 如果没有档案，允许创建
+    // 档案不存在是正常状态，silent 已抑制提示，此处只进入创建模式。
+    // 刻意不调用 showError：否则首次进入页面就会冒出一条红色 toast（Pitfall 6）。
     editing.value = true
   } finally {
     loading.value = false
@@ -197,6 +270,9 @@ const fetchProfile = async () => {
 
 const handleSubmit = async () => {
   if (!formRef.value) return
+
+  // 上一轮的残留服务端错误不进入本次尝试（不碰用户输入）。
+  reset()
 
   await formRef.value.validate(async valid => {
     if (!valid) return
@@ -213,7 +289,13 @@ const handleSubmit = async () => {
       editing.value = false
       await fetchProfile()
     } catch (error) {
-      ElMessage.error('操作失败')
+      // validation → 0 toast，内联 + 汇总承担呈现（GOV.UK 双呈现）。
+      const err = showError(error, 'profile.saveFailed')
+      if (err.kind === 'validation') {
+        apply(err)
+        await nextTick()
+        summaryRef.value?.focusSummary()
+      }
     } finally {
       loading.value = false
     }
