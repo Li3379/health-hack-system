@@ -197,8 +197,9 @@ public class AIChatServiceImpl implements AIChatService {
                 : 0;
             log.info("AI对话响应成功: tokens={}", tokensUsed);
         } catch (Exception e) {
+            // Full detail (including the runtime error text) stays in the log only.
             log.error("AI对话调用失败，详细错误信息: {}", e.getMessage(), e);
-            throw new BusinessException(ErrorCode.AI_ERROR, "AI服务暂时不可用: " + e.getMessage());
+            throw new BusinessException(ErrorCode.AI_ERROR, "AI服务暂时不可用");
         }
 
         // 6. 答案安全检查和过滤
