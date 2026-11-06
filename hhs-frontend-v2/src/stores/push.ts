@@ -11,6 +11,7 @@ import {
 import { ElMessage } from 'element-plus'
 import { showError } from '@/utils/showError'
 import { ApiError } from '@/utils/appError'
+import { ERROR_MESSAGES } from '@/utils/errorMessages'
 
 export const usePushStore = defineStore('push', () => {
   const configs = ref<PushConfig[]>([])
@@ -18,19 +19,24 @@ export const usePushStore = defineStore('push', () => {
   const stats = ref<PushStats | null>(null)
   const loading = ref(false)
   const testing = ref<string | null>(null)
+  /** 配置加载失败的原因；视图据此渲染错误态而不是空列表（WR-09）。 */
+  const loadError = ref<string | null>(null)
 
   /**
    * Load all push configurations
    */
-  async function loadConfigs() {
+  async function loadConfigs(options: { silent?: boolean } = {}) {
     loading.value = true
+    loadError.value = null
     try {
       const res = await getPushConfigs()
       if (res.code === 200) {
         configs.value = res.data
       }
     } catch (error) {
-      // config load failed
+      // 不再静默吞掉：错误态交给视图渲染；后台刷新可显式 { silent: true }（WR-09）。
+      const err = showError(error, 'server.unavailable', { silent: options.silent === true })
+      loadError.value = err.message || ERROR_MESSAGES['server.unavailable']
     } finally {
       loading.value = false
     }
@@ -51,11 +57,12 @@ export const usePushStore = defineStore('push', () => {
       if (index !== -1) {
         configs.value[index] = res.data
       }
-      ElMessage.success('配置已保存')
+      // 成功反馈由调用方拥有（开关/保存各有上下文文案），此处不再额外弹一条，
+      // 否则一次切换会出现两条堆叠的成功提示（WR-07）。
       return true
     } catch (error) {
       // store 层唯一出口：调用方只读布尔返回值，不重复弹提示（T-11-21）。
-      showError(error, 'profile.saveFailed')
+      showError(error, 'push.saveFailed')
       return false
     }
   }
@@ -86,28 +93,29 @@ export const usePushStore = defineStore('push', () => {
   /**
    * Load push history
    */
-  async function loadHistory(limit = 20) {
+  async function loadHistory(limit = 20, options: { silent?: boolean } = {}) {
     try {
       const res = await getPushHistory(limit)
       if (res.code === 200) {
         history.value = res.data
       }
     } catch (error) {
-      // history load failed
+      // 历史是次要区块：默认静默，但把失败交回调用者可决定是否提示（WR-09）。
+      showError(error, 'server.unavailable', { silent: options.silent !== false })
     }
   }
 
   /**
    * Load push statistics
    */
-  async function loadStats() {
+  async function loadStats(options: { silent?: boolean } = {}) {
     try {
       const res = await getPushStats()
       if (res.code === 200) {
         stats.value = res.data
       }
     } catch (error) {
-      // stats load failed
+      showError(error, 'server.unavailable', { silent: options.silent !== false })
     }
   }
 
@@ -124,6 +132,7 @@ export const usePushStore = defineStore('push', () => {
     stats,
     loading,
     testing,
+    loadError,
     loadConfigs,
     saveConfig,
     testChannel,
