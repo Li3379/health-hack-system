@@ -1,8 +1,19 @@
+// 字段级校验错误：后端在 HTTP 400 时下发，前端据此做内联回填
+export interface FieldError {
+  field: string
+  message: string
+  code?: string
+}
+
 // API 统一响应格式
 export interface ApiResponse<T = any> {
   code: number
   message: string
   data: T
+  // 稳定错误码（如 resource.exists），用于调用点决定呈现方式（D-08）
+  errorCode?: string
+  // 字段校验明细（仅 HTTP 400 校验失败时下发）
+  fieldErrors?: FieldError[]
 }
 
 // 分页响应
@@ -438,4 +449,3 @@ export interface MetricDefinitionVO {
 }
 
 export type MetricMetaMap = Record<string, MetricDefinitionVO>
-
