@@ -190,7 +190,9 @@ public class OcrServiceImpl implements OcrService {
 
         } catch (Exception e) {
             log.error("OCR processing failed for report {}", reportId, e);
-            reportStatusService.updateOcrStatus(reportId, "FAILED", "识别失败: " + e.getMessage());
+            // The status endpoint surfaces anything starting with 识别失败; keep the prefix but
+            // never echo provider/JDBC exception text to the end user.
+            reportStatusService.updateOcrStatus(reportId, "FAILED", "识别失败，请稍后重试");
 
             OcrRecognizeLog logEntity = new OcrRecognizeLog();
             logEntity.setReportId(reportId);

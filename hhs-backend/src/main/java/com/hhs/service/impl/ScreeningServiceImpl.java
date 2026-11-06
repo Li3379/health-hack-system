@@ -121,7 +121,7 @@ public class ScreeningServiceImpl implements ScreeningService {
                 report.setReportDate(LocalDate.parse(reportDateStr));
             } catch (DateTimeParseException e) {
                 log.warn("Invalid report date format for report ID {}: {}", report.getId(), reportDateStr);
-                throw new BusinessException(ErrorCode.RESOURCE_FILE_PARSE_ERROR, "报告日期格式错误: " + reportDateStr, e);
+                throw new BusinessException(ErrorCode.RESOURCE_FILE_PARSE_ERROR, "报告日期格式错误", e);
             }
         }
         report.setFileUrl(fileUrl);
@@ -143,9 +143,10 @@ public class ScreeningServiceImpl implements ScreeningService {
 
             log.info("Scheduled OCR processing for report {} (will run after transaction commit)", reportId);
         } catch (Exception e) {
-            // If event publishing fails, update status to FAILED
+            // If event publishing fails, update status to FAILED. The user-visible column gets a
+            // fixed Chinese string; the internal exception text stays in the log only.
             log.error("Failed to schedule OCR for report {}", reportId, e);
-            reportStatusService.updateOcrStatus(reportId, "FAILED", "调度OCR处理失败: " + e.getMessage());
+            reportStatusService.updateOcrStatus(reportId, "FAILED", "OCR 处理失败，请稍后重试");
         }
 
         return toReportVO(report); // Returns immediately without waiting for OCR
