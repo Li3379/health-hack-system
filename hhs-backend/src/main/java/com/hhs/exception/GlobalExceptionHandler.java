@@ -22,13 +22,15 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 /**
  * Global exception handler for the application.
  * Provides consistent error responses and aggregates validation errors.
  * Supports internationalization via Accept-Language header.
+ *
+ * <p>Every user-facing fallback message is Chinese. Server-side exception details are written to
+ * the log only and never returned in the response body.
  */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -38,6 +40,9 @@ public class GlobalExceptionHandler {
     /** Upper bound on the number of field errors returned in one response. */
     private static final int MAX_FIELD_ERRORS = 20;
 
+    /** Fixed message used for every {@code SYSTEM_*} error code reaching a user. */
+    private static final String SYSTEM_FALLBACK_MESSAGE = "服务暂时不可用，请稍后重试";
+
     /**
      * Handle business exceptions with ErrorCode support.
      */
@@ -45,7 +50,7 @@ public class GlobalExceptionHandler {
     public Result<Void> handleBusinessException(BusinessException ex, HttpServletRequest request) {
         ErrorCode ec = ex.getErrorCode();
         String lang = resolveLanguage(request);
-        String message = ec.getMessage(lang);
+        String message = systemFallbackMessage(ec, lang);
 
         // Include detail if present
         if (ex.getDetail() != null) {
@@ -53,7 +58,8 @@ public class GlobalExceptionHandler {
         }
 
         log.warn("Business exception: {} - {} - {}", ec.getCode(), message, ex.getMessage());
-        return Result.failure(ec.getCode(), message);
+        Result<Void> result = Result.failure(ec.getCode(), message);
+        return result.withErrorCode(ec.getCode());
     }
 
     /**
@@ -66,7 +72,9 @@ public class GlobalExceptionHandler {
         log.error("System exception: code={}, message={}", errorCode.getCode(), ex.getMessage(), ex);
 
         // System exceptions don't trigger rollback, might succeed on retry
-        return Result.failure(errorCode.getHttpStatus(), ex.getMessage());
+        String message = systemFallbackMessage(errorCode, "zh");
+        return Result.<Void>failure(errorCode.getHttpStatus(), message)
+            .withErrorCode(errorCode.getCode());
     }
 
     /**
@@ -144,30 +152,24 @@ public class GlobalExceptionHandler {
      * Handle authentication credentials not found exceptions.
      */
     @ExceptionHandler(AuthenticationCredentialsNotFoundException.class)
-    public ResponseEntity<Map<String, Object>> handleAuthenticationCredentialsNotFound(
+    public ResponseEntity<Result<Void>> handleAuthenticationCredentialsNotFound(
             AuthenticationCredentialsNotFoundException ex) {
-
-        Map<String, Object> response = new java.util.HashMap<>();
-        response.put("code", "AUTHENTICATION_REQUIRED");
-        response.put("message", "Authentication required. Please login.");
-
         log.warn("Authentication attempt without credentials: {}", ex.getMessage());
 
-        return ResponseEntity.status(401).body(response);
+        Result<Void> body = Result.failure(
+            401, ErrorCode.AUTH_UNAUTHORIZED.getCode(), "登录已过期，请重新登录");
+        return ResponseEntity.status(401).body(body);
     }
 
     /**
      * Handle security exceptions.
      */
     @ExceptionHandler(SecurityException.class)
-    public ResponseEntity<Map<String, Object>> handleSecurityException(SecurityException ex) {
-        Map<String, Object> response = new java.util.HashMap<>();
-        response.put("code", "SECURITY_VIOLATION");
-        response.put("message", "Invalid request");
-
+    public ResponseEntity<Result<Void>> handleSecurityException(SecurityException ex) {
         log.error("Security violation: {}", ex.getMessage());
 
-        return ResponseEntity.badRequest().body(response);
+        Result<Void> body = Result.failure(400, "security.violation", "请求无效，请刷新页面后重试");
+        return ResponseEntity.badRequest().body(body);
     }
 
     /**
@@ -176,7 +178,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public Result<Void> handleHttpMessageNotReadableException(HttpMessageNotReadableException ex) {
         log.warn("Request body parsing failed: {}", ex.getMessage());
-        return Result.failure(400, "Request body format error");
+        return Result.failure(400, "validation.request_body_invalid", "请求内容格式有误，请检查后重试");
     }
 
     /**
@@ -184,18 +186,37 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(NoResourceFoundException.class)
     public Result<Void> handleNoResourceFoundException(NoResourceFoundException ex) {
-        log.warn("Resource not found: {}", ex.getResourcePath());
+        log.warn("静态资源缺失: {}", ex.getResourcePath());
         // For static resources (like avatars) that don't exist, return 404 but don't log as error
-        return Result.failure(404, "Resource not found");
+        return Result.failure(404, ErrorCode.RESOURCE_NOT_FOUND.getCode(), "请求的资源不存在");
     }
 
     /**
-     * Handle all other exceptions.
+     * Handle all other exceptions. The exception detail goes to the log only.
      */
     @ExceptionHandler(Exception.class)
     public Result<Void> handleException(Exception ex) {
         log.error("System exception: {} - {}", ex.getClass().getSimpleName(), ex.getMessage(), ex);
-        return Result.failure(500, "System error, please try again later");
+        return Result.failure(500, ErrorCode.SYSTEM_ERROR.getCode(), SYSTEM_FALLBACK_MESSAGE);
+    }
+
+    /**
+     * Resolve the user-facing message for an error code.
+     *
+     * <p>Every {@code SYSTEM_*} code is unconditionally replaced by a fixed friendly message.
+     * The enum's own Chinese wording for those codes is banned by the UI specification and would
+     * otherwise reach the user, because these failures travel back as a business envelope that the
+     * client renders verbatim.
+     *
+     * @param ec   the error code being reported
+     * @param lang requested language for non-system codes
+     * @return the user-facing message
+     */
+    private String systemFallbackMessage(ErrorCode ec, String lang) {
+        if (ec.name().startsWith("SYSTEM_")) {
+            return SYSTEM_FALLBACK_MESSAGE;
+        }
+        return ec.getMessage(lang);
     }
 
     /**
