@@ -12,11 +12,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
 import org.springframework.validation.ObjectError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.ArrayList;
@@ -45,6 +48,11 @@ public class GlobalExceptionHandler {
 
     /**
      * Handle business exceptions with ErrorCode support.
+     *
+     * <p>The numeric envelope code keeps its historical {@code parseCodeToInt} semantics
+     * (non-numeric codes fall back to {@code 500}); the stable string code travels separately in
+     * {@code errorCode}. Detail text is appended only for non-{@code SYSTEM_*} codes — a
+     * {@code SYSTEM_*} detail is technical and must not reach the user.
      */
     @ExceptionHandler(BusinessException.class)
     public Result<Void> handleBusinessException(BusinessException ex, HttpServletRequest request) {
@@ -52,9 +60,11 @@ public class GlobalExceptionHandler {
         String lang = resolveLanguage(request);
         String message = systemFallbackMessage(ec, lang);
 
-        // Include detail if present
-        if (ex.getDetail() != null) {
+        // Detail is user-facing copy for domain codes, but technical for SYSTEM_* codes.
+        if (ex.getDetail() != null && !ec.name().startsWith("SYSTEM_")) {
             message = message + ": " + ex.getDetail();
+        } else if (ex.getDetail() != null) {
+            log.warn("Suppressed SYSTEM_* detail from response: {}", ex.getDetail());
         }
 
         log.warn("Business exception: {} - {} - {}", ec.getCode(), message, ex.getMessage());
@@ -71,8 +81,16 @@ public class GlobalExceptionHandler {
         ErrorCode errorCode = ex.getErrorCode();
         log.error("System exception: code={}, message={}", errorCode.getCode(), ex.getMessage(), ex);
 
-        // System exceptions don't trigger rollback, might succeed on retry
+        // System exceptions don't trigger rollback, might succeed on retry.
+        // SYSTEM_* details are technical and stay in the log; domain codes (e.g. AUTH_FAILED with
+        // "授权凭证换取失败，请重新发起连接") carry an actionable Chinese detail worth surfacing.
+        // Only detail that is actually Chinese is surfaced — provider/HTTP client text such as
+        // "Failed to exchange authorization code: ..." must not reach the user.
         String message = systemFallbackMessage(errorCode, "zh");
+        String detail = ex.getMessage();
+        if (!errorCode.name().startsWith("SYSTEM_") && isUserFacingChinese(detail)) {
+            message = detail;
+        }
         return Result.<Void>failure(errorCode.getHttpStatus(), message)
             .withErrorCode(errorCode.getCode());
     }
@@ -138,14 +156,16 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ValidationException.class)
     public ResponseEntity<Result<Void>> handleValidationException(
             ValidationException ex, HttpServletRequest request) {
-        List<FieldErrorVO> fieldErrors =
-            List.of(new FieldErrorVO("_global", ex.getMessage(), null));
+        // ValidationException messages are developer-facing (e.g. "HV000028: ..."). The client
+        // gets a fixed Chinese message; the raw text stays in the log.
+        String globalMessage = "提交内容校验未通过，请检查后重试";
+        List<FieldErrorVO> fieldErrors = List.of(new FieldErrorVO("_global", globalMessage, null));
         String message = getLocalizedMessage(ErrorCode.VALIDATION_INVALID_PARAMETER, request);
 
         log.warn("Validation exception: {}", ex.getMessage());
 
         return ResponseEntity.badRequest()
-            .body(Result.<Void>invalidInput(message, fieldErrors).withErrors(List.of(ex.getMessage())));
+            .body(Result.<Void>invalidInput(message, fieldErrors).withErrors(List.of(globalMessage)));
     }
 
     /**
@@ -169,6 +189,34 @@ public class GlobalExceptionHandler {
         log.error("Security violation: {}", ex.getMessage());
 
         Result<Void> body = Result.failure(400, "security.violation", "请求无效，请刷新页面后重试");
+        return ResponseEntity.badRequest().body(body);
+    }
+
+    /**
+     * Handle authorization denials raised by method security (e.g. {@code @PreAuthorize}).
+     *
+     * <p>MVC handles these before they can escape to the security filter chain, so
+     * {@code RestAccessDeniedHandler} never sees them. Without this handler a user lacking
+     * {@code ROLE_ADMIN} would be told the service is unavailable.
+     */
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<Result<Void>> handleAccessDenied(AccessDeniedException ex) {
+        log.warn("Access denied: {}", ex.getMessage());
+        Result<Void> body = Result.failure(403, ErrorCode.AUTH_FORBIDDEN.getCode(), "没有访问权限");
+        return ResponseEntity.status(403).body(body);
+    }
+
+    /**
+     * Handle client-side request errors (bad path/query parameter types, missing parameters).
+     *
+     * <p>These are HTTP 400-class failures; treating them as an outage misleads the user.
+     */
+    @ExceptionHandler({MethodArgumentTypeMismatchException.class,
+        MissingServletRequestParameterException.class})
+    public ResponseEntity<Result<Void>> handleBadRequest(Exception ex) {
+        log.warn("Bad request: {} - {}", ex.getClass().getSimpleName(), ex.getMessage());
+        Result<Void> body = Result.failure(400, ErrorCode.VALIDATION_INVALID_PARAMETER.getCode(),
+            "请求参数有误，请检查后重试");
         return ResponseEntity.badRequest().body(body);
     }
 
@@ -217,6 +265,24 @@ public class GlobalExceptionHandler {
             return SYSTEM_FALLBACK_MESSAGE;
         }
         return ec.getMessage(lang);
+    }
+
+    /**
+     * Whether a detail string is intended for the end user.
+     *
+     * <p>The phase's Chinese copy is the only surfacing input; technical/English text (provider
+     * errors, low-level exception messages) is kept in the log. A detail qualifies when it is
+     * non-blank and contains at least one CJK ideograph.
+     *
+     * @param detail candidate detail
+     * @return true when the detail can be shown to the user
+     */
+    private boolean isUserFacingChinese(String detail) {
+        if (detail == null || detail.isBlank()) {
+            return false;
+        }
+        return detail.codePoints().anyMatch(cp -> Character.UnicodeScript.of(cp)
+            == Character.UnicodeScript.HAN);
     }
 
     /**

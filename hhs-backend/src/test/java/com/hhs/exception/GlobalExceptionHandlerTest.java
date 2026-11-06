@@ -102,7 +102,7 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
-    @DisplayName("business failures carrying a SYSTEM_* code use the fixed friendly message")
+    @DisplayName("business failures carrying a SYSTEM_* code suppress the technical detail")
     void handleBusinessException_replacesSystemCodes() {
         for (ErrorCode code : systemCodes()) {
             BusinessException ex = new BusinessException(code, "所有指标保存失败");
@@ -111,10 +111,10 @@ class GlobalExceptionHandlerTest {
 
             assertThat(body.getCode()).isEqualTo(500);
             assertThat(body.getErrorCode()).isEqualTo(code.getCode());
+            // WR-02: a SYSTEM_* detail is technical and must not reach the client.
+            assertThat(body.getMessage()).isEqualTo(SYSTEM_FALLBACK);
             assertThat(body.getMessage())
-                .isEqualTo(SYSTEM_FALLBACK + ": 所有指标保存失败");
-            assertThat(body.getMessage())
-                .doesNotContain("系统错误", "数据库错误", "内部错误");
+                .doesNotContain("系统错误", "数据库错误", "内部错误", "所有指标保存失败");
         }
     }
 
@@ -153,10 +153,20 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
-    @DisplayName("non-SYSTEM codes keep their enum message")
+    @DisplayName("non-SYSTEM codes surface the actionable Chinese detail")
     void handleSystemException_keepsEnumMessageForNonSystemCodes() {
-        Result<Void> body =
-            handler.handleSystemException(new SystemException(ErrorCode.AUTH_FAILED, "outer failure"));
+        // WR-21: providers pass actionable Chinese detail (e.g. 授权凭证换取失败，请重新发起连接).
+        Result<Void> body = handler.handleSystemException(
+            new SystemException(ErrorCode.AUTH_FAILED, "授权凭证换取失败，请重新发起连接"));
+
+        assertThat(body.getMessage()).isEqualTo("授权凭证换取失败，请重新发起连接");
+        assertThat(body.getErrorCode()).isEqualTo("auth.failed");
+    }
+
+    @Test
+    @DisplayName("non-SYSTEM codes fall back to the enum message when no detail is supplied")
+    void handleSystemException_fallsBackToEnumMessageWithoutDetail() {
+        Result<Void> body = handler.handleSystemException(new SystemException(ErrorCode.AUTH_FAILED));
 
         assertThat(body.getMessage()).isEqualTo("认证失败");
         assertThat(body.getErrorCode()).isEqualTo("auth.failed");
