@@ -36,7 +36,13 @@ const accessibleRetryName = computed(() => props.retryLabel || `重试：${props
 
 // 组件自身不维护 loading 状态，也不自动重试第二次 —— 重试节奏由父组件的 retrying 控制。
 async function handleRetry(): Promise<void> {
-  await props.retry?.()
+  // Vue 不会 await 事件处理器返回的 Promise，未捕获的拒绝会变成未处理拒绝且无反馈。
+  // 错误呈现由父组件拥有（与 showError 的 `Promise.resolve(...).catch()` 一致）。
+  try {
+    await props.retry?.()
+  } catch {
+    /* parent owns the error surface */
+  }
 }
 </script>
 

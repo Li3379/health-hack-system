@@ -106,9 +106,19 @@ export function useFormServerErrors(options: UseFormServerErrorsOptions = {}): {
   function focusField(field: string): void {
     if (!field) return
 
-    // 只转义双引号与反斜杠：字段名是后端 DTO 常量，这里防的是拼接成非法选择器。
-    const escaped = field.replace(/["\\]/g, '\\$&')
-    const container = document.querySelector<HTMLElement>(`[data-field="${escaped}"]`)
+    // 字段名本是后端 DTO 常量，但控制字符（换行、制表符）仍能让 querySelector 抛
+    // DOMException。优先用 CSS.escape（完整转义），不可用时退回双引号/反斜杠转义；
+    // 任何非法选择器都必须静默返回，不得让异常冒泡出点击处理器（T-11-15）。
+    const escaped =
+      typeof CSS !== 'undefined' && typeof CSS.escape === 'function'
+        ? CSS.escape(field)
+        : field.replace(/["\\]/g, '\\$&')
+    let container: HTMLElement | null = null
+    try {
+      container = document.querySelector<HTMLElement>(`[data-field="${escaped}"]`)
+    } catch {
+      return
+    }
     if (!container) return
 
     const control = container.querySelector<HTMLElement>(

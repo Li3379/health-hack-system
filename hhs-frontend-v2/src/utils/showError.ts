@@ -28,6 +28,14 @@ export interface ShowErrorOptions {
   action?: { label?: string; onClick: () => void }
   /** 只分类不呈现（D-09/D-10）：零 toast，仍返回 ApiError。 */
   silent?: boolean
+  /**
+   * 呈现校验失败（默认 false）。
+   *
+   * <p>D-01 的默认契约是 validation → 0 toast，由调用点内联 + 汇总呈现。但个别表单
+   * 尚未接入 useFormServerErrors、没有任何内联绑定（例如阈值对话框），若仍静默，
+   * 后端 400 会完全不可见。这些调用点显式 opt-in，让校验失败也走同一个 toast 出口。
+   */
+  presentValidation?: boolean
 }
 
 /** 字典条文长度上限；后端下发的文案不受此限制，绝不截断。 */
@@ -117,8 +125,9 @@ export function showError(
   const err = normalizeApiError(raw)
 
   // 取消 / 校验 / silent：分类完成但绝不呈现。
+  // 校验失败默认零 toast（D-01）；未接入内联表单的调用点可显式 presentValidation 放行。
   if (err.kind === 'cancel') return err
-  if (err.kind === 'validation') return err
+  if (err.kind === 'validation' && opts?.presentValidation !== true) return err
   if (opts?.silent === true) return err
 
   // 后端文案优先；只有走到字典回退时才考虑 30 字上限（字典本身已受约束，实际不会截断）。
