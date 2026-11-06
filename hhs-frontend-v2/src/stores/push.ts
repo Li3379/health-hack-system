@@ -9,6 +9,8 @@ import {
   getPushStats
 } from '@/api/push'
 import { ElMessage } from 'element-plus'
+import { showError } from '@/utils/showError'
+import { ApiError } from '@/utils/appError'
 
 export const usePushStore = defineStore('push', () => {
   const configs = ref<PushConfig[]>([])
@@ -42,21 +44,18 @@ export const usePushStore = defineStore('push', () => {
     data: { configValue?: string; enabled?: boolean }
   ) {
     try {
+      // 拦截器已保证 code !== 200 会 reject，成功路径只可能是 200。
       const res = await updatePushConfig(channelType, data)
-      if (res.code === 200) {
-        // Update local state
-        const index = configs.value.findIndex(c => c.channelType === channelType)
-        if (index !== -1) {
-          configs.value[index] = res.data
-        }
-        ElMessage.success('配置已保存')
-        return true
-      } else {
-        ElMessage.error(res.message || '保存失败')
-        return false
+      // Update local state
+      const index = configs.value.findIndex(c => c.channelType === channelType)
+      if (index !== -1) {
+        configs.value[index] = res.data
       }
+      ElMessage.success('配置已保存')
+      return true
     } catch (error) {
-      ElMessage.error('保存失败')
+      // store 层唯一出口：调用方只读布尔返回值，不重复弹提示（T-11-21）。
+      showError(error, 'profile.saveFailed')
       return false
     }
   }
@@ -68,15 +67,16 @@ export const usePushStore = defineStore('push', () => {
     testing.value = channelType
     try {
       const res = await testPushChannel(channelType)
-      if (res.code === 200 && res.data.success) {
+      if (res.data.success) {
         ElMessage.success(`${res.data.channel} 推送测试成功`)
         return true
-      } else {
-        ElMessage.error(res.message || '推送测试失败')
-        return false
       }
+      // 通道自身汇报失败（HTTP 200 + data.success=false）是可到达的分支，
+      // 仍走 store 的唯一错误出口，保证提示来源单一；后端中文优先（D-05）。
+      showError(new ApiError(res.message || '', 'business'), 'server.unavailable')
+      return false
     } catch (error) {
-      ElMessage.error('推送测试失败')
+      showError(error, 'server.unavailable')
       return false
     } finally {
       testing.value = null
