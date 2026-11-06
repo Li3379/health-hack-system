@@ -98,17 +98,24 @@ export function normalizeApiError(raw: unknown): ApiError {
   //    误判成 business，闩锁不触发、不 logout，一次会话过期就变成静默失败。
   if (status === 401) return new ApiError('登录已过期，请重新登录', 'auth', 401)
 
-  // 4. 断网：仅对原生 Axios 错误形态生效（ApiError 已在第 0 步直通返回）
+  // 4. 断网：仅对原生 Axios 错误形态生效（ApiError 已在第 0 步直通返回）。
+  //    应用代码里抛出的普通 Error / TypeError 没有 response，却也不代表网络故障 ——
+  //    把它们判成 network 会显示带「重试」按钮的网络提示，掩盖真正的程序缺陷。
+  //    这类错误统一落到 'unknown'（无重试按钮；showError 按 business 处理，一条字符串提示）。
   if (!err?.response) {
-    return new ApiError(
-      '网络连接异常，请检查网络后重试',
-      'network',
-      undefined,
-      undefined,
-      {},
-      undefined,
-      true
-    )
+    const isAxios = (raw as { isAxiosError?: boolean } | null | undefined)?.isAxiosError === true
+    if (isAxios) {
+      return new ApiError(
+        '网络连接异常，请检查网络后重试',
+        'network',
+        undefined,
+        undefined,
+        {},
+        undefined,
+        true
+      )
+    }
+    return new ApiError('操作未完成，请稍后重试', 'unknown', undefined, undefined, {}, undefined, false)
   }
 
   // 5. 真实 HTTP 5xx（网关 / 容器层返回，响应体不带信封 code）
@@ -126,8 +133,9 @@ export function normalizeApiError(raw: unknown): ApiError {
 
   // 6. 信封业务失败（HTTP 200 + 信封 code !== 200）。
   //    判定只读信封里的 data.code，不读 status、也不看 code 的数值大小：
-  //    BusinessException 经 parseCodeToInt 回退后信封 code 恒为 500，若按数值
-  //    判 5xx，每条业务失败都会被改判成 server 并丢掉后端中文 message（违反 D-05）。
+  //    本后端把 BusinessException 的字符串错误码交给 parseCodeToInt 后恒回退为 500
+  //    （WR-06 记录了这一契约缺陷，修复会改变既有 code 数值语义，超出本阶段范围）。
+  //    若按数值判 5xx，每条业务失败都会被改判成 server 并丢掉后端中文 message（违反 D-05）。
   //    typeof === 'number' 守卫生效：字符串码（如旧 AUTHENTICATION_REQUIRED）
   //    不进入本分支，落到兜底。
   if (typeof data?.code === 'number' && data.code !== 200) {
