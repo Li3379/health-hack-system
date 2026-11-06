@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import { authApi } from '@/api/auth'
 import { userApi } from '@/api/user'
 import { storage } from '@/utils/storage'
+import { resetAuthLatch } from '@/utils/authSession'
 import type { LoginRequest, RegisterRequest, UserVO } from '@/types/api'
 import { ElMessage } from 'element-plus'
 import router from '@/router'
@@ -20,6 +21,10 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = res.data.user
     storage.setToken(res.data.token)
     storage.setUser(res.data.user)
+    // 复位 401 闩锁：上一次会话过期时闩锁被置位，若不复位，
+    // 下一次会话的首个 401 会变成零提示、零跳转。
+    // 登录失败不走这里（await 会先抛出），因此失败登录不会复位，符合预期。
+    resetAuthLatch()
     ElMessage.success('登录成功')
     router.push('/dashboard')
   }
