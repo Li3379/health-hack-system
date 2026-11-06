@@ -173,7 +173,8 @@ describe('showError — VNode sticky toast', () => {
   })
 
   it('renders a sticky text-only VNode for network failures without a retry callback', () => {
-    showError({}, 'network.offline')
+    // 只有原生 Axios 错误形态（isAxiosError=true）才是 network（WR-17）。
+    showError({ isAxiosError: true, message: 'Network Error' }, 'network.offline')
 
     const opts = firstCallOptions()
     expect(opts.grouping).toBe(false)
