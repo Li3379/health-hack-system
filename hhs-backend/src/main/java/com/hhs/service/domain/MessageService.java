@@ -24,14 +24,15 @@ public class MessageService {
     private final ConversationService conversationService;
 
     /**
-     * Get recent N rounds of chat history for AI context.
+     * Get recent N rounds of chat history for AI context, scoped to the caller.
      *
      * @param sessionId the session ID
-     * @param rounds number of conversation rounds to retrieve
+     * @param userId    the caller's user ID ({@code null} for visitors); always applied
+     * @param rounds    number of conversation rounds to retrieve
      * @return list of ChatMessage in chronological order (oldest first)
      */
-    public List<ChatMessage> getRecentHistory(String sessionId, int rounds) {
-        List<AIConversation> records = conversationService.getBySessionId(sessionId);
+    public List<ChatMessage> getRecentHistory(String sessionId, Long userId, int rounds) {
+        List<AIConversation> records = conversationService.getBySessionId(sessionId, userId);
 
         // Each round includes Q&A, so we need rounds * 2 records
         int limit = Math.min(records.size(), rounds * 2);
@@ -47,18 +48,20 @@ public class MessageService {
             }
         }
 
-        log.debug("Built message history: sessionId={}, messages={}", sessionId, messages.size());
+        log.debug("Built message history: sessionId={}, userId={}, messages={}",
+            sessionId, userId, messages.size());
         return messages;
     }
 
     /**
-     * Build chat context from conversation records.
+     * Build chat context from conversation records, scoped to the caller.
      *
      * @param sessionId the session ID
+     * @param userId    the caller's user ID ({@code null} for visitors); always applied
      * @return ChatContextVO with conversation turns in reverse chronological order
      */
-    public ChatContextVO buildChatContext(String sessionId) {
-        List<AIConversation> records = conversationService.getBySessionId(sessionId);
+    public ChatContextVO buildChatContext(String sessionId, Long userId) {
+        List<AIConversation> records = conversationService.getBySessionId(sessionId, userId);
         List<ChatContextVO.ContextTurn> turns = new ArrayList<>();
 
         // Build turns in reverse order (newest first)
@@ -71,7 +74,8 @@ public class MessageService {
             ));
         }
 
-        log.debug("Built chat context: sessionId={}, turns={}", sessionId, turns.size());
+        log.debug("Built chat context: sessionId={}, userId={}, turns={}",
+            sessionId, userId, turns.size());
         return new ChatContextVO(sessionId, turns);
     }
 

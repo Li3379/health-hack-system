@@ -1,5 +1,6 @@
 package com.hhs.service;
 
+import com.hhs.common.constant.ErrorCode;
 import com.hhs.component.AIRateLimiter;
 import com.hhs.component.ContentFilter;
 import com.hhs.dto.ai.AIChatResponse;
@@ -27,6 +28,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
+import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -99,7 +101,7 @@ class AIChatServiceTest {
         when(rateLimiter.checkLimit(testUserId)).thenReturn(true);
         when(contentFilter.cleanInput(testQuestion)).thenReturn(testQuestion);
         when(contentFilter.containsSensitive(testQuestion)).thenReturn(false);
-        when(messageService.getRecentHistory(anyString(), anyInt())).thenReturn(Collections.emptyList());
+        when(messageService.getRecentHistory(anyString(), any(), anyInt())).thenReturn(Collections.emptyList());
         when(chatModel.generate(any(java.util.List.class))).thenReturn(mockResponse);
         when(contentFilter.filterResponse(anyString())).thenReturn("Based on your question, here are some health tips...");
         when(messageService.createConversationEntity(any(), anyString(), anyString(), anyString(), anyInt()))
@@ -173,7 +175,7 @@ class AIChatServiceTest {
         when(rateLimiter.checkLimit(testUserId)).thenReturn(true);
         when(contentFilter.cleanInput(testQuestion)).thenReturn(testQuestion);
         when(contentFilter.containsSensitive(testQuestion)).thenReturn(false);
-        when(messageService.getRecentHistory(anyString(), anyInt())).thenReturn(Collections.emptyList());
+        when(messageService.getRecentHistory(anyString(), any(), anyInt())).thenReturn(Collections.emptyList());
         when(chatModel.generate(any(java.util.List.class))).thenThrow(new RuntimeException("AI service unavailable"));
 
         // When & Then: Should throw exception
@@ -275,16 +277,52 @@ class AIChatServiceTest {
     @Test
     @DisplayName("测试1.11：获取会话上下文 - 成功场景")
     void testGetContext_Success() {
-        // Given: Mock context
-        ChatContextVO mockContext = mock(ChatContextVO.class);
-        when(messageService.buildChatContext(testSessionId)).thenReturn(mockContext);
+        // Given: Mock context owned by the caller
+        ChatContextVO mockContext = new ChatContextVO(testSessionId,
+            List.of(new ChatContextVO.ContextTurn("q", "a", LocalDateTime.now())));
+        when(messageService.buildChatContext(testSessionId, testUserId)).thenReturn(mockContext);
 
         // When: Get context
         ChatContextVO result = aiChatService.getContext(testSessionId, testUserId);
 
-        // Then: Verify result
+        // Then: Verify result and that the read was scoped to the caller
         assertNotNull(result);
-        verify(messageService, times(1)).buildChatContext(testSessionId);
+        verify(messageService, times(1)).buildChatContext(testSessionId, testUserId);
+    }
+
+    @Test
+    @DisplayName("测试1.14：跨用户读取会话上下文 - 拒绝（IDOR 回归）")
+    void testGetContext_RejectsOtherUsersSession() {
+        // Given: The session exists, but the caller-scoped read returns no turns.
+        when(messageService.buildChatContext(testSessionId, 2L))
+            .thenReturn(new ChatContextVO(testSessionId, List.of()));
+        when(conversationService.sessionExists(testSessionId)).thenReturn(true);
+
+        // When & Then: user 2 must not read user 1's session.
+        BusinessException exception = assertThrows(BusinessException.class,
+            () -> aiChatService.getContext(testSessionId, 2L));
+
+        assertEquals(ErrorCode.RESOURCE_NOT_FOUND, exception.getErrorCode());
+        verify(messageService, times(1)).buildChatContext(testSessionId, 2L);
+    }
+
+    @Test
+    @DisplayName("测试1.15：跨用户发送消息 - 拒绝（会话损坏回归）")
+    void testChat_RejectsOtherUsersSession() {
+        // Given: rate limit passes, content safe, but the session exists with no rows for user 2.
+        when(rateLimiter.checkLimit(2L)).thenReturn(true);
+        when(contentFilter.cleanInput(testQuestion)).thenReturn(testQuestion);
+        when(contentFilter.containsSensitive(testQuestion)).thenReturn(false);
+        when(messageService.getRecentHistory(testSessionId, 2L, 5)).thenReturn(Collections.emptyList());
+        when(conversationService.sessionExists(testSessionId)).thenReturn(true);
+
+        // When & Then: user 2 must not seed their request with, or write onto, user 1's session.
+        BusinessException exception = assertThrows(BusinessException.class,
+            () -> aiChatService.chat(2L, testSessionId, testQuestion));
+
+        assertEquals(ErrorCode.RESOURCE_NOT_FOUND, exception.getErrorCode());
+        verify(chatModel, never()).generate(any(java.util.List.class));
+        verify(conversationService, never()).saveConversation(any());
     }
 
     @Test
@@ -298,7 +336,7 @@ class AIChatServiceTest {
         // Mock conversation history
         dev.langchain4j.data.message.ChatMessage historyMessage = mock(dev.langchain4j.data.message.ChatMessage.class);
         List<dev.langchain4j.data.message.ChatMessage> history = Arrays.asList(historyMessage);
-        when(messageService.getRecentHistory(anyString(), anyInt())).thenReturn(history);
+        when(messageService.getRecentHistory(anyString(), any(), anyInt())).thenReturn(history);
 
         when(chatModel.generate(any(java.util.List.class))).thenReturn(mockResponse);
         when(contentFilter.filterResponse(anyString())).thenReturn("Based on your question, here are some health tips...");
@@ -313,7 +351,7 @@ class AIChatServiceTest {
         // Then: Verify response includes context from history
         assertNotNull(result);
         assertEquals(18, result.remainingCount());
-        verify(messageService, times(1)).getRecentHistory(anyString(), anyInt());
+        verify(messageService, times(1)).getRecentHistory(anyString(), any(), anyInt());
     }
 
     @Test
@@ -323,7 +361,7 @@ class AIChatServiceTest {
         when(rateLimiter.checkLimit(testUserId)).thenReturn(true);
         when(contentFilter.cleanInput(testQuestion)).thenReturn(testQuestion);
         when(contentFilter.containsSensitive(testQuestion)).thenReturn(false);
-        when(messageService.getRecentHistory(anyString(), anyInt())).thenReturn(Collections.emptyList());
+        when(messageService.getRecentHistory(anyString(), any(), anyInt())).thenReturn(Collections.emptyList());
         when(chatModel.generate(any(java.util.List.class))).thenReturn(mockResponse);
         when(contentFilter.filterResponse(anyString())).thenReturn("[Filtered] Health advice here");
         when(messageService.createConversationEntity(any(), anyString(), anyString(), anyString(), anyInt()))
