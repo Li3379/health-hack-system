@@ -1,6 +1,5 @@
 package com.hhs.integration;
 
-import com.hhs.common.constant.ErrorCode;
 import com.hhs.config.TestSecurityConfig;
 import com.hhs.util.TestDataUtil;
 import com.hhs.dto.RealtimeMetricRequest;
@@ -78,7 +77,8 @@ public class RealtimeIntegrationTest extends AbstractIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(jsonRequest))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value(ErrorCode.VALIDATION_INVALID_PARAMETER.getCode()))
-                .andExpect(jsonPath("$.errors").exists());
+                .andExpect(jsonPath("$.code").value(400))
+                .andExpect(jsonPath("$.errors").exists())
+                .andExpect(jsonPath("$.fieldErrors").isArray());
     }
 }
