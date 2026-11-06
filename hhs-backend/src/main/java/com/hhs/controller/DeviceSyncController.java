@@ -267,8 +267,9 @@ public class DeviceSyncController {
         if (!rateLimiter.checkLimit(userId)) {
             int remaining = rateLimiter.getRemainingCount(userId);
             log.warn("设备同步请求超过限制: userId={}, remaining={}", userId, remaining);
-            throw new BusinessException(ErrorCode.DEVICE_RATE_LIMIT_EXCEEDED,
-                    "同步请求过于频繁，请 " + rateLimiter.getWindowSeconds() + " 秒后再试");
+            // Single source of truth: the ErrorCode message already tells the user to retry.
+            // Repeating the condition in `detail` produced "…请稍后再试: …请 60 秒后再试".
+            throw new BusinessException(ErrorCode.DEVICE_RATE_LIMIT_EXCEEDED);
         }
 
         // Check if platform is registered
@@ -296,8 +297,9 @@ public class DeviceSyncController {
         if (!rateLimiter.checkLimit(userId)) {
             int remaining = rateLimiter.getRemainingCount(userId);
             log.warn("设备同步请求超过限制: userId={}, remaining={}", userId, remaining);
-            throw new BusinessException(ErrorCode.DEVICE_RATE_LIMIT_EXCEEDED,
-                    "同步请求过于频繁，请 " + rateLimiter.getWindowSeconds() + " 秒后再试");
+            // Single source of truth: the ErrorCode message already tells the user to retry.
+            // Repeating the condition in `detail` produced "…请稍后再试: …请 60 秒后再试".
+            throw new BusinessException(ErrorCode.DEVICE_RATE_LIMIT_EXCEEDED);
         }
 
         // Sync all platforms via orchestration service
