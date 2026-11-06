@@ -175,8 +175,14 @@ public class AIChatServiceImpl implements AIChatService {
                 "问题包含敏感内容，请重新表述");
         }
 
-        // 3. 获取对话历史（最近5轮，支持更深入的对话）
-        List<ChatMessage> history = messageService.getRecentHistory(sessionId, 5);
+        // 3. 获取对话历史（最近5轮，支持更深入的对话）。
+        //    历史始终按调用者 userId 过滤；若会话已存在但不属于当前调用者，
+        //    说明调用方在冒用他人的 sessionId —— 直接拒绝，避免把本轮对话写进他人会话。
+        List<ChatMessage> history = messageService.getRecentHistory(sessionId, userId, 5);
+        if (history.isEmpty() && conversationService.sessionExists(sessionId)) {
+            log.warn("拒绝跨用户会话访问: userId={}, sessionId={}", userId, sessionId);
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "会话不存在");
+        }
 
         // 4. 构建完整消息列表（包含用户健康上下文）
         String personalizedPrompt = buildPersonalizedPrompt(userId);
@@ -286,7 +292,14 @@ public class AIChatServiceImpl implements AIChatService {
     @Override
     @Transactional(timeout = 30, readOnly = true)
     public ChatContextVO getContext(String sessionId, Long userId) {
-        return messageService.buildChatContext(sessionId);
+        // 读取始终按调用者 userId 过滤；会话存在但他主所有时拒绝，绝不泄露他人问答。
+        ChatContextVO context = messageService.buildChatContext(sessionId, userId);
+        if ((context == null || context.turns() == null || context.turns().isEmpty())
+                && conversationService.sessionExists(sessionId)) {
+            log.warn("拒绝跨用户会话上下文访问: userId={}, sessionId={}", userId, sessionId);
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "会话不存在");
+        }
+        return context;
     }
 
     /**

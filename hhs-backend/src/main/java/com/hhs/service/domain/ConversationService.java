@@ -73,16 +73,45 @@ public class ConversationService {
     }
 
     /**
-     * Get conversations by session ID (for context building).
+     * Get conversations by session ID, scoped to the caller.
+     *
+     * <p>The {@code user_id} predicate is always applied so a session can never be read across
+     * users. A visitor ({@code userId == null}) is scoped to rows whose {@code user_id} is null,
+     * never to another user's rows.
+     *
+     * @param sessionId the session ID
+     * @param userId    the caller's user ID ({@code null} for visitors)
+     * @return conversations owned by the caller, oldest first
      */
     @Transactional(timeout = 30, readOnly = true)
-    public List<AIConversation> getBySessionId(String sessionId) {
-        log.debug("Fetching conversations by session: sessionId={}", sessionId);
-        return conversationMapper.selectList(
+    public List<AIConversation> getBySessionId(String sessionId, Long userId) {
+        log.debug("Fetching conversations by session: sessionId={}, userId={}", sessionId, userId);
+        LambdaQueryWrapper<AIConversation> query = new LambdaQueryWrapper<>();
+        query.eq(AIConversation::getSessionId, sessionId);
+        if (userId != null) {
+            query.eq(AIConversation::getUserId, userId);
+        } else {
+            query.isNull(AIConversation::getUserId);
+        }
+        query.orderByAsc(AIConversation::getCreateTime);
+        return conversationMapper.selectList(query);
+    }
+
+    /**
+     * Check whether any conversation row exists for the session, regardless of owner.
+     *
+     * <p>Used to distinguish "session does not exist yet" from "session belongs to another
+     * user" after an ownership-scoped read came back empty.
+     *
+     * @param sessionId the session ID
+     * @return true when at least one row exists for the session
+     */
+    @Transactional(timeout = 30, readOnly = true)
+    public boolean sessionExists(String sessionId) {
+        return conversationMapper.selectCount(
                 new LambdaQueryWrapper<AIConversation>()
                         .eq(AIConversation::getSessionId, sessionId)
-                        .orderByAsc(AIConversation::getCreateTime)
-        );
+        ) > 0;
     }
 
     /**
