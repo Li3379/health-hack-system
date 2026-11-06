@@ -87,6 +87,7 @@ import { useAuthStore } from '@/stores/auth'
 import { User, Lock, Monitor, ChatDotRound, TrendCharts } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
+import { showError } from '@/utils/showError'
 import { gsap, magneticHover, buttonPress, hoverShine, rippleClick, DUR, EASE } from '@/composables/useGsap'
 
 const authStore = useAuthStore()
@@ -209,8 +210,9 @@ const handleLogin = async () => {
   loading.value = true
   try {
     await authStore.login(form)
-  } catch {
-    // authStore.login 和 Axios 拦截器已处理错误提示
+  } catch (error) {
+    // 拦截器只翻译不展示：登录失败（密码错误 / 限流 / 账号禁用）必须由本调用点呈现。
+    showError(error, 'auth.loginFailed')
   } finally {
     loading.value = false
   }

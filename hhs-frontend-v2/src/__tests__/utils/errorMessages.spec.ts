@@ -19,6 +19,8 @@ const DICTIONARY_KEYS = [
   'ai.parseFailed',
   'ocr.uploadFailed',
   'auth.expired',
+  'auth.loginFailed',
+  'auth.registerFailed',
   'network.offline',
   'server.unavailable',
   'dialog.unsavedConfirm'
@@ -27,8 +29,8 @@ const DICTIONARY_KEYS = [
 const BANNED_COPY = /操作失败|请求失败|系统错误|出错了|Error|Failed|Invalid|Please|Sorry|Exception/
 
 describe('ERROR_MESSAGES', () => {
-  it('contains all 15 scenario keys with non-empty copy', () => {
-    expect(Object.keys(ERROR_MESSAGES)).toHaveLength(15)
+  it('contains all scenario keys with non-empty copy', () => {
+    expect(Object.keys(ERROR_MESSAGES)).toHaveLength(DICTIONARY_KEYS.length)
     for (const key of DICTIONARY_KEYS) {
       expect(ERROR_MESSAGES[key], `missing key: ${key}`).toBeTruthy()
       expect(ERROR_MESSAGES[key].trim().length).toBeGreaterThan(0)

@@ -22,6 +22,8 @@ export const ERROR_MESSAGES: Record<string, string> = {
   'ai.parseFailed': 'AI 解析未完成，请调整描述后重试',
   'ocr.uploadFailed': '报告上传失败，请检查文件格式与大小',
   'auth.expired': '登录已过期，请重新登录',
+  'auth.loginFailed': '登录未成功，请检查用户名与密码',
+  'auth.registerFailed': '注册未成功，请检查用户名与邮箱',
   'network.offline': '网络连接异常，请检查网络后重试',
   'server.unavailable': '服务暂时不可用，请稍后重试',
   'dialog.unsavedConfirm': '内容尚未保存，确定离开？'

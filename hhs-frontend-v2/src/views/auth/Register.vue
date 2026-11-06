@@ -135,6 +135,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { User, Lock, Message, Key, TrendCharts, ChatDotRound } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
+import { showError } from '@/utils/showError'
 import { gsap, magneticHover, buttonPress, hoverShine, rippleClick, DUR, EASE } from '@/composables/useGsap'
 
 const authStore = useAuthStore()
@@ -276,6 +277,10 @@ const handleRegister = async () => {
           password: form.password,
           email: form.email || undefined
         })
+      } catch (error) {
+        // 拦截器只翻译不展示：注册失败（用户名重复等）必须由本调用点呈现，
+        // 否则会变成未处理的 Promise 拒绝且用户无任何反馈。
+        showError(error, 'auth.registerFailed')
       } finally {
         loading.value = false
       }
