@@ -105,6 +105,24 @@ class PushConfigControllerTest {
     }
 
     @Test
+    @DisplayName("Should mask the stored config value on read (WR-10)")
+    @WithMockUser(username = "admin")
+    void testGetAllConfigsMasksValue() throws Exception {
+        testConfig.setChannelType("FEISHU");
+        testConfig.setConfigValue("https://open.feishu.cn/open-apis/bot/v2/hook/secret-token-1234");
+        when(userPushConfigMapper.selectList(any())).thenReturn(List.of(testConfig));
+
+        mockMvc.perform(get("/api/push/config"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[?(@.channelType=='FEISHU')].configValue").value(
+                        org.hamcrest.Matchers.contains(
+                                org.hamcrest.Matchers.containsString("****"))))
+                .andExpect(jsonPath("$.data[?(@.channelType=='FEISHU')].configValue").value(
+                        org.hamcrest.Matchers.not(
+                                org.hamcrest.Matchers.contains("secret-token-1234"))));
+    }
+
+    @Test
     @DisplayName("Should get specific channel config")
     @WithMockUser(username = "admin")
     void testGetSpecificConfig() throws Exception {

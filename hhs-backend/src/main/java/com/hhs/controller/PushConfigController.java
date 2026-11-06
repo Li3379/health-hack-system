@@ -135,11 +135,14 @@ public class PushConfigController {
             config.setCreatedAt(LocalDateTime.now());
         }
 
-        // Update fields
+        // Update fields.
+        // A masked value is the placeholder the client received on read — it is not a real
+        // secret, so storing it would destroy the configured webhook. Treat it as "no change".
         if (request.getConfigKey() != null) {
             config.setConfigKey(request.getConfigKey());
         }
-        if (request.getConfigValue() != null) {
+        if (request.getConfigValue() != null
+                && !request.getConfigValue().contains(PushConfigVO.MASK_MARKER)) {
             config.setConfigValue(request.getConfigValue());
         }
         if (request.getEnabled() != null) {

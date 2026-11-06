@@ -21,8 +21,10 @@ public class ExportRequest {
     private String contentType;
 
     /** Optional start date filter (yyyy-MM-dd). */
+    @Pattern(regexp = "^\\d{4}-\\d{2}-\\d{2}$", message = "日期格式应为 yyyy-MM-dd")
     private String startDate;
 
     /** Optional end date filter (yyyy-MM-dd). */
+    @Pattern(regexp = "^\\d{4}-\\d{2}-\\d{2}$", message = "日期格式应为 yyyy-MM-dd")
     private String endDate;
 }

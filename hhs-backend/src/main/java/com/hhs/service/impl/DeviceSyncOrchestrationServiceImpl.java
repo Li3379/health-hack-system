@@ -51,7 +51,7 @@ public class DeviceSyncOrchestrationServiceImpl implements DeviceSyncOrchestrati
         for (DevicePlatformService service : platformServices) {
             String platform = service.getPlatform();
             if (platform != null && !platform.isBlank()) {
-                this.platformServices.put(platform.toLowerCase(), service);
+                this.platformServices.put(platform.toLowerCase(java.util.Locale.ROOT), service);
                 log.info("Registered device platform service: {}", platform);
             }
         }
@@ -96,7 +96,7 @@ public class DeviceSyncOrchestrationServiceImpl implements DeviceSyncOrchestrati
         Set<String> syncedPlatforms = new HashSet<>();
 
         for (DeviceConnectionVO connection : connections) {
-            String platform = connection.getPlatform().toLowerCase();
+            String platform = connection.getPlatform().toLowerCase(java.util.Locale.ROOT);
 
             // Skip if already synced (handles duplicate connections)
             if (syncedPlatforms.contains(platform)) {
@@ -192,7 +192,7 @@ public class DeviceSyncOrchestrationServiceImpl implements DeviceSyncOrchestrati
         if (platform == null || platform.isBlank()) {
             return false;
         }
-        return platformServices.containsKey(platform.toLowerCase());
+        return platformServices.containsKey(platform.toLowerCase(java.util.Locale.ROOT));
     }
 
     @Override
@@ -211,6 +211,6 @@ public class DeviceSyncOrchestrationServiceImpl implements DeviceSyncOrchestrati
         if (platform == null || platform.isBlank()) {
             return null;
         }
-        return platformServices.get(platform.toLowerCase());
+        return platformServices.get(platform.toLowerCase(java.util.Locale.ROOT));
     }
 }
