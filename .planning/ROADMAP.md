@@ -204,7 +204,30 @@ Plans:
   4. 后台轮询、元数据预加载等静默请求失败时界面无 toast；令牌过期时并发请求最多产生一条提示与一次跳转
   5. 同一失败在短时间内的重复提示自动合并为一条，不再叠加多条相同 toast
 
-**Plans**: TBD
+**Plans:** 7 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 11-01-PLAN.md — 后端错误信封契约：FieldErrorVO、Result 增 errorCode/fieldErrors、GlobalExceptionHandler 三校验分支统一投影（含 getGlobalErrors）
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 11-02-PLAN.md — 后端英文文案治理：8 个 DTO 注解消息、阈值服务异常、推送控制器字面量中文化
+- [ ] 11-03-PLAN.md — 前端错误模型：ApiError/normalizeApiError/isCancel、request.ts 只翻译不展示、silent 模块增强、401 闩锁
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 11-04-PLAN.md — 扁平文案字典 FIELD_LABELS 与唯一 toast 出口 showError，含重复合并与重试动作；theme.css 错误 token 与 EP 覆盖
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 11-05-PLAN.md — 字段错误投影：useFormServerErrors composable 与 FormErrorSummary 顶部汇总组件
+- [ ] 11-06-PLAN.md — 页面级错误状态块 ErrorState.vue 与两处后台请求 silent 化（元数据预加载、未读数）
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 11-07-PLAN.md — 两个迁移样本接线：prevention/Profile.vue 双呈现、stores/push.ts 单一出口与返回值契约
 
 **UI hint**: yes
 
