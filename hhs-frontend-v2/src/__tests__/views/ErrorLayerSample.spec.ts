@@ -144,7 +144,7 @@ describe('ErrorLayerSample — push store 单一出口与返回值契约', () =>
     expect(ElMessageMock.error).toHaveBeenCalledTimes(0)
   })
 
-  it('2. 保存成功：返回 true、一条成功提示、零错误 toast', async () => {
+  it('2. 保存成功：返回 true、store 不弹成功提示（调用方拥有）、零错误 toast', async () => {
     updatePushConfigMock.mockResolvedValueOnce({
       code: 200,
       message: 'success',
@@ -166,7 +166,8 @@ describe('ErrorLayerSample — push store 单一出口与返回值契约', () =>
     const ok = await store.saveConfig('EMAIL', { configValue: 'a@b.com' })
 
     expect(ok).toBe(true)
-    expect(ElMessageMock.success).toHaveBeenCalledTimes(1)
+    // WR-07：成功反馈归调用方，避免开关/保存各弹一条堆叠提示。
+    expect(ElMessageMock.success).toHaveBeenCalledTimes(0)
     expect(errorToastCount()).toBe(0)
   })
 
@@ -182,7 +183,9 @@ describe('ErrorLayerSample — push store 单一出口与返回值契约', () =>
 
   it('4. 连续两次网络失败：VNode 闩锁把重复提示压到 1 条（<= 1）', async () => {
     // 网络错误走 showError 自身的 2000ms VNode 闩锁（EP grouping 不支持 VNode）。
+    // 必须是原生 Axios 错误形态（isAxiosError=true 且无 response），见 WR-17。
     updatePushConfigMock.mockRejectedValue({
+      isAxiosError: true,
       request: {},
       message: 'Network Error'
     })

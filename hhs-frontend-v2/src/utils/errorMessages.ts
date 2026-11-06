@@ -16,6 +16,7 @@ export const ERROR_MESSAGES: Record<string, string> = {
   'threshold.duplicate': '该指标已有阈值，是否改为编辑？',
   'profile.saveFailed': '无法保存健康档案，请检查填写内容后重试',
   'profile.loadFailed': '无法加载健康档案，请稍后重试',
+  'push.saveFailed': '无法保存推送配置，请稍后重试',
   'metric.saveFailed': '无法保存指标记录，请检查指标类型与数值',
   'metric.deleteFailed': '无法删除该条指标记录，请稍后重试',
   'report.generateFailed': '报告生成未完成，请稍后重试',

@@ -13,6 +13,7 @@ const DICTIONARY_KEYS = [
   'threshold.duplicate',
   'profile.saveFailed',
   'profile.loadFailed',
+  'push.saveFailed',
   'metric.saveFailed',
   'metric.deleteFailed',
   'report.generateFailed',

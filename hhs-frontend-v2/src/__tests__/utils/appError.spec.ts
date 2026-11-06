@@ -191,12 +191,25 @@ describe('appError.normalizeApiError', () => {
   })
 
   describe('断网', () => {
-    it('classifies a response-less error as network and retryable', () => {
-      const err = normalizeApiError(new Error('Network Error'))
+    it('classifies a response-less Axios error as network and retryable', () => {
+      // WR-17：只有原生 Axios 错误形态才是断网。真实形态带 isAxiosError=true。
+      const err = normalizeApiError(
+        Object.assign(new Error('Network Error'), { isAxiosError: true })
+      )
 
       expect(err.kind).toBe('network')
       expect(err.retryable).toBe(true)
       expect(err.message).toBe('网络连接异常，请检查网络后重试')
+    })
+
+    it('does not misclassify a plain application Error as a retryable network failure', () => {
+      // 应用代码里的 TypeError/RangeError 无 response，但不是网络故障；
+      // 判成 network 会显示「重试」按钮，掩盖真正的程序缺陷。
+      const err = normalizeApiError(new Error('Cannot read properties of undefined'))
+
+      expect(err.kind).toBe('unknown')
+      expect(err.kind).not.toBe('network')
+      expect(err.retryable).toBe(false)
     })
   })
 
@@ -253,7 +266,8 @@ describe('appError.normalizeApiError', () => {
           })
         ).message,
         normalizeApiError(axiosError(401, {})).message,
-        normalizeApiError(new Error('Network Error')).message,
+        normalizeApiError(Object.assign(new Error('Network Error'), { isAxiosError: true })).message,
+        normalizeApiError(new Error('Cannot read properties of undefined')).message,
         normalizeApiError(axiosError(503, {})).message,
         normalizeApiError({}).message
       ]

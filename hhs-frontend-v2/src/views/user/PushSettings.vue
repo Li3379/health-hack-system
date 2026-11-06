@@ -14,7 +14,18 @@
             </div>
           </template>
 
-          <div class="channel-list">
+          <!-- 加载失败：渲染错误态，不再让空列表冒充「加载中」（WR-09） -->
+          <ErrorState
+            v-if="pushStore.loadError"
+            variant="server"
+            title="无法加载推送配置"
+            :description="pushStore.loadError"
+            :retry="() => pushStore.loadConfigs()"
+            retry-label="重新加载推送配置"
+            :retrying="pushStore.loading"
+          />
+
+          <div v-else class="channel-list">
             <div v-for="config in pushStore.configs" :key="config.channelType" class="channel-item">
               <div class="channel-header">
                 <div class="channel-info">
@@ -147,14 +158,24 @@ import { usePushStore } from '@/stores/push'
 import { useRealtimeStore } from '@/stores/realtime'
 import { formatDateTime } from '@/utils/format'
 import type { PushConfig } from '@/api/push'
+import ErrorState from '@/components/common/ErrorState.vue'
 import { ElMessage } from 'element-plus'
 import { Bell, Message, ChatDotRound, Connection, Refresh } from '@element-plus/icons-vue'
 
 const pushStore = usePushStore()
 const realtimeStore = useRealtimeStore()
 
-onMounted(() => {
-  pushStore.loadConfigs()
+/** 上次成功保存的配置值，用于跳过「失焦但值未变」的冗余 PUT（IN-12）。 */
+const lastSavedValues = new Map<string, string>()
+
+onMounted(async () => {
+  await pushStore.loadConfigs()
+  // 加载成功后记住服务端值，避免用户仅聚焦/失焦就触发一次冗余保存。
+  for (const config of pushStore.configs) {
+    if (config.configValue && !config.configValue.includes('****')) {
+      lastSavedValues.set(config.channelType, config.configValue)
+    }
+  }
   pushStore.loadStats()
   pushStore.loadHistory()
   staggerReveal('.el-card', { stagger: 0.08, y: 16 })
@@ -231,10 +252,14 @@ async function handleSaveConfig(config: PushConfig) {
     return
   }
   if (config.configValue) {
+    // 失焦即触发；值未变化时跳过，避免每次点击输入框都产生一次 PUT（IN-12）。
+    if (config.configValue === lastSavedValues.get(config.channelType)) return
     const ok = await pushStore.saveConfig(config.channelType, {
       configValue: config.configValue
     })
     if (!ok) return
+    lastSavedValues.set(config.channelType, config.configValue)
+    // 此处是唯一保存成功提示；store 不再重复弹（WR-07）。
     ElMessage.success('配置已保存')
   }
 }
