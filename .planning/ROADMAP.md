@@ -204,7 +204,7 @@ Plans:
   4. 后台轮询、元数据预加载等静默请求失败时界面无 toast；令牌过期时并发请求最多产生一条提示与一次跳转
   5. 同一失败在短时间内的重复提示自动合并为一条，不再叠加多条相同 toast
 
-**Plans:** 7 plans
+**Plans:** 8 plans
 
 Plans:
 **Wave 1**
@@ -228,6 +228,10 @@ Plans:
 **Wave 5** *(blocked on Wave 4 completion)*
 
 - [ ] 11-07-PLAN.md — 三个迁移样本接线：prevention/Profile.vue 双呈现、stores/push.ts 单一出口与返回值契约、health/Thresholds.vue 的 RESOURCE_ALREADY_EXISTS 恢复动作
+
+**Wave 6** *(gaps, blocked on Wave 5 completion)*
+
+- [ ] 11-08-PLAN.md — 缺口闭环（SC2/ERR-02）：设备同步与 OAuth 回调链路 28 处英文用户文案中文化，停止回显异常原文/provider 描述/原始 platform，新增不依赖 Docker 的回调页回归测试
 
 **UI hint**: yes
 
