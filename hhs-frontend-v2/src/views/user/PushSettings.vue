@@ -207,20 +207,20 @@ async function handleToggle(config: PushConfig) {
     return
   }
 
-  try {
-    await pushStore.saveConfig(config.channelType, {
-      enabled: config.enabled,
-      configValue: config.configValue?.includes('****') ? undefined : config.configValue
-    })
-    if (config.enabled) {
-      ElMessage.success(`${config.channelLabel}已启用`)
-    } else {
-      ElMessage.info(`${config.channelLabel}已禁用`)
-    }
-  } catch (error: unknown) {
+  // store 不 throw，只返回布尔值；失败时的提示已由 store 的 showError 承担（T-11-21）。
+  const ok = await pushStore.saveConfig(config.channelType, {
+    enabled: config.enabled,
+    configValue: config.configValue?.includes('****') ? undefined : config.configValue
+  })
+  if (!ok) {
+    // 回滚开关，不追加第二条提示。
     config.enabled = !config.enabled
-    const errorMessage = error instanceof Error ? error.message : '保存失败'
-    ElMessage.error(errorMessage)
+    return
+  }
+  if (config.enabled) {
+    ElMessage.success(`${config.channelLabel}已启用`)
+  } else {
+    ElMessage.info(`${config.channelLabel}已禁用`)
   }
 }
 
@@ -231,15 +231,11 @@ async function handleSaveConfig(config: PushConfig) {
     return
   }
   if (config.configValue) {
-    try {
-      await pushStore.saveConfig(config.channelType, {
-        configValue: config.configValue
-      })
-      ElMessage.success('配置已保存')
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : '保存失败'
-      ElMessage.error(errorMessage)
-    }
+    const ok = await pushStore.saveConfig(config.channelType, {
+      configValue: config.configValue
+    })
+    if (!ok) return
+    ElMessage.success('配置已保存')
   }
 }
 
