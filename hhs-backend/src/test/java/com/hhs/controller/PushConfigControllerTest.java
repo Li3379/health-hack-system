@@ -213,6 +213,89 @@ class PushConfigControllerTest {
     }
 
     @Test
+    @DisplayName("Should reject a webhook URL pointing at a private network (SSRF)")
+    @WithMockUser(username = "admin")
+    void testRejectPrivateWebhookUrl() throws Exception {
+        PushConfigRequest request = new PushConfigRequest();
+        request.setConfigValue("https://169.254.169.254/latest/meta-data/");
+        request.setEnabled(true);
+
+        when(userPushConfigMapper.findByUserIdAndChannelType(1L, "FEISHU")).thenReturn(null);
+
+        mockMvc.perform(put("/api/push/config/FEISHU")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(jsonPath("$.code").value(500))
+                .andExpect(jsonPath("$.errorCode").value("validation.invalid_parameter"));
+
+        verify(userPushConfigMapper, never()).insert(any());
+    }
+
+    @Test
+    @DisplayName("Should reject a non-https webhook URL (SSRF)")
+    @WithMockUser(username = "admin")
+    void testRejectPlainHttpWebhookUrl() throws Exception {
+        PushConfigRequest request = new PushConfigRequest();
+        request.setConfigValue("http://example.com/hook");
+        request.setEnabled(true);
+
+        when(userPushConfigMapper.findByUserIdAndChannelType(1L, "WECOM")).thenReturn(null);
+
+        mockMvc.perform(put("/api/push/config/WECOM")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(jsonPath("$.code").value(500))
+                .andExpect(jsonPath("$.errorCode").value("validation.invalid_parameter"));
+
+        verify(userPushConfigMapper, never()).insert(any());
+    }
+
+    @Test
+    @DisplayName("Should accept a public https webhook URL")
+    @WithMockUser(username = "admin")
+    void testAcceptPublicWebhookUrl() throws Exception {
+        PushConfigRequest request = new PushConfigRequest();
+        request.setConfigValue("https://8.8.8.8/open-apis/bot/v2/hook/abc");
+        request.setEnabled(true);
+
+        when(userPushConfigMapper.findByUserIdAndChannelType(1L, "FEISHU")).thenReturn(null);
+        when(userPushConfigMapper.insert(any())).thenAnswer(inv -> {
+            UserPushConfig config = inv.getArgument(0);
+            config.setId(2L);
+            return 1;
+        });
+
+        mockMvc.perform(put("/api/push/config/FEISHU")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(200));
+
+        verify(userPushConfigMapper).insert(any());
+    }
+
+    @Test
+    @DisplayName("Should reject an over-long config value before it reaches the mapper")
+    @WithMockUser(username = "admin")
+    void testRejectOverlongConfigValue() throws Exception {
+        PushConfigRequest request = new PushConfigRequest();
+        request.setConfigValue("a".repeat(501));
+        request.setEnabled(true);
+
+        mockMvc.perform(put("/api/push/config/FEISHU")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(400));
+
+        verify(userPushConfigMapper, never()).insert(any());
+    }
+
+    @Test
     @DisplayName("Should delete config")
     @WithMockUser(username = "admin")
     void testDeleteConfig() throws Exception {
