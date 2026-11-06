@@ -139,7 +139,8 @@ const fetchThresholds = async () => {
     const res = await thresholdApi.getThresholds({ page: 1, size: 100 })
     thresholds.value = res.data.records || []
   } catch (error) {
-    ElMessage.error('获取阈值失败')
+    // 单一错误出口（D-05/D-10）：后端中文优先，场景字典兜底。
+    showError(error, 'threshold.loadFailed')
   } finally {
     loading.value = false
   }
@@ -201,11 +202,12 @@ const handleSubmit = async () => {
       // 只在列表里确实找到该指标时才给恢复动作，否则不渲染死按钮（T-11-24）。
       // 失败保持对话框打开（ERR-05 前提）。
       const existing = thresholds.value.find(t => t.metricKey === form.metricKey)
-      showError(
-        error,
-        'threshold.duplicate',
-        existing ? { action: { onClick: () => openExistingThreshold(existing) } } : undefined
-      )
+      // 本页未接入 useFormServerErrors、没有内联绑定：显式放行校验失败，
+      // 否则后端 400（如 metricKey 超长）会完全静默（WR-13）。仍走单一 toast 出口。
+      showError(error, 'threshold.duplicate', {
+        presentValidation: true,
+        ...(existing ? { action: { onClick: () => openExistingThreshold(existing) } } : {})
+      })
     }
   })
 }
@@ -219,8 +221,9 @@ const handleDelete = async (row: UserThreshold) => {
     ElMessage.success('删除成功')
     fetchThresholds()
   } catch (error) {
+    // ElMessageBox 取消返回字符串 'cancel'；其余失败统一走错误出口。
     if (error !== 'cancel') {
-      ElMessage.error('删除失败')
+      showError(error, 'threshold.deleteFailed')
     }
   }
 }
