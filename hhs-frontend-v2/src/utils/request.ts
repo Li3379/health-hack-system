@@ -63,7 +63,8 @@ service.interceptors.response.use(
     // 401 链路唯一的用户可见提示来自 logout 自身，此处不得再加第二条。
     if (apiError.kind === 'auth' && !isHandling401()) {
       markHandling401()
-      useAuthStore().logout()
+      // 会话过期而非用户主动退出：提示「登录已过期，请重新登录」（WR-14）。
+      useAuthStore().logout({ reason: 'expired' })
     }
 
     // 无条件 reject（D-10）。这里刻意不声明 `const silent = ...` ——
