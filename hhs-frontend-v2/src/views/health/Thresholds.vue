@@ -106,8 +106,11 @@ import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'elem
 import { Plus } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { thresholdApi } from '@/api/threshold'
+import { showError } from '@/utils/showError'
 import { formatDateTime, getMetricLabel } from '@/utils/format'
 import type { UserThreshold, UserThresholdRequest } from '@/types/api'
+
+// Phase 14: 其余 toast 调用点待迁移
 
 const authStore = useAuthStore()
 const loading = ref(false)
@@ -170,6 +173,12 @@ const handleEdit = (row: UserThreshold) => {
   dialogVisible.value = true
 }
 
+/** 恢复动作：关闭新增/失败对话框并打开已存在阈值的编辑态。 */
+const openExistingThreshold = (row: UserThreshold) => {
+  dialogVisible.value = false
+  handleEdit(row)
+}
+
 const handleSubmit = async () => {
   if (!formRef.value) return
 
@@ -187,7 +196,16 @@ const handleSubmit = async () => {
       dialogVisible.value = false
       fetchThresholds()
     } catch (error) {
-      ElMessage.error('操作失败')
+      // 错误码判定完全由 showError 内部完成，本页不写任何错误码分支；
+      // 标签由 ERROR_CODE_ACTIONS 自动补成「打开编辑」——此处只传 onClick，不传 label。
+      // 只在列表里确实找到该指标时才给恢复动作，否则不渲染死按钮（T-11-24）。
+      // 失败保持对话框打开（ERR-05 前提）。
+      const existing = thresholds.value.find(t => t.metricKey === form.metricKey)
+      showError(
+        error,
+        'threshold.duplicate',
+        existing ? { action: { onClick: () => openExistingThreshold(existing) } } : undefined
+      )
     }
   })
 }
@@ -212,17 +230,32 @@ onMounted(() => {
 
   nextTick(() => {
     const tl = gsap.timeline({ defaults: { ease: EASE.out } })
-    tl.fromTo('.el-card',
+    tl.fromTo(
+      '.el-card',
       { y: 20, autoAlpha: 0 },
-      { y: 0, autoAlpha: 1, duration: DUR.mid, clearProps: 'transform,autoAlpha,visibility,opacity' }
+      {
+        y: 0,
+        autoAlpha: 1,
+        duration: DUR.mid,
+        clearProps: 'transform,autoAlpha,visibility,opacity'
+      }
     )
-    tl.fromTo('.header-actions',
+    tl.fromTo(
+      '.header-actions',
       { y: -10, autoAlpha: 0 },
-      { y: 0, autoAlpha: 1, duration: DUR.mid, clearProps: 'transform,autoAlpha,visibility,opacity' }
-    , '-=0.2')
+      {
+        y: 0,
+        autoAlpha: 1,
+        duration: DUR.mid,
+        clearProps: 'transform,autoAlpha,visibility,opacity'
+      },
+      '-=0.2'
+    )
   })
 })
-onUnmounted(() => { cleanupScrollTriggers() })
+onUnmounted(() => {
+  cleanupScrollTriggers()
+})
 </script>
 
 <style scoped>
