@@ -1,10 +1,11 @@
 ---
 phase: "11"
 slug: "11-error-foundation"
-status: draft
+status: approved
 shadcn_initialized: false
 preset: none
 created: "2026-11-06"
+reviewed_at: "2026-11-06"
 ---
 
 # Phase 11 — 全站统一友好错误反馈地基 — UI Design Contract
@@ -27,7 +28,7 @@ created: "2026-11-06"
 
 **Binding constraints inherited from the project:**
 
-- `ElSegmented` is **prohibited** in this phase. The declared dependency floor in `package.json` is `^2.5.6`; a lockfile re-resolve would install a version without it. Use `el-radio-group` / `el-button-group` instead.
+- `ElSegmented` is **not used** in this phase — a deliberate convention choice, not an availability constraint. The resolved `element-plus@2.14.0` *does* export it (`node -p "typeof require('element-plus').ElSegmented"` → `object`), and the declared `^2.5.6` floor resolves upward to 2.14.0. Use `el-radio-group` / `el-button-group` instead so the error layer reuses the project's existing choice-control styling surface rather than introducing a component with a different visual treatment.
 - The project applies heavy `!important` overrides to Element Plus in `src/assets/styles/theme.css`. All new components must consume `--el-*` / project tokens, never hardcode colors.
 - Both themes must render correctly. `theme.css` puts dark values on `:root`, but `stores/theme.ts:38` defaults the stored theme to `'light'`, so **light is the effective first-paint default**. Every color contract below lists both values, and light-mode contrast is audited at the same standard as dark.
 - All user-facing copy is Simplified Chinese only (D-13/D-14). No i18n framework.
@@ -65,15 +66,22 @@ Declared values (multiples of 4 only):
 
 | Token | Value | Usage |
 |-------|-------|-------|
-| xs | 4px | `el-form-item__error` padding-top (Element Plus default `4px` — keep); icon-to-adjacent-text micro gap |
-| sm | 8px | Summary list row gap; gap between icon glyph and title in ErrorState |
-| md | 16px | Summary-to-first-field gap (`margin-bottom: 16px`); ErrorState title-to-description gap; alert and toast horizontal padding |
+| xs | 4px | `el-form-item__error` padding-top — **normalized to 4px** (EP ships `2px` on default/small sizes and `4px` on large; see the override in Component Contract 3); retry button vertical padding (`.error-toast__retry { padding: 4px 8px }`, Component Contract 4) |
+| sm | 8px | Summary list row gap; ErrorState icon-circle-to-title gap and title-to-description gap (8px each); retry button horizontal padding (`.error-toast__retry { padding: 4px 8px }`) |
+| sm-3 | 12px | Summary alert vertical padding (`padding: 12px 16px 8px`); **toast vertical padding (`12px 16px`, delivered by the `.el-message` override in Component Contract 4)**; summary list bottom padding (`0 16px 12px 40px`) |
+| md | 16px | Summary-to-first-field gap (`margin-bottom: 16px`); alert horizontal padding (`12px 16px`); toast horizontal padding (`12px 16px`); toast text-to-retry gap (`.error-toast { gap: 16px }`) |
 | lg | 24px | ErrorState description-to-actions gap; ErrorState horizontal padding |
-| xl | 32px | ErrorState vertical rhythm above/below the copy block |
-| 2xl | 48px | ErrorState block vertical padding (`padding: 48px 24px`) |
-| 3xl | 64px | ErrorState icon circle diameter (64px) |
+| xl | 32px | Toast viewport gutter — Element Plus's shipped `max-width: calc(100% - 32px)` (16px per side), accepted unchanged and recorded in Component Contract 4 |
+| 2xl | 40px | Summary list indent (`padding-left: 40px`) — aligns entries under the alert title (16 alert padding + 16 icon + 8 icon margin) |
+| 3xl | 48px | ErrorState block vertical padding (`padding: 48px 24px`) |
+| 4xl | 64px | ErrorState icon circle diameter (64px) |
 
-Exceptions: `12px` is permitted as the **vertical** padding of the summary alert and the toast (`padding: 12px 16px`). 12 is a multiple of 4 and matches the existing `--sp-3` token. No other exceptions.
+**No exceptions.** Every declared spacing value is a multiple of 4. Values below 4px appear only as border, outline, and focus-ring *widths* (`1px`/`2px`/`3px`), which are not spacing. Two shipped Element Plus defaults are off-grid and are normalized by overrides in the component contracts, so no runtime spacing value resolves off-scale:
+
+- `el-form-item__error` padding-top `2px` → `4px` (Component Contract 3).
+- `el-message` padding `11px 15px` (`--el-message-padding` in `theme-chalk/el-message.css`) → `12px 16px` (Component Contract 4). Without this override the toast renders an off-grid 11px/15px and the `sm-3` / `md` rows above would be undelivered claims.
+
+Every row above is bound to a concrete declaration; there are no decorative entries.
 
 ---
 
@@ -96,7 +104,7 @@ Application to this phase's surfaces:
 | Summary title (`请修正以下 N 项填写问题`) | 14px / 600 / 1.4 | Body size, semibold |
 | Summary count emphasis | same size/weight; no separate badge | Alert `show-icon` carries the visual weight |
 | Summary list entry | 14px / 400 / 1.5, underlined link affordance | Body role |
-| Toast text | 14px / 400 / 1.5 | Body role |
+| Toast text | 14px / 400 / **1.5 (override EP's `line-height:1` on `.el-message__content`)** | Body role |
 | Toast retry action | 14px / 600 / 1.5 | Body size, semibold |
 | ErrorState title | 18px / 600 / 1.3 | Heading role |
 | ErrorState description | 14px / 400 / 1.5, color `--text-3` | Body role |
@@ -165,7 +173,7 @@ Error background tints (never a solid red fill):
 
 - Alert: `var(--hhs-color-error-tint)` — `rgba(245,108,108,0.12)` dark, `#fef0f0` light. Do not use `--el-color-error-light-9` alone; in the dark theme EP resolves it to `#2a1d1d`, which mismatches the project's `--surface-1` (`#111217`) and reads as brown.
 - ErrorState icon circle: `var(--hhs-color-error-tint)` for `load`/`server`/`network`; `rgba(141,144,156,0.12)` for `forbidden`/`notFound`.
-- Toast: Element Plus `--el-message-bg-color` (its `type="error"` default) — acceptable because the toast renders on `body`, where the text sits on EP's own tint. Override `--el-message-text-color` to `var(--hhs-color-error-text)` so the copy passes AA in light mode (EP's default `#f56c6c` on `#fef0f0` is 2.61:1).
+- Toast: Element Plus `--el-message-bg-color` (its `type="error"` default) — acceptable because the toast renders on `body`, where the text sits on EP's own tint. Override `--el-message-text-color` to `var(--hhs-color-error-text)` on `.el-message--error` so the copy passes AA in light mode (EP's default `#f56c6c` on `#fef0f0` is 2.61:1). The rule is delivered in the global toast block in Component Contract 4; it is scoped to the error modifier so success/warning toasts keep EP's own colors.
 
 ---
 
@@ -173,7 +181,7 @@ Error background tints (never a solid red fill):
 
 | Element | Copy |
 |---------|------|
-| Primary CTA (this phase) | `重试` — the single retry affordance on both ErrorState and retry-bearing toast |
+| Primary CTA (this phase) | `重试` — visible label on both ErrorState and retry-bearing toast. **The accessible name must carry the object**, never the bare verb: ErrorState uses `retryLabel` (see prop table); the toast uses `重试：{message}`. |
 | Secondary CTA | `打开编辑` — recovery action auto-attached to `RESOURCE_ALREADY_EXISTS` (D-08) |
 | Empty state heading | Not restyled this phase — existing `el-empty` (e.g. `暂无健康目标`) remains. **ErrorState must never be used to represent an empty state.** |
 | Empty state body | Not applicable this phase; empty-state teaching copy belongs to Phase 12 (THR-07) / Phase 13 (PRF-07). |
@@ -267,6 +275,7 @@ These four contracts are the actual deliverable of Phase 11. They are prescripti
 | `title` | `string` | required | ≤16 chars. |
 | `description` | `string` | `''` | ≤40 chars. |
 | `retry` | `() => void \| Promise<void>` | `undefined` | When absent the retry button is **not rendered** (no disabled ghost button). |
+| `retryLabel` | `string` | `undefined` | Accessible name for the retry button, verb + object (e.g. `重新加载阈值列表`). When `retry` is provided but `retryLabel` is omitted, the accessible name composes as `重试：{title}`. The visible button text always stays `重试`. |
 | `retrying` | `boolean` | `false` | Binds `:loading` on the retry button; also sets `aria-busy="true"` on the block. |
 
 **Variant → icon + color:**
@@ -323,7 +332,17 @@ Load/server/network differ by **copy**, not icon — a single warning glyph avoi
 - **The list is a sibling of `ElAlert`, not its slot content.** Verified in `alert.vue...mjs`: the default slot is rendered inside `createElementBlock("p", { class: "el-alert__description" })`. Nesting `<ol>`/`<li>` in a `<p>` is invalid HTML and the browser will hoist it out of the alert, breaking the tint background. The title slot is a `<span>`, which is safe.
 - **The focusable wrapper is required.** `ElAlert` hardcodes `role="alert"` on its internal root `<div>` and does not spread `$attrs` (`createElementVNode("div", { class, role: "alert" }, ...)`, no `mergeProps`). Passing `tabindex` to `<el-alert>` does not reliably reach the DOM. The `<div ref="summaryRef" tabindex="-1">` wrapper is the focus target; the inner `ElAlert` keeps its native `role="alert"`.
 - **Wrapper role:** `role="group"` + `aria-labelledby` pointing at the title. Do not use a second `role="alert"` here — the inner alert already announces.
-- **Unique id:** `const titleId = useId()` (Vue 3.5+; the project has 3.5.34 resolved). Do not hardcode an id — a page and a dialog can render two summaries at once, and duplicate ids break `aria-labelledby`.
+- **Unique id:** use a module-level counter, **not** `useId()`. `useId` is Vue 3.5+, but `package.json` declares `vue: ^3.4.15` — relying on the resolved 3.5.34 is exactly the floor-vs-resolved risk this spec forbids elsewhere (see the `ElSegmented` note). Use:
+
+```ts
+// module scope — one counter per bundle
+let summaryIdSeq = 0
+
+// inside <script setup> — one id per component instance
+const titleId = `form-error-summary-title-${++summaryIdSeq}`
+```
+
+  Do not hardcode an id — a page and a dialog can render two summaries at once, and duplicate ids break `aria-labelledby`.
 - `type="error"`, `show-icon`, `:closable="false"`. Title is semibold 14px; the body list is regular 14px.
 - **List form, not single line.** One `<li>` per field error. Ordered **by form field order**, not backend order (GOV.UK: summary order must match the page). `useFormServerErrors` accepts an optional `fieldOrder: string[]`; fallback = backend key order.
 - **Visual merge:** the wrapper owns the tint, the `ElAlert` inside it is transparent, so the heading and the list read as one block. Styling:
@@ -342,12 +361,15 @@ Load/server/network differ by **copy**, not icon — a single warning glyph avoi
 }
 .form-error-summary__list {
   margin: 0;
-  padding: 0 16px 12px 2.25em;            /* aligns markers under the alert text */
+  padding: 0 16px 12px 40px;             /* 16 alert + 16 icon + 8 margin = title alignment */
   display: flex;
   flex-direction: column;
   gap: 8px;
   font-size: 14px;
   line-height: 1.5;
+  max-height: 144px;                     /* 4 rows (28px) + 3 gaps (8px) + 16px inset */
+  overflow-y: auto;                      /* beyond 4 entries, scroll inside the summary */
+  overscroll-behavior: contain;
 }
 .form-error-summary__link {
   display: inline;
@@ -370,6 +392,7 @@ Load/server/network differ by **copy**, not icon — a single warning glyph avoi
   The focus ring uses the error token, **not** the accent — see the measured accent constraint in `## Color`.
 - **Never** `dangerouslyUseHTMLString`. Messages are plain text.
 - If `fieldErrors` is empty but a non-validation error exists, this alert does **not** render (that error is a toast).
+- **The save/submit button is never disabled pending validation (AF-ERR-6).** It stays enabled; clicking it runs validation, and a failure produces the summary + inline errors. A disabled-by-default save button gives no explanation for why nothing happens. Only a request already in flight disables it (`:loading`). This is the one place the project's existing "metric dialog blocks hard-limit cases" behavior is intentionally not generalized — hard-limit business rules still surface as a toast, not as a pre-disabled button.
 
 **Lifecycle (the "both disappear as the user fixes them" rule):**
 
@@ -390,16 +413,17 @@ Load/server/network differ by **copy**, not icon — a single warning glyph avoi
 - Bind: `:error="fieldErrors[prop]"`. The form item **must** declare a `prop` matching the backend field name (this is why `Thresholds.vue`'s four bare items need `prop` added — Phase 12 dependency, called out here so it is not re-discovered).
 - Tooling: `useFormServerErrors()` returns `fieldErrors: Ref<Record<string,string>>`, `summaryItems`, `apply(err)`, `clearField(field)`, `reset()`, `focusField(field)`.
 - `apply()` only acts on `kind === 'validation'`. Blood-pressure dual requests use the caller-supplied `err.formField` to move the backend's generic `value` error onto `diastolicValue` (per ARCHITECTURE Flow 1, item 6).
-- **Typography override (required):** Element Plus default is `font-size:12px; line-height:1; position:absolute; top:100%; left:0`. Override line-height:
+- **Style override (required):** Element Plus default is `font-size:12px; line-height:1; padding-top:2px; position:absolute; top:100%; left:0`. Override line-height, padding, and color:
 
 ```css
 :deep(.el-form-item__error) {
   line-height: 1.4;
+  padding-top: 4px;                       /* normalize EP's 2px to the xs token */
   color: var(--hhs-color-error-text);
 }
 ```
 
-  Keep EP's `font-size: 12px` and `padding-top: 4px` (2px on `--default` size — leave as shipped), and keep the absolute positioning so the layout does not jump. Two mandatory overrides: `line-height: 1.4` (Chinese glyphs at EP's `line-height:1` clip descenders) and `color: var(--hhs-color-error-text)` (EP's `var(--el-color-danger)` = `#f56c6c` is only 2.90:1 on the light theme's white surface).
+  Verified in `theme-chalk/el-form-item.css`: the base and `--default` / `--small` rules ship `padding-top: 2px`; only `--large` ships `4px`. `Thresholds.vue`'s form items are default-sized, so without this override they would render 2px — the one non-4-multiple spacing value in the phase. The override makes every error surface resolve to 4px regardless of `size`. Keep EP's `font-size: 12px` and the absolute positioning so the layout does not jump. Three mandatory overrides: `line-height: 1.4` (Chinese glyphs at EP's `line-height:1` clip descenders), `padding-top: 4px` (spacing-scale conformance, above), and `color: var(--hhs-color-error-text)` (EP's `var(--el-color-danger)` = `#f56c6c` is only 2.90:1 on the light theme's white surface).
 - **No icon** next to inline errors (GOV.UK pattern: text alone; the alert carries the icon). No background, no border, no pill.
 - Multiple errors per field: EP renders one string per `el-form-item`. Join with `；` (Chinese semicolon) if two arrive for one field.
 - Inline errors never auto-scroll and never steal focus.
@@ -428,6 +452,9 @@ showError(raw: unknown, fallbackKey: string, opts?: {
 | Server / 5xx (`kind==='server'`) | `error` | `false` (VNode) | `0` | `true` | yes | 1 |
 | Auth 401 (latch) | `error` | `true` | `4000` | `true` | no | 1 (latch) |
 | Cancel / abort | — | — | — | — | — | **0** (fully ignored) |
+| Silent request (`{ silent: true }`, D-09/D-10) | — | — | — | — | — | **0** (classified, never presented) |
+
+**Silent-request rule (closes the `request.ts` → `showError()` loop):** `silent: true` is enforced in `request.ts`, not in `showError()`. A rejection from a silent request **still rejects** with a fully normalized `ApiError` (D-10 — never resolve a fake empty value), but the interceptor never calls `showError`, so no toast, summary, or inline error renders. The caller owns the degradation (local cache, `0` badge). `showError` itself is never passed `silent`; if it is, it presents nothing and returns the `ApiError` unchanged.
 
 **Rationale for the split:** Element Plus's own `grouping` docs state that `VNode` messages are **not** supported by grouping (`message.d.ts:62-63`). Retry-bearing and recovery-bearing toasts *must* use a VNode to host a real focusable `<button>`. Therefore they disable `grouping` and rely on the helper's latch instead; every other toast uses string messages with `grouping: true`.
 
@@ -441,11 +468,36 @@ showError(raw: unknown, fallbackKey: string, opts?: {
 **Retry button placement and form:**
 
 - Lives **inside the message body**, right-aligned after the text: `[文本 ...] [重试]`.
-- Structure: `h('div', { class: 'error-toast' }, [ h('span', { class: 'error-toast__text' }, message), h('button', { type: 'button', class: 'error-toast__retry', onClick: handleRetry }, '重试') ])`.
+- Structure: `h('div', { class: 'error-toast' }, [ h('span', { class: 'error-toast__text' }, message), h('button', { type: 'button', class: 'error-toast__retry', 'aria-label': \`重试：\${message}\`, onClick: handleRetry }, '重试') ])`. **The accessible name is `重试：{message}`, not the bare `重试`** — a screen reader must hear the object being retried, since the surrounding toast text is not guaranteed to be read with the button.
 - Style: `.error-toast { display:flex; align-items:center; gap:16px; }`; `.error-toast__text { flex:1; }`; `.error-toast__retry { flex:none; background:none; border:0; padding:4px 8px; color: var(--hhs-color-error-text); font: 600 14px/1.5 var(--font-ui); cursor:pointer; border-radius: var(--radius-sm); }`; hover → `text-decoration: underline; text-underline-offset: 2px;`; focus-visible → `outline: 2px solid var(--hhs-color-error-text); outline-offset: 2px;`. The retry text uses the error token, not the accent — see the measured accent constraint in `## Color`.
+- **Toast root styling (global — required).** Messages are teleported to `document.body`, so a scoped style block cannot reach them. Add these rules to `src/assets/styles/theme.css` (loaded after `element-plus/dist/index.css` in `main.ts`, so equal-specificity later-wins applies — no `!important` needed):
+
+```css
+/* Toast spacing — EP ships --el-message-padding: 11px 15px (theme-chalk/el-message.css).
+   11px/15px are off the 4px grid; normalize to the sm-3 / md tokens. */
+.el-message {
+  --el-message-padding: 12px 16px;
+}
+/* EP's type="error" text color is #f56c6c — 2.61:1 on the light-mode tint.
+   Route copy through the AA-passing error token (see ## Color).
+   Scoped to the error modifier: an unscoped --el-message-text-color on .el-message
+   would also override EP's --success/--warning values at equal specificity. */
+.el-message--error {
+  --el-message-text-color: var(--hhs-color-error-text);
+}
+/* EP ships .el-message__content{ line-height:1 } — Chinese glyphs clip descenders. */
+.el-message__content {
+  line-height: 1.5;
+}
+```
+
+  EP's shipped `max-width: calc(100% - 32px)` (16px gutter per side) is accepted unchanged — it is the `xl` token's delivered usage. Do not override it.
+
+  Verification targets for the executor: computed `padding` on `.el-message` resolves to `12px 16px` (not `11px 15px`), and computed `line-height` on `.el-message__content` resolves to `21px` at `font-size: 14px`. Both are testable in a UI-state test by mounting `showError('...')` and reading `getComputedStyle` on the appended node. Note that the VNode payload renders inside `.el-message__content` as well (`message.vue` renders the default slot inside the `<p>`), so the line-height rule covers string, VNode, retry, and recovery-action toasts alike.
+- **Do not** set toast padding per-call via `customClass`; one global rule keeps every `ElMessage.error` on the same grid and also covers pre-existing call sites that have not yet migrated to `showError()`.
 - Clicking retry: close **that** message (`handler.close()`), then invoke the caller's callback. **No automatic retry** (D-03) — the callback re-issues exactly one request.
 - `duration: 0` for retry/action toasts is deliberate: it keeps the control reachable by keyboard and satisfies AF-ERR-4 (never auto-dismiss instruction-bearing errors). "At most 1 visible" prevents sticky-toast pile-up.
-- The 4s business/401 toasts already pause their countdown on hover in Element Plus (`onMouseenter: clearTimer`), so no additional "don't auto-dismiss while reading" logic is needed.
+- **The 4s countdown pauses on hover only.** Verified in `element-plus@2.14.0` `message.vue_vue_type_script_setup_true_lang.mjs:113-115`: the root carries `onMouseenter: clearTimer` / `onMouseleave: startTimer` and **no `focusin` handler** — keyboard focus does not halt the timer. Because the informational toasts carry no control, a keyboard user has no way to pause them. Mitigation: business/401 toasts carry complete, non-instructional copy (≤30 chars) that is a single glance, and the same content is re-fetchable; instruction-bearing detail never goes in a 4s toast. Retry/action toasts use `duration: 0` and therefore need no pause at all. If a future phase needs instruction-bearing timed toasts, it must add its own focus-pause wrapper — do not claim EP provides one.
 
 **Positioning:** EP defaults — `offset: 16`, `placement: 'top'`, `appendTo: document.body`. Do not change per-call.
 
@@ -465,8 +517,8 @@ showError(raw: unknown, fallbackKey: string, opts?: {
 | ErrorState announcement | Wrapper: `role="status"` + `aria-live="polite"`. **Not** `role="alert"` — a persistent block is non-urgent and must not interrupt. `aria-busy="true"` while `retrying`. |
 | ErrorState focus | Do **not** steal focus on mount. The user is already on the page; a programmatic focus jump after a failed load is disorienting. |
 | Toast announcement | `ElMessage` renders `role="alert"` natively on its root (verified, `message.vue...mjs`: `role: "alert"`). No extra live region. |
-| Toast timer pause | Verified in EP source: `onMouseenter: clearTimer` / `onMouseleave: startTimer`. Hovering (or focusing within) a toast halts its countdown, so a user can read a 4s toast indefinitely while pointing at it. Retry/action toasts still use `duration: 0` so no pointer interaction is required to keep them alive. |
-| Retry keyboard | The retry `<button>` is Tab-reachable while the message is open; because retry toasts use `duration: 0`, the control cannot disappear from under the keyboard mid-tab. Closing is via the EP close button (`showClose: true`) or the helper's `handler.close()`. |
+| Toast timer pause | Verified in `element-plus@2.14.0` source (`message.vue_vue_type_script_setup_true_lang.mjs:113-115`): **hover only** — `onMouseenter: clearTimer` / `onMouseleave: startTimer`, with no `focusin` handler. A pointer user can hold a 4s toast open; a keyboard user cannot pause it. Therefore every timed toast carries self-contained copy that does not require extended reading, and every control-bearing or instruction-bearing toast uses `duration: 0`. |
+| Retry keyboard | The retry `<button>` is Tab-reachable while the message is open; because retry toasts use `duration: 0`, the control cannot disappear from under the keyboard mid-tab. Its accessible name is `重试：{message}` — never the bare verb. Closing is via the EP close button (`showClose: true`) or the helper's `handler.close()`. ErrorState's retry button likewise uses `retryLabel` (verb + object) as its accessible name while showing `重试`. |
 | Color contrast | Measured: inline error `#f56c6c` on `#111217` = 6.45:1 (dark); `#b91c1c` on `#ffffff` = 6.47:1 (light). Both pass AA at 12px. This is why `--hhs-color-error-text` exists — EP's shipped `#f56c6c` on white is 2.90:1 and would fail. Summary link and toast retry text use the same token on their tints (5.55:1 / 5.83:1). Accent (`#0d9488` light) is 3.74:1 on white and is therefore barred from bare-text use. Never rely on color alone: the icon + text carry the signal. |
 | Reduced motion | ErrorState and summary introduce no entrance animation. Do not wrap them in `useGsap`/GSAP transitions. |
 
@@ -482,7 +534,7 @@ Applicable state considerations resolved: 8 covered, 1 backstop, 0 unresolved.
 | loading | list-collection, interactive-control | ✅ covered | While a load is in flight, existing `v-loading` remains; `ErrorState.retrying` binds `:loading` on the retry button and `aria-busy="true"` on the block. Retry is disabled during flight. |
 | error | form, list-collection, interactive-control | ✅ covered | Four-channel contract: validation → inline + summary (0 toast); business → 1 toast; network/5xx → 1 sticky toast with retry; 401 → 1 latched toast + logout; cancel/abort → 0 UI. |
 | partial | form | ✅ covered | Partial success (some fields valid, some rejected) renders only the rejected fields inline plus a summary of exactly those N entries; valid fields stay unmarked and user input is preserved. |
-| overflow | static-content (alert body) | ✅ covered | Summary lists are not capped (a form cannot realistically exceed ~10 fields); the alert grows vertically inside the dialog body, which scrolls. Backend `fieldErrors` arrays are capped at 20 server-side. |
+| overflow | static-content (alert body) | ✅ covered | Summary list is **height-capped and scrollable** when entries exceed 4: `max-height: 144px; overflow-y: auto` on `.form-error-summary__list` (4 rows × 28px + 3 gaps × 8px + 16px inset). The heading and first row stay visible; long forms never push the submit button off-screen. The alert grows only up to the cap, then scrolls internally. Backend `fieldErrors` arrays are capped at 20 server-side. |
 | long-text | static-content (toast, ErrorState description) | 🧪 backstop | Toast text > 30 chars and ErrorState description > 40 chars must wrap (never ellipsis) — verified by a UI-state test rendering a 60-char Chinese backend message and asserting the toast/description does not truncate. |
 | zero-one-many | list-collection (summary entries) | ✅ covered | N=1 → `请修正以下 1 项填写问题`; N≥2 → `请修正以下 {N} 项填写问题`; N=0 → the alert does not render at all (not an empty alert). |
 | populated | list-collection | ✅ covered | Happy path is unchanged — no error chrome renders on a successful load or submit. |
@@ -500,12 +552,23 @@ Applicable state considerations resolved: 8 covered, 1 backstop, 0 unresolved.
 
 ## Checker Sign-Off
 
-- [ ] Dimension 1 Copywriting: PASS
-- [ ] Dimension 2 Visuals: PASS
-- [ ] Dimension 3 Color: PASS
-- [ ] Dimension 4 Typography: PASS
-- [ ] Dimension 5 Spacing: PASS
-- [ ] Dimension 6 Registry Safety: PASS
-- [ ] Dimension 7 Inventory Provenance: PASS
+- [x] Dimension 1 Copywriting: PASS
+- [x] Dimension 2 Visuals: PASS
+- [x] Dimension 3 Color: PASS
+- [x] Dimension 4 Typography: PASS
+- [x] Dimension 5 Spacing: PASS
+- [x] Dimension 6 Registry Safety: PASS
+- [x] Dimension 7 Inventory Provenance: PASS
 
-**Approval:** pending
+**Approval:** approved (2026-11-06)
+
+**Revision 2026-11-06:** resolved checker findings — D5 spacing (`2.25em` → `40px`; EP's `2px` error padding normalized to `4px`), D1 retry accessible names (`重试：{message}` / `retryLabel`), D2 toast timer claim corrected to hover-only, plus `useId` floor risk, inverted `ElSegmented` rationale, silent-request rule, and AF-ERR-6 save-enabled note.
+
+**Revision 2026-11-06 (second pass):** resolved remaining D5 and D4 findings by binding the declared values to actual declarations rather than by amending the claims.
+
+- **D5 blocking — toast padding.** The scale claimed a toast padding of `12px 16px` that no contract delivered; the rendered toast kept EP's `--el-message-padding: 11px 15px` (`theme-chalk/el-message.css`), i.e. an off-grid 15px, contradicting the section's own "no runtime spacing value resolves off-scale" assertion. Fix applied: a **global** `.el-message { --el-message-padding: 12px 16px }` rule in Component Contract 4, placed in `src/assets/styles/theme.css` (loaded after `element-plus/dist/index.css` in `main.ts`, so equal-specificity later-wins applies without `!important`). Mechanism chosen over the `customClass` suggestion because messages are teleported to `body` (scoped styles cannot reach them) and a single global rule also covers call sites not yet migrated to `showError()`; the spec now explicitly forbids the per-call route.
+- **D5 secondary — `xl 32px`.** The row claimed an ErrorState vertical-rhythm usage that does not exist in the contract (`padding: 48px 24px`, gaps 8/8/24). Fix applied: the row is rebound to a real rendered value — EP's shipped `max-width: calc(100% - 32px)` viewport gutter on the toast — rather than dropped, so the token keeps a delivered usage.
+- **D5 table completeness.** Every remaining row was rebound to the declaration that renders it, including two values that were previously implied but unlisted (`4px 8px` retry-button padding, `16px` toast gap).
+- **D4 recommendation — toast line height.** Adopted. EP ships `.el-message__content { line-height: 1 }` and the contract added no override; `.el-message__content { line-height: 1.5 }` is now part of the same global block, matching the rationale already applied to `el-form-item__error`. Verified that the VNode payload also renders inside `.el-message__content`, so string, retry, and action toasts are all covered.
+- **Adjacent gap closed.** The Color section required a `--el-message-text-color` override but never said where it was delivered. It now lives in the same global block, scoped to `.el-message--error` so success/warning toasts retain EP's own colors.
+- No changes to D-01..D-16, copy, color values, typography sizes, or component APIs. No user questions re-asked.
