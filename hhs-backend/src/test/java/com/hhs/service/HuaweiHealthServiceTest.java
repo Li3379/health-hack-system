@@ -499,7 +499,8 @@ class HuaweiHealthServiceTest {
             // Given: No device connection
             when(connectionService.getConnection(testUserId, "huawei")).thenReturn(null);
 
-            SyncResultVO failedResult = SyncResultVO.failed("huawei", "Device not connected", 0);
+            SyncResultVO failedResult = SyncResultVO.failed(
+                    "huawei", "尚未连接华为运动健康，请先在设备页绑定账号", 0);
             when(syncHistoryService.createFailedRecord(anyLong(), anyString(), anyString(), anyString(), anyInt()))
                     .thenReturn(failedResult);
 
@@ -508,7 +509,10 @@ class HuaweiHealthServiceTest {
 
             // Then: Should return failed result
             assertEquals("failed", result.getStatus());
-            assertTrue(result.getErrorMessage().contains("Device not connected"));
+            ArgumentCaptor<String> messageCaptor = ArgumentCaptor.forClass(String.class);
+            verify(syncHistoryService).createFailedRecord(
+                    eq(testUserId), eq("huawei"), eq("manual"), messageCaptor.capture(), anyInt());
+            assertEquals("尚未连接华为运动健康，请先在设备页绑定账号", messageCaptor.getValue());
         }
 
         @Test
@@ -518,7 +522,7 @@ class HuaweiHealthServiceTest {
             testConnection.setStatus("expired");
             when(connectionService.getConnection(testUserId, "huawei")).thenReturn(testConnection);
 
-            SyncResultVO failedResult = SyncResultVO.failed("huawei", "Device connection is not active", 0);
+            SyncResultVO failedResult = SyncResultVO.failed("huawei", "设备连接已失效，请重新绑定账号", 0);
             when(syncHistoryService.createFailedRecord(anyLong(), anyString(), anyString(), anyString(), anyInt()))
                     .thenReturn(failedResult);
 
@@ -527,6 +531,10 @@ class HuaweiHealthServiceTest {
 
             // Then: Should return failed result
             assertEquals("failed", result.getStatus());
+            ArgumentCaptor<String> messageCaptor = ArgumentCaptor.forClass(String.class);
+            verify(syncHistoryService).createFailedRecord(
+                    eq(testUserId), eq("huawei"), eq("manual"), messageCaptor.capture(), anyInt());
+            assertEquals("设备连接已失效，请重新绑定账号", messageCaptor.getValue());
         }
 
         @Test
@@ -677,6 +685,7 @@ class HuaweiHealthServiceTest {
 
             // Then: Should return success (mock data saves some metrics)
             assertEquals("success", result.getStatus());
+            assertTrue(result.getErrorMessage().contains("部分指标同步失败"));
         }
     }
 }

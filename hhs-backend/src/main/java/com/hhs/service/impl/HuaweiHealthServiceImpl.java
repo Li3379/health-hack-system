@@ -149,7 +149,7 @@ public class HuaweiHealthServiceImpl implements HuaweiHealthService, DevicePlatf
         Long userId = validateAndConsumeState(state);
         if (userId == null) {
             throw new BusinessException(ErrorCode.AUTH_FORBIDDEN,
-                "Invalid or expired OAuth state. Please try connecting again.");
+                "授权信息已失效，请重新发起连接");
         }
 
         // Exchange code for tokens
@@ -157,7 +157,7 @@ public class HuaweiHealthServiceImpl implements HuaweiHealthService, DevicePlatf
         if (tokenResponse.hasError()) {
             log.error("Token exchange failed: {} - {}", tokenResponse.error(), tokenResponse.getErrorMessage());
             throw new SystemException(ErrorCode.AUTH_FAILED,
-                "Token exchange failed: " + tokenResponse.getErrorMessage());
+                "授权凭证换取失败，请重新发起连接");
         }
 
         // Encrypt and store tokens
@@ -237,7 +237,7 @@ public class HuaweiHealthServiceImpl implements HuaweiHealthService, DevicePlatf
             log.warn("No Huawei device connection found for user {}", userId);
             return syncHistoryService.createFailedRecord(
                     userId, PLATFORM, "manual",
-                    "Device not connected. Please connect your Huawei Health account first.",
+                    "尚未连接华为运动健康，请先在设备页绑定账号",
                     (int) (System.currentTimeMillis() - startTime)
             );
         }
@@ -246,7 +246,7 @@ public class HuaweiHealthServiceImpl implements HuaweiHealthService, DevicePlatf
             log.warn("Huawei device connection is not active for user {}: {}", userId, connection.getStatus());
             return syncHistoryService.createFailedRecord(
                     userId, PLATFORM, "manual",
-                    "Device connection is not active. Status: " + connection.getStatus(),
+                    "设备连接已失效，请重新绑定账号",
                     (int) (System.currentTimeMillis() - startTime)
             );
         }
@@ -259,7 +259,7 @@ public class HuaweiHealthServiceImpl implements HuaweiHealthService, DevicePlatf
                 log.warn("Failed to get valid access token for user {}", userId);
                 return syncHistoryService.createFailedRecord(
                         userId, PLATFORM, "manual",
-                        "Failed to authenticate with Huawei Health. Please reconnect your account.",
+                        "华为运动健康授权已过期，请重新绑定账号",
                         (int) (System.currentTimeMillis() - startTime)
                 );
             }
@@ -267,7 +267,7 @@ public class HuaweiHealthServiceImpl implements HuaweiHealthService, DevicePlatf
             log.error("Error getting access token for user {}: {}", userId, e.getMessage());
             return syncHistoryService.createFailedRecord(
                     userId, PLATFORM, "manual",
-                    "Authentication error: " + e.getMessage(),
+                    "获取授权信息失败，请稍后重试",
                     (int) (System.currentTimeMillis() - startTime)
             );
         }
@@ -281,7 +281,7 @@ public class HuaweiHealthServiceImpl implements HuaweiHealthService, DevicePlatf
             log.error("Error fetching health data for user {}: {}", userId, e.getMessage());
             return syncHistoryService.createFailedRecord(
                     userId, PLATFORM, "manual",
-                    "Failed to fetch health data: " + e.getMessage(),
+                    "获取健康数据失败，请稍后重试",
                     (int) (System.currentTimeMillis() - startTime)
             );
         }
@@ -297,7 +297,7 @@ public class HuaweiHealthServiceImpl implements HuaweiHealthService, DevicePlatf
                 }
             } catch (Exception e) {
                 log.warn("Failed to save health metric for user {}: {}", userId, e.getMessage());
-                errors.add(dataPoint.metricKey() + ": " + e.getMessage());
+                errors.add("指标数据保存失败");
             }
         }
 
@@ -317,14 +317,14 @@ public class HuaweiHealthServiceImpl implements HuaweiHealthService, DevicePlatf
                     userId, PLATFORM, "manual", savedCount, durationMs
             );
             if (!errors.isEmpty()) {
-                result.setErrorMessage("Partial sync: " + String.join("; ", errors));
+                result.setErrorMessage("部分指标同步失败，请稍后重试");
             }
             return result;
         } else {
             log.warn("Huawei Health sync completed for user {} with no data saved", userId);
             return syncHistoryService.createFailedRecord(
                     userId, PLATFORM, "manual",
-                    errors.isEmpty() ? "No valid health data found" : String.join("; ", errors),
+                    errors.isEmpty() ? "未获取到有效的健康数据" : "部分指标同步失败，请稍后重试",
                     durationMs
             );
         }
