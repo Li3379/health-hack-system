@@ -35,11 +35,9 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
+import java.time.Duration;
 import java.time.Instant;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
-import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 
@@ -675,15 +673,16 @@ public class HuaweiHealthServiceImpl implements HuaweiHealthService, DevicePlatf
                     userId = Long.parseLong(userIdObj.toString());
                 }
 
-                // Validate timestamp (should be within expiration window)
-                Long timestamp = ((Number) stateData.get("timestamp")).longValue();
-                long ageMinutes = ChronoUnit.MINUTES.between(
-                        LocalDateTime.ofEpochSecond(timestamp / 1000, 0, java.time.ZoneOffset.UTC),
-                        LocalDateTime.now()
-                );
-                if (ageMinutes > STATE_EXPIRATION_MINUTES) {
-                    log.warn("State expired: {} minutes old", ageMinutes);
-                    return null;
+                // Validate timestamp using instants. Comparing a UTC wall-clock LocalDateTime
+                // (from ofEpochSecond) with LocalDateTime.now() used the JVM zone and reported
+                // every callback as ~480 minutes old on Asia/Shanghai.
+                Object timestampObj = stateData.get("timestamp");
+                if (timestampObj instanceof Number timestamp) {
+                    Instant issuedAt = Instant.ofEpochMilli(timestamp.longValue());
+                    if (Duration.between(issuedAt, Instant.now()).toMinutes() > STATE_EXPIRATION_MINUTES) {
+                        log.warn("State expired for user {}", userId);
+                        return null;
+                    }
                 }
             } catch (Exception e) {
                 // Fall back to direct value
