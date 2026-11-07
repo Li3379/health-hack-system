@@ -5,11 +5,11 @@ milestone_name: 引导式配置与友好错误反馈
 current_phase: 12 — 阈值配置向导化与告警正确性修复
 current_phase_name: 阈值配置向导化与告警正确性修复
 status: planning
-stopped_at: Phase 12 context gathered
-last_updated: "2026-11-07T10:31:45.451Z"
+stopped_at: Phase 12 UI-SPEC approved
+last_updated: "2026-11-07T16:51:41.615Z"
 last_activity: 2026-11-07
 last_activity_desc: Phase 11 complete, transitioned to Phase 12
-state_head: 07a79967af08eb5cda10fcd10f617401f9cca509
+state_head: df602cdf0f32db697a7b14974999ba6938e70282
 progress:
   total_phases: 11
   completed_phases: 8
@@ -100,9 +100,9 @@ Progress: [███████░░░] 73%
 
 ## Session
 
-**Last session:** 2026-11-07T10:31:45.304Z
-**Stopped at:** Phase 12 context gathered
-**Resume file:** .planning/phases/12-threshold-wizard/12-CONTEXT.md
+**Last session:** 2026-11-07T16:51:41.443Z
+**Stopped at:** Phase 12 UI-SPEC approved
+**Resume file:** .planning/phases/12-threshold-wizard/12-UI-SPEC.md
 
 ## Performance Metrics
 
