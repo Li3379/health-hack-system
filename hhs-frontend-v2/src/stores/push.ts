@@ -23,9 +23,15 @@ export const usePushStore = defineStore('push', () => {
   const loadError = ref<string | null>(null)
 
   /**
-   * Load all push configurations
+   * Load all push configurations.
+   *
+   * 页面级加载失败走**错误状态块**，不走 toast（D-02：两者分工固定，不混用）。
+   * 因此这里始终 `silent: true` —— 只分类、只记录 `loadError`，由视图渲染
+   * ErrorState 承载呈现与重试入口。曾经按 `options.silent === true` 放行 toast，
+   * 结果前台调用（PushSettings.vue）同时弹出常驻 toast + 错误块，同一失败两次呈现、
+   * 两个重试入口（UAT 后验证发现的 D-02 回归）。
    */
-  async function loadConfigs(options: { silent?: boolean } = {}) {
+  async function loadConfigs() {
     loading.value = true
     loadError.value = null
     try {
@@ -34,8 +40,7 @@ export const usePushStore = defineStore('push', () => {
         configs.value = res.data
       }
     } catch (error) {
-      // 不再静默吞掉：错误态交给视图渲染；后台刷新可显式 { silent: true }（WR-09）。
-      const err = showError(error, 'server.unavailable', { silent: options.silent === true })
+      const err = showError(error, 'server.unavailable', { silent: true })
       loadError.value = err.message || ERROR_MESSAGES['server.unavailable']
     } finally {
       loading.value = false

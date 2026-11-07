@@ -68,12 +68,13 @@ vi.mock('element-plus', async importOriginal => {
 })
 
 import { usePushStore } from '@/stores/push'
-import { updatePushConfig } from '@/api/push'
+import { getPushConfigs, updatePushConfig } from '@/api/push'
 import Thresholds from '@/views/health/Thresholds.vue'
 import { thresholdApi } from '@/api/threshold'
 import { ElMessage } from 'element-plus'
 
 const updatePushConfigMock = updatePushConfig as unknown as Mock
+const getPushConfigsMock = getPushConfigs as unknown as Mock
 const getThresholdsMock = thresholdApi.getThresholds as unknown as Mock
 const createThresholdMock = thresholdApi.createThreshold as unknown as Mock
 
@@ -195,6 +196,19 @@ describe('ErrorLayerSample — push store 单一出口与返回值契约', () =>
     await store.saveConfig('EMAIL', { configValue: 'a@b.com' })
 
     expect(errorToastCount()).toBeLessThanOrEqual(1)
+  })
+
+  it('4b. 加载失败：零 toast，只写 loadError 交给错误状态块（D-02 分工）', async () => {
+    // D-02：页面级加载失败由 ErrorState 承担呈现与重试，不得同时弹 toast。
+    // 回归来源：loadConfigs 曾按 options.silent 放行 toast，而 PushSettings.vue
+    // 无参调用 → 常驻 toast + 错误块 = 同一失败两次呈现、两个重试入口。
+    getPushConfigsMock.mockRejectedValueOnce({ response: { status: 500, data: {} } })
+
+    const store = usePushStore()
+    await store.loadConfigs()
+
+    expect(toastCount()).toBe(0)
+    expect(store.loadError).toBeTruthy()
   })
 
   it('5. push store 源码内不再有 ElMessage.error（单一出口）', () => {
