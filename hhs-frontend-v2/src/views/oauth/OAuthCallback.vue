@@ -116,6 +116,24 @@ const showTimeoutDialog = ref(false)
 const errorCode = ref<string | null>(null)
 const errorTitle = ref('')
 const errorMessage = ref('')
+
+/**
+ * Fixed Chinese copy for OAuth provider error codes.
+ *
+ * `error_description` from the callback URL is attacker-controllable and often
+ * English, so it is never rendered. Only these whitelisted codes are mapped.
+ */
+const OAUTH_ERROR_MESSAGES: Record<string, string> = {
+  access_denied: '您在授权页面取消了授权',
+  invalid_request: '授权请求参数有误，请重新发起连接',
+  invalid_client: '应用授权配置有误，请联系技术支持',
+  invalid_scope: '授权范围无效，请重新发起连接',
+  unauthorized_client: '当前应用无权发起该授权',
+  unsupported_response_type: '授权服务不支持该请求类型',
+  server_error: '授权服务暂时不可用，请稍后重试',
+  temporarily_unavailable: '授权服务暂时不可用，请稍后重试'
+}
+const DEFAULT_OAUTH_ERROR_MESSAGE = '授权未能完成，请重新发起连接'
 const statusText = ref('正在处理授权...')
 const stepDescription = ref('')
 
@@ -130,7 +148,7 @@ let timeoutCheck: ReturnType<typeof setInterval> | null = null
 
 // Computed
 const platformName = computed(() => {
-  return PLATFORM_NAMES[oauthPlatform.value] || oauthPlatform.value
+  return PLATFORM_NAMES[oauthPlatform.value] || '该设备'
 })
 
 // Step progression
@@ -147,11 +165,10 @@ const handleCallback = async () => {
   const code = route.query.code as string
   const state = route.query.state as string
   const error = route.query.error as string
-  const errorDescription = route.query.error_description as string
 
-  // Validate platform
-  if (!platform) {
-    handleError('invalid_platform', '无效的平台', '未指定设备平台')
+  // Validate platform — reject unknown platforms instead of falling through to a timeout
+  if (!platform || !PLATFORM_NAMES[platform]) {
+    handleError('invalid_platform', '无效的平台', '该设备平台暂不支持授权连接')
     return
   }
 
@@ -160,9 +177,11 @@ const handleCallback = async () => {
     oauthPlatform.value = platform
   }
 
-  // Check for OAuth error from provider
+  // Check for OAuth error from provider.
+  // Only whitelisted error codes are mapped to fixed Chinese copy — the raw
+  // `error_description` query value is never displayed.
   if (error) {
-    handleError(error, '授权被拒绝', errorDescription || '用户取消了授权')
+    handleError(error, '授权被拒绝', OAUTH_ERROR_MESSAGES[error] || DEFAULT_OAUTH_ERROR_MESSAGE)
     return
   }
 
@@ -188,8 +207,8 @@ const handleCallback = async () => {
 
     // Check connection status
     await checkConnectionStatus(platform)
-  } catch (err: any) {
-    handleError('connection_failed', '连接失败', err.message || '无法完成设备连接')
+  } catch {
+    handleError('connection_failed', '连接失败', '无法完成设备连接，请稍后重试')
   }
 }
 
