@@ -122,15 +122,24 @@ evidence: |
   `120.00 / 100.00 / 50.00 / 40.00`，指标类型显示「心率」。
   全流程未出现 `Threshold already exists`。
 
+## Current Test
+
+[testing complete]
+
 ## Summary
 
 total: 7
 passed: 7
-issues: 4
+issues: 0
+issues_found_and_fixed: 4
 skipped: 0
 blocked: 0
 
-## Issues
+## Issues Found and Fixed In-Session
+
+以下 4 项均在本次 UAT 会话中定位、修复、加回归测试并复测通过，无遗留。
+
+
 
 ### I-01（已修复）OAuth 回调页回显外部可控的 `error_description`
 - 位置：`hhs-frontend-v2/src/views/oauth/OAuthCallback.vue`
