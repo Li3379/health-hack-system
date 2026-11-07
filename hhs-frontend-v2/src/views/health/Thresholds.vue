@@ -217,14 +217,29 @@ const handleDelete = async (row: UserThreshold) => {
     await ElMessageBox.confirm('确定要删除这个阈值设置吗？', '提示', {
       type: 'warning'
     })
+  } catch {
+    // 用户取消：零提示（D-12），不进入错误出口。
+    return
+  }
+  await deleteThresholdConfirmed(row)
+}
+
+/**
+ * 真正执行删除。
+ *
+ * 失败时的重试回调重新执行**整个删除动作**（含成功后的列表刷新与成功提示），
+ * 而不是只重发 HTTP 请求 —— 否则重试成功后列表仍显示已删除的行。
+ * showError 只在网络/传输层 5xx 时渲染「重试」，业务失败不会出现死按钮（D-03）。
+ */
+const deleteThresholdConfirmed = async (row: UserThreshold) => {
+  try {
     await thresholdApi.deleteThreshold(row.id)
     ElMessage.success('删除成功')
     fetchThresholds()
   } catch (error) {
-    // ElMessageBox 取消返回字符串 'cancel'；其余失败统一走错误出口。
-    if (error !== 'cancel') {
-      showError(error, 'threshold.deleteFailed')
-    }
+    showError(error, 'threshold.deleteFailed', {
+      retry: () => deleteThresholdConfirmed(row)
+    })
   }
 }
 
