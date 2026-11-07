@@ -200,7 +200,8 @@ const formRef = ref<FormInstance>()
 const summaryRef = ref<InstanceType<typeof FormErrorSummary> | null>(null)
 const profileData = ref<HealthProfileVO | null>(null)
 
-const { fieldErrors, summaryItems, apply, clearField, reset, focusField } = useFormServerErrors()
+const { fieldErrors, summaryItems, apply, setErrors, clearField, reset, focusField } =
+  useFormServerErrors()
 
 const form = reactive<HealthProfileRequest>({
   gender: '',
@@ -282,14 +283,36 @@ const fetchProfile = async () => {
   }
 }
 
+/**
+ * 把 Element Plus 的 `invalidFields` 摊平成 `字段 → 首条中文消息`。
+ * 汇总块与内联提示消费同一形状，因此客户端校验不需要单独的渲染分支。
+ */
+function collectInvalidFieldMessages(
+  invalidFields: Record<string, Array<{ message?: string }>> | undefined
+): Record<string, string> {
+  const next: Record<string, string> = {}
+  for (const [field, errors] of Object.entries(invalidFields ?? {})) {
+    const message = errors?.[0]?.message
+    if (message) next[field] = message
+  }
+  return next
+}
+
 const handleSubmit = async () => {
   if (!formRef.value) return
 
   // 上一轮的残留服务端错误不进入本次尝试（不碰用户输入）。
   reset()
 
-  await formRef.value.validate(async valid => {
-    if (!valid) return
+  await formRef.value.validate(async (valid, invalidFields) => {
+    if (!valid) {
+      // 客户端 el-form 校验失败：Element Plus 只会内联提示，这里补上顶部常驻汇总，
+      // 让客户端与服务端校验共用同一套 GOV.UK 双呈现（D-01），且不弹 toast。
+      setErrors(collectInvalidFieldMessages(invalidFields))
+      await nextTick()
+      summaryRef.value?.focusSummary()
+      return
+    }
 
     loading.value = true
     try {
