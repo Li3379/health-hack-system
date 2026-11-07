@@ -24,6 +24,17 @@ export class ApiError extends Error {
     super(message)
     this.name = 'ApiError'
   }
+
+  /**
+   * 重新发起同一次请求的回调（D-03）。
+   *
+   * 由 `request.ts` 的响应拦截器在拿到 `error.config` 时挂上；`showError` 在
+   * `retryable === true` 且调用方没有显式给 retry 时使用它，让网络/传输层 5xx
+   * 的 toast 天然带「重试」按钮，而不必每个调用点各写一遍。
+   *
+   * 只在用户点击时执行一次，绝不自动重试 —— 写操作重复提交的风险由用户承担。
+   */
+  retryRequest?: () => Promise<unknown>
 }
 
 // D-12: 取消的五种形态统一识别并完全忽略，不产生任何提示。

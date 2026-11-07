@@ -206,6 +206,54 @@ describe('showError — VNode sticky toast', () => {
     expect(retry).toHaveBeenCalledTimes(1)
   })
 
+  it('auto-renders 重试 from ApiError.retryRequest when the caller supplies no retry (D-03)', () => {
+    const retryRequest = vi.fn().mockResolvedValue(undefined)
+    const err = new ApiError(
+      '网络连接异常，请检查网络后重试',
+      'network',
+      undefined,
+      undefined,
+      {},
+      undefined,
+      true
+    )
+    err.retryRequest = retryRequest
+
+    showError(err, 'network.offline')
+
+    const button = findButton(firstCallOptions().message)
+    expect(button?.children).toBe('重试')
+  })
+
+  it('re-presents a failed auto-retry instead of swallowing it', async () => {
+    const err = new ApiError('网络连接异常，请检查网络后重试', 'network', undefined, undefined, {}, undefined, true)
+    err.retryRequest = vi.fn().mockRejectedValue(
+      new ApiError('服务暂时不可用，请稍后重试', 'server', 503, undefined, {}, undefined, true)
+    )
+
+    showError(err, 'network.offline')
+
+    const button = findButton(firstCallOptions().message)
+    ;(button?.props?.onClick as (() => void) | undefined)?.()
+    await Promise.resolve()
+    await Promise.resolve()
+
+    // 第一次 toast + 重试失败后的第二条 toast
+    expect(ElMessage).toHaveBeenCalledTimes(2)
+  })
+
+  it('never renders 重试 for a non-retryable business failure even when a callback is supplied', () => {
+    showError(
+      new ApiError('该指标已存在阈值，请直接编辑', 'business', 200, 'resource.exists'),
+      'threshold.duplicate',
+      { retry: () => undefined }
+    )
+
+    const opts = firstCallOptions()
+    expect(typeof opts.message).toBe('string')
+    expect(findButton(opts.message)).toBeUndefined()
+  })
+
   it('auto-attaches the 打开编辑 label from ERROR_CODE_ACTIONS when only onClick is given (D-08)', () => {
     showError(
       new ApiError('该指标已存在阈值，请直接编辑', 'business', 200, 'resource.exists'),

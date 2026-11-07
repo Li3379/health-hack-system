@@ -144,9 +144,22 @@ export function showError(
   // 此处再弹会让一次令牌过期出现两条消息（T-11-13）。刻意不在此处产生 toast。
   if (err.kind === 'auth') return err
 
-  const retryFn = opts?.retry
+  // D-03：调用方显式给的 retry 优先；没有时，网络/传输层 5xx 自动用拦截器挂上的
+  // 「重发同一请求」回调，保证这类 toast 始终带「重试」按钮。
+  // 重试再次失败时重新走一次 showError，用户不会因为重试而失去反馈。
+  const autoRetry = err.retryable && err.retryRequest ? err.retryRequest : undefined
+  const retryFn =
+    opts?.retry ??
+    (autoRetry
+      ? () =>
+          Promise.resolve(autoRetry()).catch(retryError => {
+            showError(retryError, fallbackKey)
+          })
+      : undefined)
   const actionOnClick = opts?.action?.onClick
-  const hasRetry = typeof retryFn === 'function'
+  // D-03：只有网络/传输层 5xx（retryable）才渲染「重试」。
+  // 业务失败（含信封包装的系统异常）不可重试 —— 重发同一次写操作只会重复失败。
+  const hasRetry = typeof retryFn === 'function' && err.retryable
   // 标签解析顺序：调用方显式 label → ERROR_CODE_ACTIONS 自动补 → 空串（不渲染死按钮）。
   const actionLabel = opts?.action
     ? opts.action.label || ERROR_CODE_ACTIONS[err.code ?? ''] || ''

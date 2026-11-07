@@ -54,6 +54,13 @@ service.interceptors.response.use(
   error => {
     const apiError = normalizeApiError(error)
 
+    // D-03：网络/传输层 5xx 的 toast 必须带「重试」。把原始 config 包成回调挂到
+    // ApiError 上，showError 在调用方没有显式 retry 时自动使用 —— 调用点无需重复实现。
+    const failedConfig = (error as { config?: AxiosRequestConfig } | null | undefined)?.config
+    if (apiError.retryable && failedConfig) {
+      apiError.retryRequest = () => service.request(failedConfig)
+    }
+
     // 取消不产生任何提示（D-12）
     if (apiError.kind === 'cancel') {
       return Promise.reject(apiError)
