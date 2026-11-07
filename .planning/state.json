@@ -1,7 +1,7 @@
 {
   "contract": "1.0.0",
   "flavor": "core",
-  "milestone": "v1.3",
+  "milestone": "v1.3 — 引导式配置与友好错误反馈",
   "phases": [
     {
       "number": "4",
@@ -37,12 +37,32 @@
       "number": "10",
       "name": "指标录入通用交互组件封装与全站验证",
       "status": "complete"
+    },
+    {
+      "number": "11",
+      "name": "全站统一友好错误反馈地基",
+      "status": "complete"
+    },
+    {
+      "number": "12",
+      "name": "阈值配置向导化与告警正确性修复",
+      "status": "pending"
+    },
+    {
+      "number": "13",
+      "name": "健康档案完善引导（非阻塞）",
+      "status": "pending"
+    },
+    {
+      "number": "14",
+      "name": "全站收尾排查与回归验证",
+      "status": "pending"
     }
   ],
   "next": {
-    "command": "/gsd:discuss-phase",
-    "label": "Discuss the first phase",
-    "reason": "Project initialized — plan your first phase"
+    "command": "/gsd:progress --next",
+    "label": "Advance to the next step (plan phase 12)",
+    "reason": "Phase 12 of 11 — needs a plan"
   },
-  "updated_at": "2026-11-05T13:54:53.876Z"
+  "updated_at": "2026-11-07T09:48:00.109Z"
 }
