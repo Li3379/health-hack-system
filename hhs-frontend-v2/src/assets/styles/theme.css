@@ -1183,30 +1183,32 @@ p { margin: 0; }
    ElMessage 渲染在被 teleport 到 document.body 的节点上，组件 <style scoped> 无法触达，
    因此这些规则必须留在全局样式表。
 
-   本文件在 main.ts 中于 element-plus/dist/index.css 之后加载，
-   同特异性下后者胜出 —— 这四条规则刻意不加 !important。
+   本文件在 main.ts 中于 element-plus/dist/index.css 之后加载，但 Element Plus 的
+   组件样式会被 unplugin-vue-components 按路由 chunk 再次注入，位置在本文件之后 ——
+   因此这些归一化规则统一用 `body .类名`（特异性 0,1,1）而不是裸类名（0,1,0），
+   与注入顺序解耦，且不需要 !important。
    ============================================ */
 
 /* EP 默认 --el-message-padding: 11px 15px 不在 4 的倍数网格上（目标值对齐 sm-3 12px / md 16px）。 */
-.el-message {
+body .el-message {
   --el-message-padding: 12px 16px;
 }
 
 /* EP 的 type="error" 文本色是 #f56c6c，在亮色 tint 上仅 2.61:1。
    限定 error 修饰符：不带修饰符会以同特异性覆盖 success / warning 的 EP 配色。 */
-.el-message--error {
+body .el-message--error {
   --el-message-text-color: var(--hhs-color-error-text);
 }
 
 /* EP 默认 .el-message__content { line-height: 1 } 会裁切中文字形下缘。
    VNode（retry / action）也渲染在这个 <p> 里，一条规则覆盖全部 toast 形态。 */
-.el-message__content {
+body .el-message__content {
   line-height: 1.5;
 }
 
 /* EP default / small 尺寸的 el-form-item__error 发 padding-top: 2px（只有 large 是 4px），
    归一化到 xs token；行高同理避免中文字形裁切。 */
-.el-form-item__error {
+body .el-form-item__error {
   line-height: 1.4;
   padding-top: 4px;
   color: var(--hhs-color-error-text);

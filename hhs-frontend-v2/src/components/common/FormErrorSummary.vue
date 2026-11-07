@@ -86,6 +86,9 @@ function handleEntryClick(field: string): void {
   font-size: 14px;
   font-weight: 600;
   line-height: 1.4;
+  /* ElAlert 的 error 类型把标题色写死成 --el-color-error（#f56c6c），
+     在亮色 tint 上只有 2.61:1。标题与条目必须同色，统一走错误 token。 */
+  color: var(--hhs-color-error-text);
 }
 
 .form-error-summary__list {
