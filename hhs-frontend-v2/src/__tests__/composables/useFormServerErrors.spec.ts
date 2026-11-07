@@ -37,6 +37,32 @@ describe('useFormServerErrors', () => {
     expect(summaryItems.value[1].label).toBe('指标数值')
   })
 
+  it('setErrors projects client-side el-form validation failures into the same summary channel', () => {
+    const { fieldErrors, summaryItems, setErrors, clearField } = useFormServerErrors()
+
+    setErrors({ gender: '请选择性别', birthDate: '请选择出生日期' })
+
+    expect(fieldErrors.value.gender).toBe('请选择性别')
+    expect(summaryItems.value).toHaveLength(2)
+    expect(summaryItems.value.map(item => item.field)).toEqual(['gender', 'birthDate'])
+
+    // 修正一项后汇总只剩另一项；全部修正后汇总整体消失（GOV.UK 双呈现）。
+    clearField('gender')
+    expect(summaryItems.value.map(item => item.field)).toEqual(['birthDate'])
+    clearField('birthDate')
+    expect(summaryItems.value).toHaveLength(0)
+  })
+
+  it('setErrors copies the input so later mutation of the caller object cannot leak in', () => {
+    const { fieldErrors, setErrors } = useFormServerErrors()
+    const source: Record<string, string> = { gender: '请选择性别' }
+
+    setErrors(source)
+    source.gender = '被外部改掉'
+
+    expect(fieldErrors.value.gender).toBe('请选择性别')
+  })
+
   it('renders an empty label for unknown fields while keeping the backend message', () => {
     const { summaryItems, apply } = useFormServerErrors()
 

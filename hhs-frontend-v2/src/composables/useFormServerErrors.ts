@@ -36,6 +36,7 @@ export function useFormServerErrors(options: UseFormServerErrorsOptions = {}): {
   fieldErrors: Ref<Record<string, string>>
   summaryItems: ComputedRef<SummaryItem[]>
   apply: (err: ApiError) => void
+  setErrors: (next: Record<string, string>) => void
   clearField: (field: string) => void
   reset: () => void
   focusField: (field: string) => void
@@ -83,6 +84,17 @@ export function useFormServerErrors(options: UseFormServerErrorsOptions = {}): {
       }
       fieldErrors.value = next
     }
+  }
+
+  /**
+   * 直接投影一批字段错误。
+   *
+   * 用于客户端 `el-form` 校验失败（Element Plus 只在字段下方内联提示，没有汇总）。
+   * 与服务端 apply() 共用同一份 `fieldErrors`，因此汇总块与内联提示走同一通道，
+   * 满足 D-01 的 GOV.UK 双呈现要求，且不产生 toast。
+   */
+  function setErrors(next: Record<string, string>): void {
+    fieldErrors.value = { ...next }
   }
 
   /** 只移除单个字段；最后一条清除后汇总块由 v-if 自动卸载。 */
@@ -137,6 +149,7 @@ export function useFormServerErrors(options: UseFormServerErrorsOptions = {}): {
     fieldErrors,
     summaryItems,
     apply,
+    setErrors,
     clearField,
     reset,
     focusField
