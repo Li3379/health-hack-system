@@ -87,6 +87,13 @@ describe('FIELD_LABELS / fieldLabel', () => {
     expect(FIELD_LABELS.notes).toBe('备注说明')
   })
 
+  it('pins all four threshold field labels (THR-05: threshold violations must never render a blank label)', () => {
+    expect(FIELD_LABELS.warningHigh).toBe('警告高值')
+    expect(FIELD_LABELS.warningLow).toBe('警告低值')
+    expect(FIELD_LABELS.criticalHigh).toBe('严重高值')
+    expect(FIELD_LABELS.criticalLow).toBe('严重低值')
+  })
+
   it('returns the label for a known field', () => {
     expect(fieldLabel('warningHigh')).toBe('警告高值')
   })
