@@ -432,6 +432,18 @@ export interface PlatformInfo {
 }
 
 // 指标元数据相关
+
+/**
+ * 后端下发的推荐阈值四项（D-06：与 alertable 同一响应下发，来源为 alert_rule 种子派生，
+ * 前端不做独立计算）。每项可独立为 null = 无界。
+ */
+export interface RecommendedThresholdVO {
+  warningLow?: number | null
+  warningHigh?: number | null
+  criticalLow?: number | null
+  criticalHigh?: number | null
+}
+
 export interface MetricDefinitionVO {
   canonicalKey: string
   aliases: string[]
@@ -446,6 +458,13 @@ export interface MetricDefinitionVO {
   normalMax: number
   placeholder: string
   guideHint: string
+  /**
+   * 是否可配置告警阈值（D-03：由后端元数据注册中心权威判定，前端不维护白名单）。
+   * D-19 定义：alert_rule 有 enabled 且四项阈值至少一列非 null。
+   */
+  alertable: boolean
+  /** 后端推荐阈值（12-04 起后端总是下发；fallback 常量镜像种子值） */
+  recommended: RecommendedThresholdVO
 }
 
 export type MetricMetaMap = Record<string, MetricDefinitionVO>

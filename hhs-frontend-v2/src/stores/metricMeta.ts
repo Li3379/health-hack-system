@@ -24,6 +24,17 @@ export const useMetricMetaStore = defineStore('metricMeta', () => {
     allDefinitions.value.filter(d => d.category === 'WELLNESS')
   )
 
+  // 可配置告警阈值的医学健康指标 (D-03/D-04：仅 alertable === true 进入向导第 1 步选择器，
+  // 后端权威判定，前端不维护白名单；当前 fallback 数据下为 6 项)
+  const alertableHealthMetrics = computed<MetricDefinitionVO[]>(() =>
+    healthMetrics.value.filter(d => d.alertable)
+  )
+
+  // 可配置告警阈值的保健指标（当前 fallback 数据下为空数组，空组由调用方按 D-04 隐藏）
+  const alertableWellnessMetrics = computed<MetricDefinitionVO[]>(() =>
+    wellnessMetrics.value.filter(d => d.alertable)
+  )
+
   /**
    * 根据标准 key 或任意别名获取指标定义
    * 优先查询当前响应式字典，未命中回退至本地静态常量
@@ -90,6 +101,8 @@ export const useMetricMetaStore = defineStore('metricMeta', () => {
     allDefinitions,
     healthMetrics,
     wellnessMetrics,
+    alertableHealthMetrics,
+    alertableWellnessMetrics,
     getDefinition,
     fetchMetadata
   }

@@ -25,6 +25,40 @@ describe('useMetricMetaStore', () => {
     expect(store.isLoaded).toBe(false)
   })
 
+  it('exposes exactly the six D-19 alertable health metrics and no alertable wellness metrics', () => {
+    const store = useMetricMetaStore()
+
+    expect(store.alertableHealthMetrics.length).toBe(6)
+    // 集合相等断言（而非仅计数）——T-12-17：防止 fallback 与后端六项集合漂移
+    expect([...store.alertableHealthMetrics.map(d => d.canonicalKey)].sort()).toEqual(
+      ['bloodGlucose', 'bodyTemperature', 'bmi', 'diastolicBP', 'heartRate', 'systolicBP'].sort()
+    )
+    expect(store.alertableWellnessMetrics.length).toBe(0)
+  })
+
+  it('resolves aliases onto the alertable flag and mirrors the alert_rule seed recommendations', () => {
+    const store = useMetricMetaStore()
+
+    // 别名解析仍落在 bloodGlucose 上，且带 alertable 标志
+    expect(store.getDefinition('glucose')?.alertable).toBe(true)
+    expect(store.getDefinition('glucose')?.canonicalKey).toBe('bloodGlucose')
+
+    // 推荐值镜像 alert_rule 种子（heartRate 100/120/50/40）
+    const heartRate = store.getDefinition('heartRate')
+    expect(heartRate?.recommended).toEqual({
+      warningLow: 50,
+      warningHigh: 100,
+      criticalLow: 40,
+      criticalHigh: 120
+    })
+
+    // 非告警指标（weight 四列全 NULL、bloodOxygen 无种子规则）保持 false（D-19/D-20）
+    expect(store.getDefinition('weight')?.alertable).toBe(false)
+    expect(store.getDefinition('spo2')?.alertable).toBe(false)
+    // 非告警指标的 recommended 为空对象（无推荐四值）
+    expect(store.getDefinition('weight')?.recommended).toEqual({})
+  })
+
   it('should correctly lookup definitions using canonical keys and aliases', () => {
     const store = useMetricMetaStore()
 
@@ -81,7 +115,9 @@ describe('useMetricMetaStore', () => {
         normalMin: 60,
         normalMax: 100,
         placeholder: '例如: 72',
-        guideHint: '已更新的心率说明'
+        guideHint: '已更新的心率说明',
+        alertable: true,
+        recommended: { warningLow: 50, warningHigh: 100, criticalLow: 40, criticalHigh: 120 }
       }
     }
 
