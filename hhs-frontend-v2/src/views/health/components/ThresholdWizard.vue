@@ -28,6 +28,7 @@
           placeholder="请选择指标"
           filterable
           :disabled="isEditMode"
+          popper-class="threshold-wizard-options"
           style="width: 100%"
           @change="handleMetricSelect"
         >
@@ -37,6 +38,7 @@
               :key="m.canonicalKey"
               :label="`${m.displayName} (${m.unit})`"
               :value="m.canonicalKey"
+              :title="`${m.displayName} (${m.unit})`"
             />
           </el-option-group>
           <el-option-group v-if="store.alertableWellnessMetrics.length" label="保健指标">
@@ -45,6 +47,7 @@
               :key="m.canonicalKey"
               :label="`${m.displayName} (${m.unit})`"
               :value="m.canonicalKey"
+              :title="`${m.displayName} (${m.unit})`"
             />
           </el-option-group>
         </el-select>
@@ -499,6 +502,9 @@ async function handleSubmit(): Promise<void> {
     const apiError = normalizeApiError(raw)
     if (apiError.kind === 'validation') {
       apply(apiError)
+      // 校验失败发生在第 3 步提交时：退回第 2 步让汇总块与内联错误可见（GOV.UK 双呈现），
+      // 焦点随步骤规则落到第一个输入框；草稿与弹窗保持原样（D-12）。
+      goToStep(1)
     } else {
       emit('error', raw)
     }
@@ -679,5 +685,20 @@ defineExpose({
   line-height: 1.4;
   /* --text-3 浅色实测仅 3.97:1 不达 AA，说明文字一律 --text-2（浅色 8.38:1） */
   color: var(--text-2);
+}
+</style>
+
+<!-- 指标下拉面板经 popper teleport 到 body，scoped 无法触达；用专用 popper-class 约束（UI-SPEC 长文本与溢出） -->
+<style>
+.threshold-wizard-options .el-select-dropdown__item {
+  height: 34px;
+  line-height: 34px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.threshold-wizard-options .el-select-dropdown__wrap {
+  max-height: 264px; /* 超出即面板内滚动，六项以上也不撑破视口 */
 }
 </style>

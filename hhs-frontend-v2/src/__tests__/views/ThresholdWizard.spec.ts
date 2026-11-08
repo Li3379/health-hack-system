@@ -44,8 +44,11 @@ vi.mock('element-plus', async importOriginal => {
 
 import ThresholdWizard from '@/views/health/components/ThresholdWizard.vue'
 import { ElMessageBox } from 'element-plus'
+import { thresholdApi } from '@/api/threshold'
+import { ApiError } from '@/utils/appError'
 
 const confirmMock = ElMessageBox.confirm as unknown as Mock
+const createThresholdMock = thresholdApi.createThreshold as unknown as Mock
 
 const globalStubs = {
   'el-dialog': {
@@ -195,6 +198,8 @@ describe('ThresholdWizard — 三步向导组件契约', () => {
     vm.goToStep(1)
     await nextTick()
     expect(wrapper.findAll('.recommend-badge')).toHaveLength(4)
+    // 无错误时 GOV.UK 汇总块整体不渲染（UI-SPEC empty 契约）
+    expect(wrapper.find('.form-error-summary').exists()).toBe(false)
     wrapper.unmount()
   })
 
@@ -232,6 +237,8 @@ describe('ThresholdWizard — 三步向导组件契约', () => {
     expect((wrapper.find('button.el-button--primary').element as HTMLButtonElement).disabled).toBe(
       true
     )
+    // 违规时第 2 步顶部出现汇总块（GOV.UK 双呈现），全程零 toast（D-12）
+    expect(wrapper.find('.form-error-summary').exists()).toBe(true)
     const messages = wrapper.findAll('.el-form-item__error').map(e => e.text())
     expect(messages).toHaveLength(2)
     expect(messages[0]).toBe('警告低值必须小于警告高值，请调整其中一个')
@@ -269,17 +276,33 @@ describe('ThresholdWizard — 三步向导组件契约', () => {
     await nextTick()
     expect(sentence()).not.toContain('≥ 11.1')
     expect((sentence().match(/红色紧急提醒/g) ?? []).length).toBe(1)
+    // 数值以 strong 加粗（同字号只加字重）
+    expect(wrapper.find('.confirm-sentence').html()).toContain('<strong')
+    // 部分填写合法：置空一项后仍有边界，主按钮不被禁用（D-10）
+    expect((wrapper.find('button.el-button--primary').element as HTMLButtonElement).disabled).toBe(
+      false
+    )
     wrapper.unmount()
   })
 
-  it('7. 四项全空时确认语句降级为 尚未设置任何有效阈值（THR-06）', async () => {
+  it('7. 未选指标时四项输入禁用且说明可见；四项全空时确认语句降级（THR-06）', async () => {
     const wrapper = mountWizard()
     await flushPromises()
     const vm = getVM(wrapper)
 
+    // 先进入第 2 步：未选指标 → 输入全部禁用，但说明文案仍在（教学先行）
+    vm.goToStep(1)
+    await nextTick()
+    const inputs = wrapper.findAll('input.el-input-number__inner')
+    expect(inputs).toHaveLength(4)
+    for (const input of inputs) {
+      expect((input.element as HTMLInputElement).disabled).toBe(true)
+    }
+    expect(wrapper.findAll('.threshold-field__hint')).toHaveLength(4)
+
+    // 四项全空 → 确认语句降级
     vm.goToStep(2)
     await nextTick()
-
     expect(wrapper.find('.confirm-sentence').text()).toContain('尚未设置任何有效阈值')
     wrapper.unmount()
   })
@@ -311,6 +334,8 @@ describe('ThresholdWizard — 三步向导组件契约', () => {
     ;getVM(wrapperDirty).handleBeforeClose(doneDirty)
     await flushPromises()
     expect(confirmMock).toHaveBeenCalledTimes(1)
+    // 确认文案逐字来自 dialog.unsavedConfirm 字典键
+    expect(confirmMock.mock.calls[0][0]).toBe('内容尚未保存，确定离开？')
     expect(doneDirty).not.toHaveBeenCalled()
     wrapperDirty.unmount()
 
@@ -344,5 +369,103 @@ describe('ThresholdWizard — 三步向导组件契约', () => {
     await nextTick()
     expect(focusSpy.mock.contexts).toContain(pickerInput)
     wrapperFresh.unmount()
+  })
+
+  it('11. 修改后恢复推荐值：四项回到推荐值且徽标重现（THR-02 / D-08）', async () => {
+    const wrapper = mountWizard()
+    await flushPromises()
+    const vm = getVM(wrapper)
+
+    vm.handleMetricSelect('bloodGlucose')
+    vm.goToStep(1)
+    await nextTick()
+    vm.draft.warningLow = 5
+    vm.draft.criticalHigh = 20
+    await nextTick()
+    // 改过的字段不再等于推荐值 → 徽标消失
+    expect(wrapper.findAll('.recommend-badge')).toHaveLength(2)
+
+    vm.restoreRecommended()
+    await nextTick()
+    expect(vm.draft.warningLow).toBe(3.9)
+    expect(vm.draft.criticalHigh).toBe(11.1)
+    expect(wrapper.findAll('.recommend-badge')).toHaveLength(4)
+    wrapper.unmount()
+  })
+
+  it('12. 保存成功：提交一次、emit saved 并关闭；请求悬挂时闩锁阻止重复提交', async () => {
+    let resolveSave: (value: unknown) => void = () => {}
+    createThresholdMock.mockReturnValue(
+      new Promise(resolve => {
+        resolveSave = resolve
+      })
+    )
+    const wrapper = mountWizard()
+    await flushPromises()
+    const vm = getVM(wrapper)
+
+    vm.handleMetricSelect('bloodGlucose')
+    vm.goToStep(1)
+    vm.goToStep(2)
+    await nextTick()
+
+    const firstSubmit = vm.handleSubmit()
+    const secondSubmit = vm.handleSubmit()
+    await flushPromises()
+    // 闩锁：第二次调用直接短路，只发一次请求；主按钮 loading 态禁用
+    expect(createThresholdMock).toHaveBeenCalledTimes(1)
+    expect((wrapper.find('button.el-button--primary').element as HTMLButtonElement).disabled).toBe(
+      true
+    )
+
+    resolveSave({ code: 200 })
+    await Promise.all([firstSubmit, secondSubmit])
+    await flushPromises()
+    const savedEvents = wrapper.emitted('saved') ?? []
+    expect(savedEvents).toHaveLength(1)
+    // 保存成功后关闭弹窗
+    expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([false])
+    // 载荷：userId 来自认证 store，metricKey 为所选指标
+    expect(createThresholdMock.mock.calls[0][0]).toMatchObject({
+      userId: 1,
+      metricKey: 'bloodGlucose',
+      warningLow: 3.9,
+      warningHigh: 7,
+      criticalLow: 3,
+      criticalHigh: 11.1
+    })
+    wrapper.unmount()
+  })
+
+  it('13. 保存被校验拒绝：内联错误点亮输入框、草稿原样、弹窗不关、零 toast 出口', async () => {
+    // HTTP 400 + fieldErrors → normalizeApiError 归为 validation kind
+    createThresholdMock.mockRejectedValueOnce(
+      new ApiError('请检查填写内容', 'validation', 400, undefined, {
+        warningHigh: '警告高值必须小于严重高值'
+      })
+    )
+    const wrapper = mountWizard()
+    await flushPromises()
+    const vm = getVM(wrapper)
+
+    vm.handleMetricSelect('bloodGlucose')
+    vm.goToStep(1)
+    vm.goToStep(2)
+    await nextTick()
+    await vm.handleSubmit()
+    await flushPromises()
+
+    // 校验拒绝发生在第 3 步：向导退回第 2 步让汇总块与内联错误可见（GOV.UK 双呈现）
+    expect(vm.currentStep).toBe(1)
+    expect(wrapper.find('.form-error-summary').exists()).toBe(true)
+    // 后端 fieldErrors 点亮对应输入框（服务端与客户端共用同一投影）
+    const messages = wrapper.findAll('.el-form-item__error').map(e => e.text())
+    expect(messages).toContain('警告高值必须小于严重高值')
+    // D-12：草稿绝不被失败重置，弹窗保持打开，也不 emit error 交给 toast
+    expect(vm.draft.warningHigh).toBe(7)
+    expect(wrapper.emitted('saved')).toBeUndefined()
+    expect(wrapper.emitted('error')).toBeUndefined()
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+    wrapper.unmount()
   })
 })
