@@ -17,7 +17,7 @@
 - [x] **Phase 9: 保健指标管理页录入对齐** - 将 prevention/Metrics.vue 与 wellness/Dashboard.vue 统一接入权威元数据，对齐心情评星与四梯度宽容校验 (completed 2026-11-05)
 - [x] **Phase 10: 指标录入通用交互组件封装与全站验证** - 提炼高复用指标表单交互组件，统一编辑模式与全站体验一致性验证 (completed 2026-11-05)
 - [x] **Phase 11: 全站统一友好错误反馈地基** - 建立"只翻译不呈现"的错误信封、类型化 ApiError、字段错误内联投影与中文文案字典，使一次失败只出现一次提示 (completed 2026-11-07)
-- [ ] **Phase 12: 阈值配置向导化与告警正确性修复** - 先修 ThresholdRangeChecker 与 metricKey 规范化/存量修复，再以元数据驱动向导替代四个裸数字输入框
+- [x] **Phase 12: 阈值配置向导化与告警正确性修复** - 先修 ThresholdRangeChecker 与 metricKey 规范化/存量修复，再以元数据驱动向导替代四个裸数字输入框 (completed 2026-11-08)
 - [ ] **Phase 13: 健康档案完善引导（非阻塞）** - 完整度分数、字段级"为何需要"、后端默认假设披露与可关闭仪表盘提示，全程不阻断任何既有功能
 - [ ] **Phase 14: 全站收尾排查与回归验证** - 单站点迁移台账收口、残留裸 ElMessage.error 清零、全量后端/前端回归与端到端验证
 
@@ -248,34 +248,34 @@ Plans:
   4. 用户输入违反层级或生理极限的阈值（如警告高值低于警告低值、超出硬极限）时，保存被前后端同规则拦截并以解释性中文内联提示说明原因，不出现红色弹窗、不清空已输入内容
   5. 阈值列表为空时展示教学型空状态（说明当前使用系统默认规则、展示默认阈值内容、提供"使用推荐阈值"入口）；重复指标保存时提示"该指标已有阈值，是否改为编辑？"并提供"打开编辑"操作
 
-**Plans:** 8 plans
+**Plans:** 8/8 plans complete
 
 Plans:
 **Wave 1**
 
-- [ ] 12-01-PLAN.md — ThresholdRangeChecker 单一 classify() 重构与 D-18 全边界测试矩阵
-- [ ] 12-02-PLAN.md — 阈值写入规范化与全别名 IN 查询（5 处读取点 selectList 改造）
+- [x] 12-01-PLAN.md — ThresholdRangeChecker 单一 classify() 重构与 D-18 全边界测试矩阵
+- [x] 12-02-PLAN.md — 阈值写入规范化与全别名 IN 查询（5 处读取点 selectList 改造）
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 12-03-PLAN.md — 幂等事务式 SQL 存量修复脚本与 schema 种子 key 修正
-- [ ] 12-04-PLAN.md — @ValidThresholdRange 类级约束与元数据 alertable/recommended
+- [x] 12-03-PLAN.md — 幂等事务式 SQL 存量修复脚本与 schema 种子 key 修正
+- [x] 12-04-PLAN.md — @ValidThresholdRange 类级约束与元数据 alertable/recommended
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 12-05-PLAN.md — 前端元数据契约（类型/常量/store computed）与纯校验函数
+- [x] 12-05-PLAN.md — 前端元数据契约（类型/常量/store computed）与纯校验函数
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 12-06-PLAN.md — 五段四区预览条组件与主题 token
+- [x] 12-06-PLAN.md — 五段四区预览条组件与主题 token
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 12-07-PLAN.md — 三步向导（选指标/设置阈值/确认保存）与零 toast 内联校验
+- [x] 12-07-PLAN.md — 三步向导（选指标/设置阈值/确认保存）与零 toast 内联校验
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 12-08-PLAN.md — 列表页接入向导、教学型空状态与重复指标恢复动作
+- [x] 12-08-PLAN.md — 列表页接入向导、教学型空状态与重复指标恢复动作
 
 **UI hint**: yes
 
@@ -324,6 +324,6 @@ Plans:
 | 9. 保健指标管理页录入对齐 | 2/2 | Complete    | 2026-11-05 |
 | 10. 指标录入通用交互组件封装与全站验证 | 2/2 | Complete    | 2026-11-05 |
 | 11. 全站统一友好错误反馈地基 | 8/8 | Complete    | 2026-11-07 |
-| 12. 阈值配置向导化与告警正确性修复 | 0/8 | Planned | - |
+| 12. 阈值配置向导化与告警正确性修复 | 8/8 | Complete    | 2026-11-08 |
 | 13. 健康档案完善引导（非阻塞） | 0/0 | Not started | - |
 | 14. 全站收尾排查与回归验证 | 0/0 | Not started | - |
