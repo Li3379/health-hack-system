@@ -11,6 +11,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -120,7 +121,7 @@ class UserThresholdServiceTest {
             userThresholdService.create(testUserId, testRequest);
         });
 
-        assertTrue(exception.getMessage().contains("该指标已存在阈值"));
+        assertTrue(exception.getMessage().contains("该指标已有阈值"));
         verify(userThresholdMapper, never()).insert(any(UserThreshold.class));
     }
 
@@ -180,7 +181,7 @@ class UserThresholdServiceTest {
             userThresholdService.update(1L, testUserId, testRequest);
         });
 
-        assertTrue(exception.getMessage().contains("该指标已存在阈值"));
+        assertTrue(exception.getMessage().contains("该指标已有阈值"));
     }
 
     @Test
@@ -315,5 +316,72 @@ class UserThresholdServiceTest {
         // Then: Verify empty result
         assertNotNull(result);
         assertTrue(result.isEmpty());
+    }
+
+    @Test
+    @DisplayName("测试2.1：创建用户阈值 - 别名 glucose 规范化为标准键 bloodGlucose 落库")
+    void testCreate_GlucoseAlias_PersistsCanonicalKey() {
+        // Given: Request carries a legacy alias of bloodGlucose
+        UserThresholdRequest aliasRequest = new UserThresholdRequest();
+        aliasRequest.setUserId(testUserId);
+        aliasRequest.setMetricKey("glucose");
+        aliasRequest.setWarningHigh(new BigDecimal("10"));
+
+        when(userThresholdMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(null);
+        when(userThresholdMapper.insert(any(UserThreshold.class))).thenReturn(1);
+
+        // When: Create threshold
+        userThresholdService.create(testUserId, aliasRequest);
+
+        // Then: The persisted entity carries the canonical key, not the alias
+        ArgumentCaptor<UserThreshold> captor = ArgumentCaptor.forClass(UserThreshold.class);
+        verify(userThresholdMapper, times(1)).insert(captor.capture());
+        assertEquals("bloodGlucose", captor.getValue().getMetricKey());
+    }
+
+    @Test
+    @DisplayName("测试2.2：创建用户阈值 - 别名与已有标准键行冲突时返回业务错误而非 500")
+    void testCreate_AliasCollidesWithCanonicalRow_ReturnsBusinessError() {
+        // Given: User already has a canonical bloodGlucose row
+        UserThresholdRequest aliasRequest = new UserThresholdRequest();
+        aliasRequest.setUserId(testUserId);
+        aliasRequest.setMetricKey("glucose");
+        aliasRequest.setWarningHigh(new BigDecimal("10"));
+
+        UserThreshold canonicalRow = new UserThreshold();
+        canonicalRow.setId(9L);
+        canonicalRow.setUserId(testUserId);
+        canonicalRow.setMetricKey("bloodGlucose");
+
+        when(userThresholdMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(canonicalRow);
+
+        // When & Then: Business error with the new copy — never a unique-constraint 500
+        BusinessException exception = assertThrows(BusinessException.class, () -> {
+            userThresholdService.create(testUserId, aliasRequest);
+        });
+
+        assertTrue(exception.getMessage().contains("该指标已有阈值"));
+        verify(userThresholdMapper, never()).insert(any(UserThreshold.class));
+    }
+
+    @Test
+    @DisplayName("测试2.3：创建用户阈值 - 标准键原样落库（规范化幂等）")
+    void testCreate_CanonicalKey_Unchanged() {
+        // Given: Request already carries the canonical key
+        UserThresholdRequest canonicalRequest = new UserThresholdRequest();
+        canonicalRequest.setUserId(testUserId);
+        canonicalRequest.setMetricKey("bloodGlucose");
+        canonicalRequest.setWarningHigh(new BigDecimal("10"));
+
+        when(userThresholdMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(null);
+        when(userThresholdMapper.insert(any(UserThreshold.class))).thenReturn(1);
+
+        // When: Create threshold
+        userThresholdService.create(testUserId, canonicalRequest);
+
+        // Then: The persisted key is unchanged
+        ArgumentCaptor<UserThreshold> captor = ArgumentCaptor.forClass(UserThreshold.class);
+        verify(userThresholdMapper, times(1)).insert(captor.capture());
+        assertEquals("bloodGlucose", captor.getValue().getMetricKey());
     }
 }

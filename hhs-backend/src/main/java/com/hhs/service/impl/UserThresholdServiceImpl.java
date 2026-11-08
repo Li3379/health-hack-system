@@ -8,6 +8,7 @@ import com.hhs.exception.BusinessException;
 import com.hhs.common.constant.ErrorCode;
 import com.hhs.mapper.UserThresholdMapper;
 import com.hhs.service.UserThresholdService;
+import com.hhs.service.domain.MetricKeyNormalizer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
@@ -45,10 +46,17 @@ public class UserThresholdServiceImpl implements UserThresholdService {
     public UserThreshold create(Long userId, UserThresholdRequest request) {
         log.info("Creating threshold for user: {}, metricKey: {}", userId, request.getMetricKey());
 
+        // FIX-02 (D-17): canonicalize the metric key BEFORE the duplicate pre-check so
+        // the pre-check and the insert observe the same value. Normalizing only the
+        // insert would let an alias request (e.g. "glucose") skip the pre-check for an
+        // existing canonical row ("bloodGlucose") and die on the uk_user_metric unique
+        // index as a 500, instead of the business error below (RESEARCH Pitfall 3).
+        request.setMetricKey(MetricKeyNormalizer.toCanonicalKey(request.getMetricKey()));
+
         // Check if threshold already exists for this user and metric key
         UserThreshold existing = getByUserAndMetricKey(userId, request.getMetricKey());
         if (existing != null) {
-            throw new BusinessException(ErrorCode.RESOURCE_ALREADY_EXISTS, "该指标已存在阈值，请直接编辑");
+            throw new BusinessException(ErrorCode.RESOURCE_ALREADY_EXISTS, "该指标已有阈值，是否改为编辑？");
         }
 
         UserThreshold threshold = new UserThreshold();
@@ -69,6 +77,11 @@ public class UserThresholdServiceImpl implements UserThresholdService {
     public UserThreshold update(Long id, Long userId, UserThresholdRequest request) {
         log.info("Updating threshold id: {} for user: {}", id, userId);
 
+        // FIX-02 (D-17): canonicalize before the metric-change comparison so an alias
+        // request for the same metric (e.g. "glucose" on a "bloodGlucose" row) is not
+        // treated as a metric change, and the persisted value is always the canonical key.
+        request.setMetricKey(MetricKeyNormalizer.toCanonicalKey(request.getMetricKey()));
+
         UserThreshold threshold = userThresholdMapper.selectById(id);
         if (threshold == null) {
             throw new BusinessException(ErrorCode.HEALTH_THRESHOLD_INVALID, "未找到该条阈值设置");
@@ -84,7 +97,7 @@ public class UserThresholdServiceImpl implements UserThresholdService {
         if (!threshold.getMetricKey().equals(request.getMetricKey())) {
             UserThreshold existing = getByUserAndMetricKey(userId, request.getMetricKey());
             if (existing != null && !existing.getId().equals(id)) {
-                throw new BusinessException(ErrorCode.RESOURCE_ALREADY_EXISTS, "该指标已存在阈值，请直接编辑");
+                throw new BusinessException(ErrorCode.RESOURCE_ALREADY_EXISTS, "该指标已有阈值，是否改为编辑？");
             }
         }
 
