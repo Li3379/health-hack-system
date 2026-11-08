@@ -167,7 +167,9 @@ describe('format utils', () => {
         normalMin: 60,
         normalMax: 100,
         placeholder: '例如: 80',
-        guideHint: '测试动态指标说明'
+        guideHint: '测试动态指标说明',
+        alertable: false,
+        recommended: {}
       }
 
       expect(getMetricDisplayName('customDynamicMetric')).toBe('自定义动态指标')

@@ -2,7 +2,9 @@ import type { MetricMetaMap } from '@/types/api'
 
 /**
  * 本地权威指标静态元数据字典（离线兜底源）
- * 严格同步后端 HealthMetricMetaRegistry.java 中的 23 项指标定义与生理极限
+ * 严格同步后端 HealthMetricMetaRegistry.java 中的 23 项指标定义与生理极限。
+ * alertable 与 recommended 镜像后端 D-19 判定与 alert_rule 种子值（T-12-17：
+ * 由 store 测试断言六项集合相等，防止两端漂移）。
  */
 export const FALLBACK_METRIC_META: MetricMetaMap = {
   // HEALTH METRICS (16 项)
@@ -19,7 +21,9 @@ export const FALLBACK_METRIC_META: MetricMetaMap = {
     normalMin: 60,
     normalMax: 100,
     placeholder: '例如: 75',
-    guideHint: '正常静息心率 60 ~ 100 次/分'
+    guideHint: '正常静息心率 60 ~ 100 次/分',
+    alertable: true,
+    recommended: { warningLow: 50, warningHigh: 100, criticalLow: 40, criticalHigh: 120 }
   },
   systolicBP: {
     canonicalKey: 'systolicBP',
@@ -34,7 +38,9 @@ export const FALLBACK_METRIC_META: MetricMetaMap = {
     normalMin: 90,
     normalMax: 139,
     placeholder: '例如: 120',
-    guideHint: '正常收缩压 90 ~ 139 mmHg'
+    guideHint: '正常收缩压 90 ~ 139 mmHg',
+    alertable: true,
+    recommended: { warningLow: 90, warningHigh: 140, criticalLow: 80, criticalHigh: 160 }
   },
   diastolicBP: {
     canonicalKey: 'diastolicBP',
@@ -49,7 +55,9 @@ export const FALLBACK_METRIC_META: MetricMetaMap = {
     normalMin: 60,
     normalMax: 89,
     placeholder: '例如: 80',
-    guideHint: '正常舒张压 60 ~ 89 mmHg'
+    guideHint: '正常舒张压 60 ~ 89 mmHg',
+    alertable: true,
+    recommended: { warningLow: 60, warningHigh: 90, criticalLow: 50, criticalHigh: 100 }
   },
   bloodGlucose: {
     canonicalKey: 'bloodGlucose',
@@ -72,7 +80,9 @@ export const FALLBACK_METRIC_META: MetricMetaMap = {
     normalMin: 3.9,
     normalMax: 6.1,
     placeholder: '例如: 5.6',
-    guideHint: '正常空腹参考值 3.9 ~ 6.1 mmol/L'
+    guideHint: '正常空腹参考值 3.9 ~ 6.1 mmol/L',
+    alertable: true,
+    recommended: { warningLow: 3.9, warningHigh: 7.0, criticalLow: 3.0, criticalHigh: 11.1 }
   },
   fastingGlucose: {
     canonicalKey: 'fastingGlucose',
@@ -87,7 +97,9 @@ export const FALLBACK_METRIC_META: MetricMetaMap = {
     normalMin: 3.9,
     normalMax: 6.1,
     placeholder: '例如: 5.2',
-    guideHint: '正常空腹参考值 3.9 ~ 6.1 mmol/L'
+    guideHint: '正常空腹参考值 3.9 ~ 6.1 mmol/L',
+    alertable: false,
+    recommended: {}
   },
   postprandialGlucose: {
     canonicalKey: 'postprandialGlucose',
@@ -102,7 +114,9 @@ export const FALLBACK_METRIC_META: MetricMetaMap = {
     normalMin: 3.9,
     normalMax: 7.8,
     placeholder: '例如: 6.8',
-    guideHint: '餐后2小时参考值 3.9 ~ 7.8 mmol/L'
+    guideHint: '餐后2小时参考值 3.9 ~ 7.8 mmol/L',
+    alertable: false,
+    recommended: {}
   },
   bodyTemperature: {
     canonicalKey: 'bodyTemperature',
@@ -125,7 +139,9 @@ export const FALLBACK_METRIC_META: MetricMetaMap = {
     normalMin: 36.0,
     normalMax: 37.2,
     placeholder: '例如: 36.5',
-    guideHint: '正常腋温参考值 36.0 ~ 37.2 °C'
+    guideHint: '正常腋温参考值 36.0 ~ 37.2 °C',
+    alertable: true,
+    recommended: { warningLow: 36.0, warningHigh: 37.5, criticalLow: 35.5, criticalHigh: 38.5 }
   },
   weight: {
     canonicalKey: 'weight',
@@ -140,7 +156,9 @@ export const FALLBACK_METRIC_META: MetricMetaMap = {
     normalMin: 40.0,
     normalMax: 120.0,
     placeholder: '例如: 65.0',
-    guideHint: '健康体重通常与身高相适应 (BMI 18.5 ~ 23.9)'
+    guideHint: '健康体重通常与身高相适应 (BMI 18.5 ~ 23.9)',
+    alertable: false,
+    recommended: {}
   },
   bmi: {
     canonicalKey: 'bmi',
@@ -155,7 +173,9 @@ export const FALLBACK_METRIC_META: MetricMetaMap = {
     normalMin: 18.5,
     normalMax: 23.9,
     placeholder: '例如: 22.0',
-    guideHint: '正常 BMI 参考值 18.5 ~ 23.9'
+    guideHint: '正常 BMI 参考值 18.5 ~ 23.9',
+    alertable: true,
+    recommended: { warningLow: 18.5, warningHigh: 28, criticalLow: 16, criticalHigh: 35 }
   },
   bloodOxygen: {
     canonicalKey: 'bloodOxygen',
@@ -170,7 +190,9 @@ export const FALLBACK_METRIC_META: MetricMetaMap = {
     normalMin: 95,
     normalMax: 100,
     placeholder: '例如: 98',
-    guideHint: '正常静息血氧 95 ~ 100%'
+    guideHint: '正常静息血氧 95 ~ 100%',
+    alertable: false,
+    recommended: {}
   },
   totalCholesterol: {
     canonicalKey: 'totalCholesterol',
@@ -185,7 +207,9 @@ export const FALLBACK_METRIC_META: MetricMetaMap = {
     normalMin: 2.8,
     normalMax: 5.2,
     placeholder: '例如: 4.50',
-    guideHint: '理想参考值 < 5.20 mmol/L'
+    guideHint: '理想参考值 < 5.20 mmol/L',
+    alertable: false,
+    recommended: {}
   },
   triglycerides: {
     canonicalKey: 'triglycerides',
@@ -200,7 +224,9 @@ export const FALLBACK_METRIC_META: MetricMetaMap = {
     normalMin: 0.4,
     normalMax: 1.7,
     placeholder: '例如: 1.20',
-    guideHint: '理想参考值 < 1.70 mmol/L'
+    guideHint: '理想参考值 < 1.70 mmol/L',
+    alertable: false,
+    recommended: {}
   },
   hdlCholesterol: {
     canonicalKey: 'hdlCholesterol',
@@ -215,7 +241,9 @@ export const FALLBACK_METRIC_META: MetricMetaMap = {
     normalMin: 1.0,
     normalMax: 2.2,
     placeholder: '例如: 1.30',
-    guideHint: '正常参考值 >= 1.00 mmol/L'
+    guideHint: '正常参考值 >= 1.00 mmol/L',
+    alertable: false,
+    recommended: {}
   },
   ldlCholesterol: {
     canonicalKey: 'ldlCholesterol',
@@ -230,7 +258,9 @@ export const FALLBACK_METRIC_META: MetricMetaMap = {
     normalMin: 1.3,
     normalMax: 3.4,
     placeholder: '例如: 2.60',
-    guideHint: '理想参考值 < 3.40 mmol/L'
+    guideHint: '理想参考值 < 3.40 mmol/L',
+    alertable: false,
+    recommended: {}
   },
   uricAcid: {
     canonicalKey: 'uricAcid',
@@ -245,7 +275,9 @@ export const FALLBACK_METRIC_META: MetricMetaMap = {
     normalMin: 150,
     normalMax: 420,
     placeholder: '例如: 320',
-    guideHint: '正常参考值 150 ~ 420 μmol/L'
+    guideHint: '正常参考值 150 ~ 420 μmol/L',
+    alertable: false,
+    recommended: {}
   },
   creatinine: {
     canonicalKey: 'creatinine',
@@ -260,7 +292,9 @@ export const FALLBACK_METRIC_META: MetricMetaMap = {
     normalMin: 44,
     normalMax: 133,
     placeholder: '例如: 85',
-    guideHint: '正常参考值 44 ~ 133 μmol/L'
+    guideHint: '正常参考值 44 ~ 133 μmol/L',
+    alertable: false,
+    recommended: {}
   },
 
   // WELLNESS METRICS (7 项)
@@ -277,7 +311,9 @@ export const FALLBACK_METRIC_META: MetricMetaMap = {
     normalMin: 6.0,
     normalMax: 9.0,
     placeholder: '例如: 7.5',
-    guideHint: '推荐每晚睡眠 6.0 ~ 9.0 小时'
+    guideHint: '推荐每晚睡眠 6.0 ~ 9.0 小时',
+    alertable: false,
+    recommended: {}
   },
   sleepQuality: {
     canonicalKey: 'sleepQuality',
@@ -292,7 +328,9 @@ export const FALLBACK_METRIC_META: MetricMetaMap = {
     normalMin: 3,
     normalMax: 5,
     placeholder: '1~5',
-    guideHint: '1: 很差, 3: 一般, 5: 很好'
+    guideHint: '1: 很差, 3: 一般, 5: 很好',
+    alertable: false,
+    recommended: {}
   },
   steps: {
     canonicalKey: 'steps',
@@ -307,7 +345,9 @@ export const FALLBACK_METRIC_META: MetricMetaMap = {
     normalMin: 6000,
     normalMax: 10000,
     placeholder: '例如: 8000',
-    guideHint: '推荐每日活动 6000 ~ 10000 步'
+    guideHint: '推荐每日活动 6000 ~ 10000 步',
+    alertable: false,
+    recommended: {}
   },
   exerciseMinutes: {
     canonicalKey: 'exerciseMinutes',
@@ -322,7 +362,9 @@ export const FALLBACK_METRIC_META: MetricMetaMap = {
     normalMin: 30,
     normalMax: 120,
     placeholder: '例如: 45',
-    guideHint: '推荐每日适度运动 30 ~ 60 分钟'
+    guideHint: '推荐每日适度运动 30 ~ 60 分钟',
+    alertable: false,
+    recommended: {}
   },
   waterIntake: {
     canonicalKey: 'waterIntake',
@@ -337,7 +379,9 @@ export const FALLBACK_METRIC_META: MetricMetaMap = {
     normalMin: 1500,
     normalMax: 2500,
     placeholder: '例如: 2000',
-    guideHint: '推荐每日饮水 1500 ~ 2500 ml'
+    guideHint: '推荐每日饮水 1500 ~ 2500 ml',
+    alertable: false,
+    recommended: {}
   },
   mood: {
     canonicalKey: 'mood',
@@ -352,7 +396,9 @@ export const FALLBACK_METRIC_META: MetricMetaMap = {
     normalMin: 3,
     normalMax: 5,
     placeholder: '1~5',
-    guideHint: '1: 极差, 3: 平静, 5: 极佳'
+    guideHint: '1: 极差, 3: 平静, 5: 极佳',
+    alertable: false,
+    recommended: {}
   },
   energy: {
     canonicalKey: 'energy',
@@ -367,6 +413,8 @@ export const FALLBACK_METRIC_META: MetricMetaMap = {
     normalMin: 3,
     normalMax: 5,
     placeholder: '1~5',
-    guideHint: '1: 疲惫, 3: 良好, 5: 充沛'
+    guideHint: '1: 疲惫, 3: 良好, 5: 充沛',
+    alertable: false,
+    recommended: {}
   }
 }
