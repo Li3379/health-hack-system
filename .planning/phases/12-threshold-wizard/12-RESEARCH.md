@@ -710,27 +710,28 @@ export interface MetricDefinitionVO {
 
 **如本表为空则无需用户确认。此处有 6 条，均需在计划前与用户对齐，尤其 A1 / A2 / A3。**
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **`alertable` 的确切定义与 bloodOxygen 的归属**
+   - RESOLVED: 按 D-19（12-CONTEXT.md，2026-11-08 用户拍板）取"有可用 alert_rule 种子"定义 → `alertable=false`（6 项），bloodOxygen 用户行保留在列表中（D-20）。
    - What we know: `alert_rule` 有 7 行，`weight` 四列全 NULL，故可用者 6 项；UI-SPEC 空状态恰好列 6 项同一集合。
    - What's unclear: bloodOxygen 已有用户阈值行（id=4）却无 `alert_rule` 种子。它是"引擎能评估但没有默认值"还是"引擎不应评估"？
-   - Recommendation: 按 A1 取"有可用种子"定义 → `alertable=false`，并保留其用户行。计划中列为显式确认点。
+   - Resolution: 见 D-19 / D-20。
 
 2. **`weight` 是否需要 `alertable`**
+   - RESOLVED: 不纳入（D-19），与"基于身高的动态评估"语义冲突。
    - What we know: 种子描述写"dynamically assessed based on height"，四值全 NULL。
-   - What's unclear: 是否希望用 `normalMin/normalMax`（40–120 kg）作为 weight 的推荐值，使 weight 可配置。
-   - Recommendation: **不**纳入（A1）。为 weight 提供静态体重阈值与"基于身高的动态评估"语义冲突。
+   - Resolution: 见 D-19。
 
 3. **v1.1 迁移脚本是否已在任何环境执行过**
+   - RESOLVED: 由 plan 03 的 Step 0 前后计数设计承接——脚本按完整别名集合编写，幂等覆盖任何中间状态（含"部分归一化"），无需事先确知生产状态。
    - What we know: 文件存在（`sql/migration/v1.1_normalize_metric_keys.sql`），且 `docs/` 中没有引用它的部署步骤；`ECS-DEPLOYMENT.md:161` 只提到 `schema.sql`。
-   - What's unclear: 生产是否处于"部分归一化"状态。
-   - Recommendation: 新脚本的 Step 0 前后计数即为诊断手段；脚本按完整别名集合编写，可幂等覆盖任何中间状态。
+   - Resolution: plan 03 BEFORE/AFTER COUNT 块即诊断手段。
 
 4. **修复后是否需要对存量告警量做限流/缓冲**
+   - RESOLVED: 不加限流（D-21），列为 UAT 观察项（12-VALIDATION.md §Manual-Only Verifications "修复后 WARNING 告警的真实推送量与频率"）。
    - What we know: `PushStrategyService:36-50` 对 MEDIUM 走 WebSocket + Email。
-   - What's unclear: 生产用户是否配置了 Email 通道。
-   - Recommendation: 计划中列为 UAT 观察项；若无 Email 配置则影响为零。
+   - Resolution: 见 D-21。
 
 ## Environment Availability
 

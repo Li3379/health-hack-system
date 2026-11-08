@@ -2,7 +2,7 @@
 phase: "12"
 slug: "threshold-wizard"
 status: draft
-nyquist_compliant: false
+nyquist_compliant: true
 wave_0_complete: false
 created: "2026-11-08"
 ---
@@ -50,7 +50,7 @@ created: "2026-11-08"
 | Req ID | 行为 | Test Type | Automated Command | File Exists | 预期失败信号 | Status |
 |--------|------|-----------|-------------------|-------------|-------------|--------|
 | FIX-01 | 四档判定正确，`isNormalRange` 与 `classify` 严格互补 | unit | `mvn -f hhs-backend/pom.xml test -Dtest=ThresholdRangeCheckerTest` | ❌ W0 | `expected: <WARNING> but was: <NORMAL>` | ⬜ |
-| FIX-02 | `glucose` 写入落库为 `bloodGlucose`；别名撞已有行返回业务错误而非 500 | unit + integration | `… -Dtest=UserThresholdServiceTest`；`… -Dtest=ThresholdAliasIntegrationTest`（需 Docker） | ⚠️ 存在需扩展 / ❌ W0 | `expected: "bloodGlucose" but was: "glucose"` | ⬜ |
+| FIX-02 | `glucose` 写入落库为 `bloodGlucose`；别名撞已有行返回业务错误而非 500 | unit | `mvn -f hhs-backend/pom.xml test -Dtest=UserThresholdServiceTest` | ⚠️ 存在需扩展 | `expected: "bloodGlucose" but was: "glucose"` | ⬜ |
 | FIX-03 | 存量 `glucose` 行经 `bloodGlucose` 查询可命中 | unit + integration | `… -Dtest=ThresholdEvaluatorTest` | ❌ W0 | mock `selectList` 未收到 `.in` → `expected not null` | ⬜ |
 | FIX-04 | 脚本幂等、重复行合并且保留最新 | manual UAT + SQL 断言 | `docker compose exec -T mysql mysql -uroot -p"$DB_PASSWORD" hhs < hhs-backend/src/main/resources/sql/fix-threshold-metric-key.sql`，比对前后 COUNT | ❌ W0 | 第二次执行后行数变化（非幂等） | ⬜ |
 | FIX-05 | D-18 全覆盖：正常 / 警告双侧 / 危急双侧 / 单侧 null / 全 null / 恰等边界 | unit | `mvn -f hhs-backend/pom.xml test -Dtest=ThresholdRangeCheckerTest` | ❌ W0 | 任一分支断言 `expected: <X> but was: <Y>` | ⬜ |
@@ -76,7 +76,6 @@ created: "2026-11-08"
 - [ ] `hhs-backend/src/test/java/com/hhs/service/domain/ThresholdRangeCheckerTest.java` — FIX-01 / FIX-05（六类边界用例）
 - [ ] `hhs-backend/src/test/java/com/hhs/service/domain/ThresholdEvaluatorTest.java` — FIX-03（别名 IN + 确定性取首）
 - [ ] `hhs-backend/src/test/java/com/hhs/validation/ThresholdRangeValidatorTest.java` — THR-05 后端（断言一次违规 → **两条** violation，字段名不含点）
-- [ ] `hhs-backend/src/test/java/com/hhs/integration/ThresholdAliasIntegrationTest.java` — FIX-02/FIX-03 端到端（需 Docker）
 - [ ] `hhs-frontend-v2/src/__tests__/utils/thresholdValidation.spec.ts` — THR-05 前端纯函数
 - [ ] `hhs-frontend-v2/src/__tests__/components/ThresholdZoneBar.spec.ts` — THR-04
 - [ ] `hhs-frontend-v2/src/__tests__/views/ThresholdWizard.spec.ts` — THR-01/02/03/06
@@ -91,6 +90,7 @@ created: "2026-11-08"
 
 | Behavior | Requirement | Why Manual | Test Instructions |
 |----------|-------------|------------|-------------------|
+| 别名写入 → 标准 key 落库的数据库级端到端（原 Wave 0 集成测试项 `ThresholdAliasIntegrationTest`） | FIX-02 / FIX-03 | Surefire 排除 `*IntegrationTest`（Failsafe 才拾取且需 Docker）；别名 IN 查询与写入规范化已由 plan 02 的 wrapper 级单测断言（`selectList` 收到 `.in` 集合参数、落库 key 断言），数据库级真值由 plan 03 的手工脚本 UAT（前后 COUNT 比对，操作真实 MySQL 并触碰 `uk_user_metric`）承接 | ①通过 API 以别名 `glucose` 保存一条阈值；②`SELECT metric_key FROM user_threshold WHERE user_id=<me>` 确认落库为 `bloodGlucose`；③用 `bloodGlucose` 查询阈值命中该行；④别名撞已有行返回业务错误而非 500 |
 | SQL 脚本在生产规模数据上的幂等性与重复行合并正确性 | FIX-04 | 需要真实的多用户、多别名历史数据；单测无法复现 MySQL 的 UNIQUE 约束交互 | ①执行前记录 `SELECT user_id, metric_key, COUNT(*) FROM user_threshold GROUP BY 1,2 HAVING COUNT(*)>1` 与总行数；②执行脚本；③再次执行脚本并确认总行数与第一次执行后一致；④确认无重复 `(user_id, metric_key)` 组合；⑤确认 `alert_rule.metric_key` 全部是标准 key |
 | 修复后 WARNING 告警的真实推送量与频率 | FIX-01（副作用） | 需要真实用户与真实推送渠道；D-21 明确本阶段不加限流，须人工观察 | 用一次真实测量落库触发警告区间，观察 WebSocket 与 Email 是否各收到 1 条、是否在 1 小时内重复；记录到 UAT |
 | 向导在真实浏览器中的三步流程、四区色带渲染、主题切换 | THR-01..THR-07 | 视觉与跨主题对比度无法由 DOM 断言覆盖 | 浏览器走一遍新增 → 预填 → 改值 → 预览 → 确认 → 保存；分别在浅色/深色主题下截图比对 UI-SPEC 的色带与错误色 |
@@ -100,11 +100,11 @@ created: "2026-11-08"
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 90s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references（`ThresholdAliasIntegrationTest` 已于 2026-11-08 计划审查后降级为上方 Manual-Only 行，理由见该行 Why Manual 列）
+- [x] No watch-mode flags
+- [x] Feedback latency < 90s
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** approved 2026-11-08（plan-checker 审查后收口）
