@@ -93,7 +93,7 @@ class TrendPredictorTest {
         // Given: Rising trend data points
         List<HealthMetric> metrics = createMetrics(7, 70.0, 3.0); // Each day +3
         when(healthMetricMapper.selectList(any(LambdaQueryWrapper.class))).thenReturn(metrics);
-        when(userThresholdMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(null);
+        when(userThresholdMapper.selectList(any(LambdaQueryWrapper.class))).thenReturn(Collections.emptyList());
 
         // When: Predict trend
         TrendResult result = trendPredictor.predict(testUserId, testMetricKey);
@@ -113,7 +113,7 @@ class TrendPredictorTest {
         // Given: Falling trend data points
         List<HealthMetric> metrics = createMetrics(7, 100.0, -3.0); // Each day -3
         when(healthMetricMapper.selectList(any(LambdaQueryWrapper.class))).thenReturn(metrics);
-        when(userThresholdMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(null);
+        when(userThresholdMapper.selectList(any(LambdaQueryWrapper.class))).thenReturn(Collections.emptyList());
 
         // When: Predict trend
         TrendResult result = trendPredictor.predict(testUserId, testMetricKey);
@@ -131,7 +131,7 @@ class TrendPredictorTest {
         // Given: Stable data points (minimal variation)
         List<HealthMetric> metrics = createMetrics(7, 75.0, 0.001); // Very small change
         when(healthMetricMapper.selectList(any(LambdaQueryWrapper.class))).thenReturn(metrics);
-        when(userThresholdMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(null);
+        when(userThresholdMapper.selectList(any(LambdaQueryWrapper.class))).thenReturn(Collections.emptyList());
 
         // When: Predict trend
         TrendResult result = trendPredictor.predict(testUserId, testMetricKey);
@@ -148,7 +148,7 @@ class TrendPredictorTest {
         // Start at 90, threshold is 100, slope +3/day
         List<HealthMetric> metrics = createMetrics(7, 90.0, 3.0);
         when(healthMetricMapper.selectList(any(LambdaQueryWrapper.class))).thenReturn(metrics);
-        when(userThresholdMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(testThreshold);
+        when(userThresholdMapper.selectList(any(LambdaQueryWrapper.class))).thenReturn(Collections.singletonList(testThreshold));
 
         // When: Predict trend
         TrendResult result = trendPredictor.predict(testUserId, testMetricKey);
@@ -169,7 +169,7 @@ class TrendPredictorTest {
         // Start at 60, threshold is 50, slope -3/day
         List<HealthMetric> metrics = createMetrics(7, 60.0, -3.0);
         when(healthMetricMapper.selectList(any(LambdaQueryWrapper.class))).thenReturn(metrics);
-        when(userThresholdMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(testThreshold);
+        when(userThresholdMapper.selectList(any(LambdaQueryWrapper.class))).thenReturn(Collections.singletonList(testThreshold));
 
         // When: Predict trend
         TrendResult result = trendPredictor.predict(testUserId, testMetricKey);
@@ -187,7 +187,7 @@ class TrendPredictorTest {
         // Start at 75, threshold is 100, very small slope
         List<HealthMetric> metrics = createMetrics(7, 75.0, 0.5);
         when(healthMetricMapper.selectList(any(LambdaQueryWrapper.class))).thenReturn(metrics);
-        when(userThresholdMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(testThreshold);
+        when(userThresholdMapper.selectList(any(LambdaQueryWrapper.class))).thenReturn(Collections.singletonList(testThreshold));
 
         // When: Predict trend
         TrendResult result = trendPredictor.predict(testUserId, testMetricKey);
@@ -204,7 +204,7 @@ class TrendPredictorTest {
         // Given: 14 days of data
         List<HealthMetric> metrics = createMetrics(14, 80.0, 1.0);
         when(healthMetricMapper.selectList(any(LambdaQueryWrapper.class))).thenReturn(metrics);
-        when(userThresholdMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(null);
+        when(userThresholdMapper.selectList(any(LambdaQueryWrapper.class))).thenReturn(Collections.emptyList());
 
         // When: Predict with 14-day lookback
         TrendResult result = trendPredictor.predict(testUserId, testMetricKey, 14);
@@ -220,7 +220,7 @@ class TrendPredictorTest {
         // Given: Trend approaching threshold
         List<HealthMetric> metrics = createMetrics(7, 95.0, 2.0); // Rising toward 100 threshold
         when(healthMetricMapper.selectList(any(LambdaQueryWrapper.class))).thenReturn(metrics);
-        when(userThresholdMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(testThreshold);
+        when(userThresholdMapper.selectList(any(LambdaQueryWrapper.class))).thenReturn(Collections.singletonList(testThreshold));
 
         // When: Check early warning
         boolean needed = trendPredictor.shouldGenerateEarlyWarning(testUserId, testMetricKey);
@@ -235,7 +235,7 @@ class TrendPredictorTest {
         // Given: Stable trend far from threshold
         List<HealthMetric> metrics = createMetrics(7, 70.0, 0.1);
         when(healthMetricMapper.selectList(any(LambdaQueryWrapper.class))).thenReturn(metrics);
-        when(userThresholdMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(testThreshold);
+        when(userThresholdMapper.selectList(any(LambdaQueryWrapper.class))).thenReturn(Collections.singletonList(testThreshold));
 
         // When: Check early warning
         boolean needed = trendPredictor.shouldGenerateEarlyWarning(testUserId, testMetricKey);
@@ -264,7 +264,7 @@ class TrendPredictorTest {
         // Given: Multiple data points
         List<HealthMetric> metrics = createMetrics(5, 75.0, 1.0);
         when(healthMetricMapper.selectList(any(LambdaQueryWrapper.class))).thenReturn(metrics);
-        when(userThresholdMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(null);
+        when(userThresholdMapper.selectList(any(LambdaQueryWrapper.class))).thenReturn(Collections.emptyList());
 
         // When: Predict trend
         TrendResult result = trendPredictor.predict(testUserId, testMetricKey);
@@ -300,7 +300,7 @@ class TrendPredictorTest {
             metrics.add(metric);
         }
         when(healthMetricMapper.selectList(any(LambdaQueryWrapper.class))).thenReturn(metrics);
-        when(userThresholdMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(null);
+        when(userThresholdMapper.selectList(any(LambdaQueryWrapper.class))).thenReturn(Collections.emptyList());
 
         // When: Predict trend
         TrendResult result = trendPredictor.predict(testUserId, testMetricKey);

@@ -74,7 +74,7 @@ class RecoveryNotifierTest {
         BigDecimal normalValue = new BigDecimal("85");
 
         when(healthAlertMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(unresolvedAlert);
-        when(userThresholdMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(testThreshold);
+        when(userThresholdMapper.selectList(any(LambdaQueryWrapper.class))).thenReturn(Collections.singletonList(testThreshold));
         when(healthAlertMapper.insert(any(HealthAlert.class))).thenAnswer(invocation -> {
             HealthAlert alert = invocation.getArgument(0);
             alert.setId(2L);
@@ -116,7 +116,7 @@ class RecoveryNotifierTest {
         BigDecimal highValue = new BigDecimal("110"); // Above warning high of 100
 
         when(healthAlertMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(unresolvedAlert);
-        when(userThresholdMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(testThreshold);
+        when(userThresholdMapper.selectList(any(LambdaQueryWrapper.class))).thenReturn(Collections.singletonList(testThreshold));
 
         // When
         HealthAlert result = recoveryNotifier.checkAndNotifyRecovery(testUserId, testMetricKey, highValue, "bpm");
@@ -133,7 +133,7 @@ class RecoveryNotifierTest {
         BigDecimal lowValue = new BigDecimal("50"); // Below warning low of 60
 
         when(healthAlertMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(unresolvedAlert);
-        when(userThresholdMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(testThreshold);
+        when(userThresholdMapper.selectList(any(LambdaQueryWrapper.class))).thenReturn(Collections.singletonList(testThreshold));
 
         // When
         HealthAlert result = recoveryNotifier.checkAndNotifyRecovery(testUserId, testMetricKey, lowValue, "bpm");
@@ -147,7 +147,7 @@ class RecoveryNotifierTest {
     void testRecovery_NoThreshold() {
         // Given: No threshold configured
         when(healthAlertMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(unresolvedAlert);
-        when(userThresholdMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(null);
+        when(userThresholdMapper.selectList(any(LambdaQueryWrapper.class))).thenReturn(Collections.emptyList());
         when(healthAlertMapper.insert(any(HealthAlert.class))).thenAnswer(invocation -> {
             HealthAlert alert = invocation.getArgument(0);
             alert.setId(2L);
@@ -182,7 +182,7 @@ class RecoveryNotifierTest {
         BigDecimal normalValue = new BigDecimal("85");
 
         when(healthAlertMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(unresolvedAlert);
-        when(userThresholdMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(testThreshold);
+        when(userThresholdMapper.selectList(any(LambdaQueryWrapper.class))).thenReturn(Collections.singletonList(testThreshold));
         when(healthAlertMapper.insert(any(HealthAlert.class))).thenReturn(1);
         when(healthAlertMapper.updateById(any(HealthAlert.class))).thenReturn(1);
         when(pushStrategyService.pushWithStrategy(any(), any())).thenReturn(Collections.emptyList());
@@ -202,7 +202,7 @@ class RecoveryNotifierTest {
         BigDecimal normalValue = new BigDecimal("85");
 
         when(healthAlertMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(unresolvedAlert);
-        when(userThresholdMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(testThreshold);
+        when(userThresholdMapper.selectList(any(LambdaQueryWrapper.class))).thenReturn(Collections.singletonList(testThreshold));
         when(healthAlertMapper.insert(any(HealthAlert.class))).thenAnswer(invocation -> {
             HealthAlert alert = invocation.getArgument(0);
             alert.setId(2L);

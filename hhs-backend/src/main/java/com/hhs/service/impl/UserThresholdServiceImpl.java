@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 
 /**
  * User Threshold Service Implementation
@@ -141,9 +142,20 @@ public class UserThresholdServiceImpl implements UserThresholdService {
     @Override
     @Transactional(timeout = 30, readOnly = true)
     public UserThreshold getByUserAndMetricKey(Long userId, String metricKey) {
+        // FIX-03 (D-17): alias-set IN query — a row stored under any alias of the
+        // requested metric (legacy "glucose" row vs canonical "bloodGlucose" query)
+        // must still be found. selectList + deterministic order instead of selectOne:
+        // BaseMapper.selectOne(Wrapper) delegates to selectOne(wrapper, true) and
+        // throws TooManyResultsException when a legacy alias row and the canonical row
+        // coexist during the migration window (RESEARCH Pitfall 2). The updatedAt/id
+        // descending order encodes D-14 (keep the most recently updated row).
+        Set<String> aliases = MetricKeyNormalizer.getAliases(metricKey);
         LambdaQueryWrapper<UserThreshold> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(UserThreshold::getUserId, userId);
-        wrapper.eq(UserThreshold::getMetricKey, metricKey);
-        return userThresholdMapper.selectOne(wrapper);
+        wrapper.in(UserThreshold::getMetricKey, aliases);
+        wrapper.orderByDesc(UserThreshold::getUpdatedAt);
+        wrapper.orderByDesc(UserThreshold::getId);
+        List<UserThreshold> rows = userThresholdMapper.selectList(wrapper);
+        return rows.isEmpty() ? null : rows.get(0);
     }
 }
