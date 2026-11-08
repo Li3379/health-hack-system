@@ -37,7 +37,10 @@ expected: |
   4. 四项说明含单位插值；
   5. 改值时五段四区条实时重绘，未填边界显示「—」；
   6. 第 3 步确认语句只含已填边界、数字加粗；保存成功关闭向导、列表新增行。
-result: pending
+result: issue
+reported: "向导 1-5 步全部符合预期（分组 6 项、显示名 (单位) 文案、精确预填 3.9/7.0/3.0/11.1、推荐徽标随改值消失、单位插值说明、四区条实时重绘、确认语句完整含修改值 8.5、保存成功 toast「添加成功」且列表新增行）；唯一缺陷：保存成功后向导未自动关闭，停留在第 3 步确认页需手动关闭"
+severity: minor
+result_note: "数据正确入库（列表行：血糖 11.1/8.5/3.9/3），预期第 6 步的自动关闭失败，其余全部通过；可手动关闭无数据丢失，判 minor"
 
 ### 2. 内联校验与未保存守卫（零 toast / 不清空 / 双主题 / 窄屏）
 expected: |
@@ -100,11 +103,19 @@ result: pending
 
 total: 7
 passed: 0
-issues: 0
-pending: 7
+issues: 1
+pending: 6
 skipped: 0
 blocked: 0
 
 ## Gaps
 
-<!-- None yet -->
+- truth: "保存成功后向导自动关闭并回到列表"
+  status: failed
+  reason: "保存成功（toast「添加成功」+ 列表新增行）但向导停留在第 3 步确认页，未自动关闭，需手动关闭"
+  severity: minor
+  test: 1
+  root_cause: ""
+  artifacts: []
+  missing: []
+  debug_session: ""
