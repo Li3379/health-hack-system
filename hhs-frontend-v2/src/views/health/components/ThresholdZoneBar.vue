@@ -104,6 +104,7 @@ const zoneBarAriaLabel = computed(() => {
 
 .zone-bar__band {
   flex: 1;
+  min-width: 0; /* 允许 flex 子项收缩，长单位字符串不会撑破向导弹窗 */
   height: 40px; /* 2xl */
   display: flex;
   flex-direction: column;
@@ -135,6 +136,16 @@ const zoneBarAriaLabel = computed(() => {
   font-size: 14px; /* Body */
   line-height: 1.5;
   font-family: var(--font-mono);
+}
+
+/* E4 长文本：标签/数值 nowrap + ellipsis，视觉截断不换行；
+   未截断的完整值仍由根元素的 aria-label 承载（UI-SPEC 长文本与溢出） */
+.zone-bar__name,
+.zone-bar__value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
 }
 
 /* 窄屏：五带换行两行堆叠（3 + 2）而不是压缩，每带保持可读宽度 */
