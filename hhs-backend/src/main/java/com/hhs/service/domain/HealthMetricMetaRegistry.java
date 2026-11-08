@@ -17,7 +17,7 @@ import java.util.Optional;
 @Component
 public class HealthMetricMetaRegistry {
 
-    private static final String VERSION_TAG = "v1.1-metric-meta";
+    private static final String VERSION_TAG = "v1.2-metric-meta";
 
     private final Map<String, MetricDefinition> definitions = new LinkedHashMap<>();
 
@@ -47,7 +47,9 @@ public class HealthMetricMetaRegistry {
                 new BigDecimal("60"),
                 new BigDecimal("100"),
                 "例如: 75",
-                "正常静息心率 60 ~ 100 次/分"
+                "正常静息心率 60 ~ 100 次/分",
+                false,
+                null
         ));
 
         register(new MetricDefinition(
@@ -63,7 +65,9 @@ public class HealthMetricMetaRegistry {
                 new BigDecimal("90"),
                 new BigDecimal("139"),
                 "例如: 120",
-                "正常收缩压 90 ~ 139 mmHg"
+                "正常收缩压 90 ~ 139 mmHg",
+                false,
+                null
         ));
 
         register(new MetricDefinition(
@@ -79,7 +83,9 @@ public class HealthMetricMetaRegistry {
                 new BigDecimal("60"),
                 new BigDecimal("89"),
                 "例如: 80",
-                "正常舒张压 60 ~ 89 mmHg"
+                "正常舒张压 60 ~ 89 mmHg",
+                false,
+                null
         ));
 
         register(new MetricDefinition(
@@ -95,7 +101,9 @@ public class HealthMetricMetaRegistry {
                 new BigDecimal("3.9"),
                 new BigDecimal("6.1"),
                 "例如: 5.6",
-                "正常空腹参考值 3.9 ~ 6.1 mmol/L"
+                "正常空腹参考值 3.9 ~ 6.1 mmol/L",
+                false,
+                null
         ));
 
         register(new MetricDefinition(
@@ -111,7 +119,9 @@ public class HealthMetricMetaRegistry {
                 new BigDecimal("3.9"),
                 new BigDecimal("6.1"),
                 "例如: 5.2",
-                "正常空腹参考值 3.9 ~ 6.1 mmol/L"
+                "正常空腹参考值 3.9 ~ 6.1 mmol/L",
+                false,
+                null
         ));
 
         register(new MetricDefinition(
@@ -127,7 +137,9 @@ public class HealthMetricMetaRegistry {
                 new BigDecimal("3.9"),
                 new BigDecimal("7.8"),
                 "例如: 6.8",
-                "餐后2小时参考值 3.9 ~ 7.8 mmol/L"
+                "餐后2小时参考值 3.9 ~ 7.8 mmol/L",
+                false,
+                null
         ));
 
         register(new MetricDefinition(
@@ -143,7 +155,9 @@ public class HealthMetricMetaRegistry {
                 new BigDecimal("36.0"),
                 new BigDecimal("37.2"),
                 "例如: 36.5",
-                "正常腋温参考值 36.0 ~ 37.2 °C"
+                "正常腋温参考值 36.0 ~ 37.2 °C",
+                false,
+                null
         ));
 
         register(new MetricDefinition(
@@ -159,7 +173,9 @@ public class HealthMetricMetaRegistry {
                 new BigDecimal("40.0"),
                 new BigDecimal("120.0"),
                 "例如: 65.0",
-                "健康体重通常与身高相适应 (BMI 18.5 ~ 23.9)"
+                "健康体重通常与身高相适应 (BMI 18.5 ~ 23.9)",
+                false,
+                null
         ));
 
         register(new MetricDefinition(
@@ -175,7 +191,9 @@ public class HealthMetricMetaRegistry {
                 new BigDecimal("18.5"),
                 new BigDecimal("23.9"),
                 "例如: 22.0",
-                "正常 BMI 参考值 18.5 ~ 23.9"
+                "正常 BMI 参考值 18.5 ~ 23.9",
+                false,
+                null
         ));
 
         register(new MetricDefinition(
@@ -191,7 +209,9 @@ public class HealthMetricMetaRegistry {
                 new BigDecimal("95"),
                 new BigDecimal("100"),
                 "例如: 98",
-                "正常静息血氧 95 ~ 100%"
+                "正常静息血氧 95 ~ 100%",
+                false,
+                null
         ));
 
         register(new MetricDefinition(
@@ -207,7 +227,9 @@ public class HealthMetricMetaRegistry {
                 new BigDecimal("2.8"),
                 new BigDecimal("5.2"),
                 "例如: 4.50",
-                "理想参考值 < 5.20 mmol/L"
+                "理想参考值 < 5.20 mmol/L",
+                false,
+                null
         ));
 
         register(new MetricDefinition(
@@ -223,7 +245,9 @@ public class HealthMetricMetaRegistry {
                 new BigDecimal("0.4"),
                 new BigDecimal("1.7"),
                 "例如: 1.20",
-                "理想参考值 < 1.70 mmol/L"
+                "理想参考值 < 1.70 mmol/L",
+                false,
+                null
         ));
 
         register(new MetricDefinition(
@@ -239,7 +263,9 @@ public class HealthMetricMetaRegistry {
                 new BigDecimal("1.0"),
                 new BigDecimal("2.2"),
                 "例如: 1.30",
-                "正常参考值 >= 1.00 mmol/L"
+                "正常参考值 >= 1.00 mmol/L",
+                false,
+                null
         ));
 
         register(new MetricDefinition(
@@ -255,7 +281,9 @@ public class HealthMetricMetaRegistry {
                 new BigDecimal("1.3"),
                 new BigDecimal("3.4"),
                 "例如: 2.60",
-                "理想参考值 < 3.40 mmol/L"
+                "理想参考值 < 3.40 mmol/L",
+                false,
+                null
         ));
 
         register(new MetricDefinition(
@@ -271,7 +299,9 @@ public class HealthMetricMetaRegistry {
                 new BigDecimal("150"),
                 new BigDecimal("420"),
                 "例如: 320",
-                "正常参考值 150 ~ 420 μmol/L"
+                "正常参考值 150 ~ 420 μmol/L",
+                false,
+                null
         ));
 
         register(new MetricDefinition(
@@ -287,7 +317,9 @@ public class HealthMetricMetaRegistry {
                 new BigDecimal("44"),
                 new BigDecimal("133"),
                 "例如: 85",
-                "正常参考值 44 ~ 133 μmol/L"
+                "正常参考值 44 ~ 133 μmol/L",
+                false,
+                null
         ));
 
         // WELLNESS METRICS (7 items)
@@ -304,7 +336,9 @@ public class HealthMetricMetaRegistry {
                 new BigDecimal("6.0"),
                 new BigDecimal("9.0"),
                 "例如: 7.5",
-                "推荐每晚睡眠 6.0 ~ 9.0 小时"
+                "推荐每晚睡眠 6.0 ~ 9.0 小时",
+                false,
+                null
         ));
 
         register(new MetricDefinition(
@@ -320,7 +354,9 @@ public class HealthMetricMetaRegistry {
                 new BigDecimal("3"),
                 new BigDecimal("5"),
                 "1~5",
-                "1: 很差, 3: 一般, 5: 很好"
+                "1: 很差, 3: 一般, 5: 很好",
+                false,
+                null
         ));
 
         register(new MetricDefinition(
@@ -336,7 +372,9 @@ public class HealthMetricMetaRegistry {
                 new BigDecimal("6000"),
                 new BigDecimal("10000"),
                 "例如: 8000",
-                "推荐每日活动 6000 ~ 10000 步"
+                "推荐每日活动 6000 ~ 10000 步",
+                false,
+                null
         ));
 
         register(new MetricDefinition(
@@ -352,7 +390,9 @@ public class HealthMetricMetaRegistry {
                 new BigDecimal("30"),
                 new BigDecimal("120"),
                 "例如: 45",
-                "推荐每日适度运动 30 ~ 60 分钟"
+                "推荐每日适度运动 30 ~ 60 分钟",
+                false,
+                null
         ));
 
         register(new MetricDefinition(
@@ -368,7 +408,9 @@ public class HealthMetricMetaRegistry {
                 new BigDecimal("1500"),
                 new BigDecimal("2500"),
                 "例如: 2000",
-                "推荐每日饮水 1500 ~ 2500 ml"
+                "推荐每日饮水 1500 ~ 2500 ml",
+                false,
+                null
         ));
 
         register(new MetricDefinition(
@@ -384,7 +426,9 @@ public class HealthMetricMetaRegistry {
                 new BigDecimal("3"),
                 new BigDecimal("5"),
                 "1~5",
-                "1: 极差, 3: 平静, 5: 极佳"
+                "1: 极差, 3: 平静, 5: 极佳",
+                false,
+                null
         ));
 
         register(new MetricDefinition(
@@ -400,7 +444,9 @@ public class HealthMetricMetaRegistry {
                 new BigDecimal("3"),
                 new BigDecimal("5"),
                 "1~5",
-                "1: 疲惫, 3: 良好, 5: 充沛"
+                "1: 疲惫, 3: 良好, 5: 充沛",
+                false,
+                null
         ));
     }
 
@@ -444,6 +490,50 @@ public class HealthMetricMetaRegistry {
      */
     public boolean contains(String key) {
         return getDefinition(key).isPresent();
+    }
+
+    /**
+     * Merge startup-derived recommendations into the registry (D-03/D-06).
+     * Every canonical key present in the given map becomes {@code alertable=true} with the
+     * supplied recommended boundaries; definitions absent from the map keep
+     * {@code alertable=false} with a null recommendation. Keys may be legacy aliases
+     * (e.g. {@code glucose}) and are canonicalized before lookup; unknown keys are ignored.
+     * The registry stays dependency-free: the database read lives in
+     * {@link MetricRecommendedThresholdProvider}, so {@code new HealthMetricMetaRegistry()}
+     * keeps working in tests (all metrics report alertable=false until this method runs).
+     *
+     * @param recommendations canonicalKey (or alias) -> recommended boundaries
+     */
+    public synchronized void applyRecommendations(Map<String, RecommendedThreshold> recommendations) {
+        if (recommendations == null || recommendations.isEmpty()) {
+            return;
+        }
+        for (Map.Entry<String, RecommendedThreshold> entry : recommendations.entrySet()) {
+            if (entry.getKey() == null || entry.getValue() == null) {
+                continue;
+            }
+            String canonicalKey = MetricKeyNormalizer.toCanonicalKey(entry.getKey());
+            MetricDefinition current = definitions.get(canonicalKey);
+            if (current == null) {
+                continue;
+            }
+            definitions.put(canonicalKey, new MetricDefinition(
+                    current.canonicalKey(),
+                    current.aliases(),
+                    current.displayName(),
+                    current.category(),
+                    current.unit(),
+                    current.precision(),
+                    current.step(),
+                    current.hardMin(),
+                    current.hardMax(),
+                    current.normalMin(),
+                    current.normalMax(),
+                    current.placeholder(),
+                    current.guideHint(),
+                    true,
+                    entry.getValue()));
+        }
     }
 
     /**
