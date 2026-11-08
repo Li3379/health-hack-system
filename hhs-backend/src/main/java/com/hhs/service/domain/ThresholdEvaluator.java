@@ -12,6 +12,7 @@ import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Threshold evaluation orchestrator.
@@ -54,22 +55,32 @@ public class ThresholdEvaluator {
      * @return UserThreshold or null if none configured
      */
     public UserThreshold getThresholdForUser(Long userId, String metricKey) {
+        // FIX-03 (D-17): alias-set IN reads — legacy rows stored under a non-canonical
+        // key (e.g. "glucose") must still be found when the engine queries "bloodGlucose".
+        // selectList + deterministic order (latest intent first, D-14) — never selectOne,
+        // which throws TooManyResultsException when legacy and canonical rows coexist.
+        Set<String> aliases = MetricKeyNormalizer.getAliases(metricKey);
+
         // First check for user's personalized threshold
         List<UserThreshold> userThresholds = userThresholdMapper.selectList(
                 new LambdaQueryWrapper<UserThreshold>()
                         .eq(UserThreshold::getUserId, userId)
-                        .eq(UserThreshold::getMetricKey, metricKey)
+                        .in(UserThreshold::getMetricKey, aliases)
+                        .orderByDesc(UserThreshold::getUpdatedAt)
+                        .orderByDesc(UserThreshold::getId)
         );
 
         if (!userThresholds.isEmpty()) {
             return userThresholds.get(0);
         }
 
-        // Fall back to default alert rule
+        // Fall back to default alert rule (alias-aware too: rule seeds may still
+        // carry non-canonical keys until the FIX-04 script has been executed)
         List<AlertRule> rules = alertRuleMapper.selectList(
                 new LambdaQueryWrapper<AlertRule>()
-                        .eq(AlertRule::getMetricKey, metricKey)
+                        .in(AlertRule::getMetricKey, aliases)
                         .eq(AlertRule::getEnabled, true)
+                        .orderByDesc(AlertRule::getId)
         );
 
         if (rules.isEmpty()) {

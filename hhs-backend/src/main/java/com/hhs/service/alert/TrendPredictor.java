@@ -5,6 +5,7 @@ import com.hhs.entity.UserThreshold;
 import com.hhs.mapper.HealthMetricMapper;
 import com.hhs.mapper.UserThresholdMapper;
 import com.hhs.service.alert.TrendResult.MetricDataPoint;
+import com.hhs.service.domain.MetricKeyNormalizer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -212,11 +213,17 @@ public class TrendPredictor {
      * Returns the relevant threshold based on trend direction
      */
     private BigDecimal getThresholdValue(Long userId, String metricKey, TrendDirection trend) {
-        UserThreshold threshold = userThresholdMapper.selectOne(
+        // FIX-03 (D-17): alias-set IN read via selectList with deterministic ordering
+        // (latest intent first, D-14) — selectOne on an aliased query throws
+        // TooManyResultsException when legacy and canonical rows coexist.
+        List<UserThreshold> thresholdRows = userThresholdMapper.selectList(
                 new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<UserThreshold>()
                         .eq(UserThreshold::getUserId, userId)
-                        .eq(UserThreshold::getMetricKey, metricKey)
+                        .in(UserThreshold::getMetricKey, MetricKeyNormalizer.getAliases(metricKey))
+                        .orderByDesc(UserThreshold::getUpdatedAt)
+                        .orderByDesc(UserThreshold::getId)
         );
+        UserThreshold threshold = thresholdRows.isEmpty() ? null : thresholdRows.get(0);
 
         if (threshold == null) {
             return null;

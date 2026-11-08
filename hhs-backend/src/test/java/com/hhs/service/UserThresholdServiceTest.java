@@ -1,17 +1,21 @@
 package com.hhs.service;
 
+import com.baomidou.mybatisplus.core.MybatisConfiguration;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.hhs.dto.UserThresholdRequest;
 import com.hhs.entity.UserThreshold;
 import com.hhs.exception.BusinessException;
 import com.hhs.mapper.UserThresholdMapper;
 import com.hhs.service.impl.UserThresholdServiceImpl;
+import org.apache.ibatis.builder.MapperBuilderAssistant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Captor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -20,6 +24,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 
@@ -39,6 +44,9 @@ class UserThresholdServiceTest {
 
     @Mock
     private UserThresholdMapper userThresholdMapper;
+
+    @Captor
+    private ArgumentCaptor<LambdaQueryWrapper<UserThreshold>> queryWrapperCaptor;
 
     @InjectMocks
     private UserThresholdServiceImpl userThresholdService;
@@ -93,7 +101,7 @@ class UserThresholdServiceTest {
     @DisplayName("测试1.2：创建用户阈值 - 成功场景")
     void testCreate_Success() {
         // Given: No existing threshold for this metric
-        when(userThresholdMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(null);
+        when(userThresholdMapper.selectList(any(LambdaQueryWrapper.class))).thenReturn(Collections.emptyList());
         when(userThresholdMapper.insert(any(UserThreshold.class))).thenAnswer(invocation -> {
             UserThreshold threshold = invocation.getArgument(0);
             ReflectionTestUtils.setField(threshold, "id", 1L);
@@ -114,7 +122,7 @@ class UserThresholdServiceTest {
     @DisplayName("测试1.3：创建用户阈值 - 阈值已存在")
     void testCreate_AlreadyExists() {
         // Given: 该指标已存在阈值
-        when(userThresholdMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(testThreshold);
+        when(userThresholdMapper.selectList(any(LambdaQueryWrapper.class))).thenReturn(Collections.singletonList(testThreshold));
 
         // When & Then: Should throw exception
         BusinessException exception = assertThrows(BusinessException.class, () -> {
@@ -171,7 +179,7 @@ class UserThresholdServiceTest {
         otherThreshold.setMetricKey("heartRate"); // Target metric
 
         when(userThresholdMapper.selectById(1L)).thenReturn(existingThreshold);
-        when(userThresholdMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(otherThreshold);
+        when(userThresholdMapper.selectList(any(LambdaQueryWrapper.class))).thenReturn(Collections.singletonList(otherThreshold));
 
         // When: Try to update to metric that already exists
         testRequest.setMetricKey("heartRate");
@@ -234,7 +242,7 @@ class UserThresholdServiceTest {
     @DisplayName("测试1.10：根据用户ID和指标类型获取阈值")
     void testGetByUserAndMetricKey() {
         // Given: Mock threshold
-        when(userThresholdMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(testThreshold);
+        when(userThresholdMapper.selectList(any(LambdaQueryWrapper.class))).thenReturn(Collections.singletonList(testThreshold));
 
         // When: Get threshold by user and metric key
         UserThreshold result = userThresholdService.getByUserAndMetricKey(testUserId, "heartRate");
@@ -243,14 +251,14 @@ class UserThresholdServiceTest {
         assertNotNull(result);
         assertEquals(testUserId, result.getUserId());
         assertEquals("heartRate", result.getMetricKey());
-        verify(userThresholdMapper, times(1)).selectOne(any(LambdaQueryWrapper.class));
+        verify(userThresholdMapper, times(1)).selectList(any(LambdaQueryWrapper.class));
     }
 
     @Test
     @DisplayName("测试1.11：根据用户ID和指标类型获取阈值 - 不存在")
     void testGetByUserAndMetricKey_NotFound() {
         // Given: Mock no threshold found
-        when(userThresholdMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(null);
+        when(userThresholdMapper.selectList(any(LambdaQueryWrapper.class))).thenReturn(Collections.emptyList());
 
         // When: Get non-existent threshold
         UserThreshold result = userThresholdService.getByUserAndMetricKey(testUserId, "glucose");
@@ -271,7 +279,7 @@ class UserThresholdServiceTest {
         invalidRequest.setWarningHigh(new BigDecimal("100"));
         invalidRequest.setCriticalHigh(new BigDecimal("90")); // Critical should be > warning
 
-        when(userThresholdMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(null);
+        when(userThresholdMapper.selectList(any(LambdaQueryWrapper.class))).thenReturn(Collections.emptyList());
         when(userThresholdMapper.insert(any(UserThreshold.class))).thenAnswer(invocation -> {
             UserThreshold threshold = invocation.getArgument(0);
             ReflectionTestUtils.setField(threshold, "id", 2L);
@@ -327,7 +335,7 @@ class UserThresholdServiceTest {
         aliasRequest.setMetricKey("glucose");
         aliasRequest.setWarningHigh(new BigDecimal("10"));
 
-        when(userThresholdMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(null);
+        when(userThresholdMapper.selectList(any(LambdaQueryWrapper.class))).thenReturn(Collections.emptyList());
         when(userThresholdMapper.insert(any(UserThreshold.class))).thenReturn(1);
 
         // When: Create threshold
@@ -353,7 +361,7 @@ class UserThresholdServiceTest {
         canonicalRow.setUserId(testUserId);
         canonicalRow.setMetricKey("bloodGlucose");
 
-        when(userThresholdMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(canonicalRow);
+        when(userThresholdMapper.selectList(any(LambdaQueryWrapper.class))).thenReturn(Collections.singletonList(canonicalRow));
 
         // When & Then: Business error with the new copy — never a unique-constraint 500
         BusinessException exception = assertThrows(BusinessException.class, () -> {
@@ -373,7 +381,7 @@ class UserThresholdServiceTest {
         canonicalRequest.setMetricKey("bloodGlucose");
         canonicalRequest.setWarningHigh(new BigDecimal("10"));
 
-        when(userThresholdMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(null);
+        when(userThresholdMapper.selectList(any(LambdaQueryWrapper.class))).thenReturn(Collections.emptyList());
         when(userThresholdMapper.insert(any(UserThreshold.class))).thenReturn(1);
 
         // When: Create threshold
@@ -383,5 +391,60 @@ class UserThresholdServiceTest {
         ArgumentCaptor<UserThreshold> captor = ArgumentCaptor.forClass(UserThreshold.class);
         verify(userThresholdMapper, times(1)).insert(captor.capture());
         assertEquals("bloodGlucose", captor.getValue().getMetricKey());
+    }
+
+    @Test
+    @DisplayName("测试2.4：别名并存窗口 - selectList 返回两行时确定取首条且不抛 TooManyResultsException")
+    void testGetByUserAndMetricKey_AliasWindow_ReturnsFirstDeterministically() {
+        // Given: A legacy alias row and the canonical row coexist for the same user
+        UserThreshold aliasRow = new UserThreshold();
+        aliasRow.setId(3L);
+        aliasRow.setUserId(testUserId);
+        aliasRow.setMetricKey("glucose");
+
+        UserThreshold canonicalRow = new UserThreshold();
+        canonicalRow.setId(4L);
+        canonicalRow.setUserId(testUserId);
+        canonicalRow.setMetricKey("bloodGlucose");
+
+        when(userThresholdMapper.selectList(any(LambdaQueryWrapper.class)))
+                .thenReturn(Arrays.asList(aliasRow, canonicalRow));
+
+        // When & Then: Exactly one row is returned without throwing
+        UserThreshold result = assertDoesNotThrow(() ->
+                userThresholdService.getByUserAndMetricKey(testUserId, "bloodGlucose"));
+
+        assertNotNull(result);
+        assertSame(aliasRow, result);
+    }
+
+    @Test
+    @DisplayName("测试2.5：getByUserAndMetricKey 构建别名集合 IN 查询并确定取 mock 首条")
+    void testGetByUserAndMetricKey_AliasInWrapper_FirstElementSelection() {
+        // Given: Lambda column cache initialized so the captured wrapper can be materialized
+        TableInfoHelper.initTableInfo(new MapperBuilderAssistant(new MybatisConfiguration(), ""), UserThreshold.class);
+
+        UserThreshold canonicalRow = new UserThreshold();
+        canonicalRow.setId(4L);
+        canonicalRow.setUserId(testUserId);
+        canonicalRow.setMetricKey("bloodGlucose");
+
+        when(userThresholdMapper.selectList(any(LambdaQueryWrapper.class)))
+                .thenReturn(Collections.singletonList(canonicalRow));
+
+        // When: Query by the canonical key
+        UserThreshold result = userThresholdService.getByUserAndMetricKey(testUserId, "bloodGlucose");
+
+        // Then: The wrapper is list-filtered (alias-set IN) rather than a scalar eq
+        verify(userThresholdMapper, times(1)).selectList(queryWrapperCaptor.capture());
+        LambdaQueryWrapper<UserThreshold> wrapper = queryWrapperCaptor.getValue();
+        String sqlSegment = wrapper.getSqlSegment().toUpperCase();
+        assertTrue(sqlSegment.contains(" IN "));
+        Collection<Object> params = wrapper.getParamNameValuePairs().values();
+        assertTrue(params.contains("bloodGlucose"));
+        assertTrue(params.contains("glucose"));
+
+        // And: The returned row is the first element of what the mock supplied
+        assertSame(canonicalRow, result);
     }
 }

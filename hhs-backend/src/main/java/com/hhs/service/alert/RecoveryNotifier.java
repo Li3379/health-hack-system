@@ -5,6 +5,7 @@ import com.hhs.entity.HealthAlert;
 import com.hhs.entity.UserThreshold;
 import com.hhs.mapper.HealthAlertMapper;
 import com.hhs.mapper.UserThresholdMapper;
+import com.hhs.service.domain.MetricKeyNormalizer;
 import com.hhs.service.push.PushResult;
 import com.hhs.service.push.PushStrategyService;
 import lombok.RequiredArgsConstructor;
@@ -55,12 +56,17 @@ public class RecoveryNotifier {
 
         HealthAlert lastAlert = lastAlertOpt.get();
 
-        // Get threshold
-        UserThreshold threshold = userThresholdMapper.selectOne(
+        // Get threshold — FIX-03 (D-17): alias-set IN read via selectList with
+        // deterministic ordering (latest intent first, D-14). selectOne on an aliased
+        // query throws TooManyResultsException when legacy and canonical rows coexist.
+        List<UserThreshold> thresholdRows = userThresholdMapper.selectList(
                 new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<UserThreshold>()
                         .eq(UserThreshold::getUserId, userId)
-                        .eq(UserThreshold::getMetricKey, metricKey)
+                        .in(UserThreshold::getMetricKey, MetricKeyNormalizer.getAliases(metricKey))
+                        .orderByDesc(UserThreshold::getUpdatedAt)
+                        .orderByDesc(UserThreshold::getId)
         );
+        UserThreshold threshold = thresholdRows.isEmpty() ? null : thresholdRows.get(0);
 
         // Check if value is within normal range
         if (!isWithinNormalRange(value, threshold)) {

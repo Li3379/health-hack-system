@@ -7,6 +7,7 @@ import com.hhs.entity.UserThreshold;
 import com.hhs.mapper.AlertRuleMapper;
 import com.hhs.mapper.HealthAlertMapper;
 import com.hhs.mapper.UserThresholdMapper;
+import com.hhs.service.domain.MetricKeyNormalizer;
 import com.hhs.service.push.PushResult;
 import com.hhs.service.push.PushStrategyService;
 import lombok.RequiredArgsConstructor;
@@ -263,11 +264,8 @@ public class IntelligentAlertService {
      * Get high threshold for user (user-specific or default)
      */
     private BigDecimal getThresholdHigh(Long userId, String metricKey) {
-        // Check user-specific threshold first
-        UserThreshold userThreshold = userThresholdMapper.selectOne(
-                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<UserThreshold>()
-                        .eq(UserThreshold::getUserId, userId)
-                        .eq(UserThreshold::getMetricKey, metricKey));
+        // Check user-specific threshold first (alias-aware read, FIX-03/D-17)
+        UserThreshold userThreshold = findUserThreshold(userId, metricKey);
 
         if (userThreshold != null && userThreshold.getCriticalHigh() != null) {
             return userThreshold.getCriticalHigh();
@@ -276,13 +274,16 @@ public class IntelligentAlertService {
             return userThreshold.getWarningHigh();
         }
 
-        // Fall back to default rule
-        var rule = alertRuleMapper.selectOne(
+        // Fall back to default rule (alias-aware too: rule seeds may still carry
+        // non-canonical keys until the FIX-04 script has been executed)
+        var rules = alertRuleMapper.selectList(
                 new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<com.hhs.entity.AlertRule>()
-                        .eq(com.hhs.entity.AlertRule::getMetricKey, metricKey)
-                        .eq(com.hhs.entity.AlertRule::getEnabled, true));
+                        .in(com.hhs.entity.AlertRule::getMetricKey, MetricKeyNormalizer.getAliases(metricKey))
+                        .eq(com.hhs.entity.AlertRule::getEnabled, true)
+                        .orderByDesc(com.hhs.entity.AlertRule::getId));
 
-        if (rule != null) {
+        if (!rules.isEmpty()) {
+            var rule = rules.get(0);
             return rule.getCriticalHigh() != null ? rule.getCriticalHigh() : rule.getWarningHigh();
         }
 
@@ -293,11 +294,8 @@ public class IntelligentAlertService {
      * Get low threshold for user (user-specific or default)
      */
     private BigDecimal getThresholdLow(Long userId, String metricKey) {
-        // Check user-specific threshold first
-        UserThreshold userThreshold = userThresholdMapper.selectOne(
-                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<UserThreshold>()
-                        .eq(UserThreshold::getUserId, userId)
-                        .eq(UserThreshold::getMetricKey, metricKey));
+        // Check user-specific threshold first (alias-aware read, FIX-03/D-17)
+        UserThreshold userThreshold = findUserThreshold(userId, metricKey);
 
         if (userThreshold != null && userThreshold.getCriticalLow() != null) {
             return userThreshold.getCriticalLow();
@@ -306,17 +304,39 @@ public class IntelligentAlertService {
             return userThreshold.getWarningLow();
         }
 
-        // Fall back to default rule
-        var rule = alertRuleMapper.selectOne(
+        // Fall back to default rule (alias-aware too)
+        var rules = alertRuleMapper.selectList(
                 new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<com.hhs.entity.AlertRule>()
-                        .eq(com.hhs.entity.AlertRule::getMetricKey, metricKey)
-                        .eq(com.hhs.entity.AlertRule::getEnabled, true));
+                        .in(com.hhs.entity.AlertRule::getMetricKey, MetricKeyNormalizer.getAliases(metricKey))
+                        .eq(com.hhs.entity.AlertRule::getEnabled, true)
+                        .orderByDesc(com.hhs.entity.AlertRule::getId));
 
-        if (rule != null) {
+        if (!rules.isEmpty()) {
+            var rule = rules.get(0);
             return rule.getCriticalLow() != null ? rule.getCriticalLow() : rule.getWarningLow();
         }
 
         return null;
+    }
+
+    /**
+     * Find the user's personalized threshold for a metric via its full alias set.
+     *
+     * <p>FIX-03 (D-17): rows stored under any alias of the requested metric are a
+     * match, so a row saved as "glucose" is found by a "bloodGlucose" query and vice
+     * versa. Uses selectList with deterministic ordering (latest intent first, D-14)
+     * instead of selectOne — BaseMapper.selectOne(Wrapper) throws
+     * TooManyResultsException when a legacy alias row and the canonical row coexist
+     * during the migration window (RESEARCH Pitfall 2).</p>
+     */
+    private UserThreshold findUserThreshold(Long userId, String metricKey) {
+        List<UserThreshold> rows = userThresholdMapper.selectList(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<UserThreshold>()
+                        .eq(UserThreshold::getUserId, userId)
+                        .in(UserThreshold::getMetricKey, MetricKeyNormalizer.getAliases(metricKey))
+                        .orderByDesc(UserThreshold::getUpdatedAt)
+                        .orderByDesc(UserThreshold::getId));
+        return rows.isEmpty() ? null : rows.get(0);
     }
 
     /**
