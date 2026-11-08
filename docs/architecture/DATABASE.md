@@ -421,3 +421,25 @@ Schema 版本通过 `Change Log` 注释追踪：
 - v3.4.0 (2026-03-19): 添加 record_time 字段
 - v3.3.0 (2026-03-05): 添加 push_history 表
 - v3.2.0 (2026-03-04): 添加预警优化相关表
+
+## 数据迁移与手工修复
+
+### 阈值指标键归一化脚本（fix-threshold-metric-key.sql）
+
+文件：`hhs-backend/src/main/resources/sql/fix-threshold-metric-key.sql`（Phase 12-threshold-wizard / FIX-04）
+
+| 属性 | 说明 |
+|------|------|
+| 用途 | 将 `user_threshold` / `alert_rule` / `alert_template` / `health_alert` 四表中历史遗留的非标准 `metric_key`（`glucose`、`temperature`、`spo2` 等全部别名）归一化为标准 key（`bloodGlucose` / `bodyTemperature` / `bloodOxygen`），并在改名前按「同一用户同一指标族保留 `updated_at` 最新一行」合并重复行 |
+| 幂等性 | **幂等且事务性**：可重复执行，第二次执行零行变更（AFTER 计数与第一次执行后完全一致）；整个变更包在单个事务中，任一语句失败整体回滚，不会留下半归一化状态 |
+| 执行方式 | **必须手工执行**（`mysql ... < fix-threshold-metric-key.sql`），不随应用启动自动运行，也不由任何迁移框架托管 |
+| 回滚边界 | 单向操作，无自动反向映射，被合并删除的行无法恢复原 id；执行前先记录脚本打印的 BEFORE 计数，并先在 UAT 环境完成幂等性验证（见 12-VALIDATION §Manual-Only Verifications）后再对生产库执行 |
+
+**执行顺序（强制）：先发布代码，后执行脚本——严禁反向。**
+
+1. 先部署包含 `MetricKeyNormalizer` 别名 IN 查询与写入规范化的后端代码（Phase 12 plan 02，FIX-02/FIX-03）。
+2. 再手工执行 `fix-threshold-metric-key.sql`。
+
+旧代码按字面精确匹配 `metric_key`：若先跑脚本后发代码，用户阈值与告警规则对旧代码"查不到"，告警彻底失效。别名 IN 查询使新代码在脚本执行前后都能命中，因此唯一安全的顺序是「代码发布 → 脚本执行」，绝不允许先执行脚本。
+
+**新库豁免：** 由 `schema.sql` 全新初始化的数据库，`alert_rule` / `alert_template` 种子已直接使用标准 key（`bloodGlucose` / `bodyTemperature`），**无需执行本脚本**。该脚本仅针对在标准 key 种子落地之前创建的存量数据库。

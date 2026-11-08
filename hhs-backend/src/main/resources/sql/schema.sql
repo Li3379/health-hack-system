@@ -515,9 +515,9 @@ INSERT INTO `alert_rule` (`metric_key`, `warning_high`, `critical_high`, `warnin
 ('heartRate', 100, 120, 50, 40, 'Heart rate (bpm): normal range 60-100'),
 ('systolicBP', 140, 160, 90, 80, 'Systolic blood pressure (mmHg): normal range 90-140'),
 ('diastolicBP', 90, 100, 60, 50, 'Diastolic blood pressure (mmHg): normal range 60-90'),
-('glucose', 7.0, 11.1, 3.9, 3.0, 'Fasting blood glucose (mmol/L): normal range 3.9-6.1'),
+('bloodGlucose', 7.0, 11.1, 3.9, 3.0, 'Fasting blood glucose (mmol/L): normal range 3.9-6.1'),
 ('bmi', 28, 35, 18.5, 16, 'BMI: normal range 18.5-24'),
-('temperature', 37.5, 38.5, 36.0, 35.5, 'Body temperature (C): normal range 36.0-37.3'),
+('bodyTemperature', 37.5, 38.5, 36.0, 35.5, 'Body temperature (C): normal range 36.0-37.3'),
 ('weight', NULL, NULL, NULL, NULL, 'Weight (kg): dynamically assessed based on height')
 ON DUPLICATE KEY UPDATE
     `warning_high` = VALUES(`warning_high`),
@@ -544,10 +544,10 @@ INSERT INTO `alert_template` (`template_key`, `metric_key`, `severity_level`, `c
 ('diastolicBP.high.warning', 'diastolicBP', 'WARNING', 'value > 90 && value <= 100', '舒张压偏高', '您的舒张压为 {value} mmHg，超过正常范围(60-90 mmHg)。', '建议减少盐分摄入，保持规律作息。如持续偏高，建议就医。', 80),
 
 -- Blood glucose templates
-('glucose.high.critical', 'glucose', 'CRITICAL', 'value > 11.1', '血糖严重偏高', '您的空腹血糖达到 {value} mmol/L，严重超过正常范围(3.9-6.1 mmol/L)。', '请尽快就医检查，可能需要调整治疗方案。如伴有口渴、多尿等症状，请立即就医。', 100),
-('glucose.high.warning', 'glucose', 'WARNING', 'value > 7.0 && value <= 11.1', '血糖偏高', '您的空腹血糖为 {value} mmol/L，超过正常范围(3.9-6.1 mmol/L)。', '建议控制饮食，减少糖分摄入，适当运动。建议复查血糖。', 80),
-('glucose.low.critical', 'glucose', 'CRITICAL', 'value < 3.0', '血糖严重偏低', '您的血糖低至 {value} mmol/L，存在低血糖风险。', '请立即补充糖分(如糖果、果汁)，如症状持续请就医。', 100),
-('glucose.low.warning', 'glucose', 'WARNING', 'value < 3.9 && value >= 3.0', '血糖偏低', '您的空腹血糖为 {value} mmol/L，低于正常范围(3.9-6.1 mmol/L)。', '建议随身携带糖果，定时进餐，避免空腹运动。', 80),
+('bloodGlucose.high.critical', 'bloodGlucose', 'CRITICAL', 'value > 11.1', '血糖严重偏高', '您的空腹血糖达到 {value} mmol/L，严重超过正常范围(3.9-6.1 mmol/L)。', '请尽快就医检查，可能需要调整治疗方案。如伴有口渴、多尿等症状，请立即就医。', 100),
+('bloodGlucose.high.warning', 'bloodGlucose', 'WARNING', 'value > 7.0 && value <= 11.1', '血糖偏高', '您的空腹血糖为 {value} mmol/L，超过正常范围(3.9-6.1 mmol/L)。', '建议控制饮食，减少糖分摄入，适当运动。建议复查血糖。', 80),
+('bloodGlucose.low.critical', 'bloodGlucose', 'CRITICAL', 'value < 3.0', '血糖严重偏低', '您的血糖低至 {value} mmol/L，存在低血糖风险。', '请立即补充糖分(如糖果、果汁)，如症状持续请就医。', 100),
+('bloodGlucose.low.warning', 'bloodGlucose', 'WARNING', 'value < 3.9 && value >= 3.0', '血糖偏低', '您的空腹血糖为 {value} mmol/L，低于正常范围(3.9-6.1 mmol/L)。', '建议随身携带糖果，定时进餐，避免空腹运动。', 80),
 
 -- BMI templates
 ('bmi.high.critical', 'bmi', 'CRITICAL', 'value > 35', 'BMI严重超标', '您的BMI达到 {value}，严重超过正常范围(18.5-24)。', '建议尽快咨询营养师或医生，制定科学的减重计划。', 90),
@@ -555,9 +555,9 @@ INSERT INTO `alert_template` (`template_key`, `metric_key`, `severity_level`, `c
 ('bmi.low.warning', 'bmi', 'WARNING', 'value < 18.5', 'BMI偏低', '您的BMI为 {value}，低于正常范围(18.5-24)。', '建议增加营养摄入，适量增加蛋白质和健康脂肪。', 60),
 
 -- Temperature templates
-('temperature.high.critical', 'temperature', 'CRITICAL', 'value > 38.5', '体温过高', '您的体温达到 {value}°C，存在高热风险。', '请立即采取物理降温措施，如症状持续或加重请就医。', 100),
-('temperature.high.warning', 'temperature', 'WARNING', 'value > 37.5 && value <= 38.5', '体温偏高', '您的体温为 {value}°C，略高于正常范围(36.0-37.3°C)。', '建议多喝水，注意休息，监测体温变化。', 70),
-('temperature.low.warning', 'temperature', 'WARNING', 'value < 36.0', '体温偏低', '您的体温为 {value}°C，低于正常范围(36.0-37.3°C)。', '建议注意保暖，如持续偏低请就医检查。', 60)
+('bodyTemperature.high.critical', 'bodyTemperature', 'CRITICAL', 'value > 38.5', '体温过高', '您的体温达到 {value}°C，存在高热风险。', '请立即采取物理降温措施，如症状持续或加重请就医。', 100),
+('bodyTemperature.high.warning', 'bodyTemperature', 'WARNING', 'value > 37.5 && value <= 38.5', '体温偏高', '您的体温为 {value}°C，略高于正常范围(36.0-37.3°C)。', '建议多喝水，注意休息，监测体温变化。', 70),
+('bodyTemperature.low.warning', 'bodyTemperature', 'WARNING', 'value < 36.0', '体温偏低', '您的体温为 {value}°C，低于正常范围(36.0-37.3°C)。', '建议注意保暖，如持续偏低请就医检查。', 60)
 ON DUPLICATE KEY UPDATE
     `message_template` = VALUES(`message_template`),
     `suggestion_template` = VALUES(`suggestion_template`),
