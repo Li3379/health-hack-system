@@ -56,6 +56,11 @@
 - **D-17:** 阈值写入路径（`UserThresholdServiceImpl.create/update`）在**预检查与入库两处**都调用 `MetricKeyNormalizer.toCanonicalKey()`；查询路径（`getByUserAndMetricKey` 及告警侧所有 `selectOne/selectList`）改用 `MetricKeyNormalizer.getAliases()` 的 `IN` 查询，兼容尚未归一化的历史行。
 - **D-18:** `ThresholdRangeCheckerTest` 必须覆盖：正常 / 警告（高、低两侧）/ 危急（高、低两侧）/ 单侧为 null / 全部为 null / 恰好等于边界值。
 
+### 研究假设确认（2026-11-08，用户拍板）
+- **D-19:** `alertable` 定义为「`alert_rule` 有 `enabled` 且四项阈值至少一列非 null」→ 实际 6 项：`heartRate` / `systolicBP` / `diastolicBP` / `bloodGlucose` / `bodyTemperature` / `bmi`。`weight`（四列全 NULL）与 `bloodOxygen`（无种子规则）**不可配**。
+- **D-20:** `bloodOxygen` 已有的 `user_threshold` 行（id=4）**保留在列表中可见可编辑**，仅从向导第 1 步的选择器移除。不删除用户数据，不加"不支持"状态列。
+- **D-21:** 修复 `isWarningRange` 后 WARNING（MEDIUM）会真实产生推送（WebSocket + Email）。**本阶段不加限流**，把「观察实际推送量与频率」列为 UAT 验收点；若确需限流则另开阶段。
+
 ### Claude's Discretion
 - 四区预览条的具体视觉实现（`ElSlider` range + marks、自绘色带、或 `div` 拼接）——只要满足"颜色带 + 当前输入位置标注"即可。
 - 确认语句的具体中文句式。
