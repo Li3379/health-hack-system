@@ -277,6 +277,10 @@ Plans:
 
 - [x] 12-08-PLAN.md — 列表页接入向导、教学型空状态与重复指标恢复动作
 
+**Wave 7** *(gaps, blocked on Wave 6 completion)*
+
+- [ ] 12-09-PLAN.md — 缺口闭环（UAT 测试 1/测试 5）：向导 el-dialog 改仓库标准 v-model + 可写 computed 修复保存后不自动关闭；SQL 修复脚本计数子查询 BINARY 大小写精确化使 AFTER 验收计数归零
+
 **UI hint**: yes
 
 ### Phase 13: 健康档案完善引导（非阻塞）
