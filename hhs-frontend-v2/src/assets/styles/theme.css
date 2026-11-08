@@ -58,6 +58,12 @@
   --hhs-color-error-text: #f56c6c;              /* 6.45:1 on #111217 */
   --hhs-color-error-tint: rgba(245, 108, 108, 0.12);
 
+  /* ---- 四区预览条色带底纹（Phase 12）----
+     与 error-tint 同族的三档底纹；色带对表面对比度仅 1.08-1.35:1，
+     颜色只作装饰，信息由带内「名称 + 数值」文字承载（WCAG 1.4.1）。 */
+  --hhs-color-warning-tint: rgba(251, 146, 60, 0.12);  /* → 实算 #2d211b on #111217 */
+  --hhs-color-normal-tint: rgba(94, 234, 212, 0.12);   /* → 实算 #1a2c2e on #111217 */
+
   /* ---- Health Score Colors ---- */
   --color-health-excellent: #22c55e;
   --color-health-good: #84cc16;
@@ -166,6 +172,12 @@
      因此亮色统一用更深的 #b91c1c。 */
   --hhs-color-error-text: #b91c1c;              /* 6.47:1 on #ffffff */
   --hhs-color-error-tint: #fef0f0;
+
+  /* ---- 四区预览条色带底纹（Phase 12）----
+     与 error-tint 同族的三档底纹；颜色只作装饰，
+     信息由带内「名称 + 数值」文字承载（WCAG 1.4.1）。 */
+  --hhs-color-warning-tint: #fdf6ec;
+  --hhs-color-normal-tint: #f0f9eb;
 
   /* ---- Shadows ---- */
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
