@@ -424,7 +424,8 @@ describe('ThresholdWizard — 三步向导组件契约', () => {
     const savedEvents = wrapper.emitted('saved') ?? []
     expect(savedEvents).toHaveLength(1)
     // 保存成功后关闭弹窗
-    expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([false])
+    const closeEvents = wrapper.emitted('update:modelValue') ?? []
+    expect(closeEvents[closeEvents.length - 1]).toEqual([false])
     // 载荷：userId 来自认证 store，metricKey 为所选指标
     expect(createThresholdMock.mock.calls[0][0]).toMatchObject({
       userId: 1,
