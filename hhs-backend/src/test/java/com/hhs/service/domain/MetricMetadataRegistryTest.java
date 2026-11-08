@@ -8,8 +8,11 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.math.BigDecimal;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -148,5 +151,131 @@ class MetricMetadataRegistryTest {
         assertTrue(categoryService.isWellnessMetric("exercise_minutes"));
         assertTrue(categoryService.isRecognizedMetric("blood_oxygen"));
         assertFalse(categoryService.isRecognizedMetric("non_existent_key"));
+    }
+
+    @Test
+    @DisplayName("Standalone registry reports alertable=false with null recommendations until applyRecommendations runs")
+    void testStandaloneRegistryNotAlertable() {
+        // The registry is dependency-free: without the startup merge nothing is alertable
+        for (MetricDefinition def : registry.getAllDefinitions().values()) {
+            assertFalse(def.alertable(), def.canonicalKey() + " must not be alertable before merge");
+            assertNull(def.recommended(), def.canonicalKey() + " must have null recommendation before merge");
+        }
+    }
+
+    @Test
+    @DisplayName("Exactly the six D-19 metrics are alertable after seed recommendations are applied")
+    void testAlertableMetrics_AreExactlyTheSixSeedMetrics() {
+        registry.applyRecommendations(seedRecommendations());
+
+        Set<String> alertableKeys = registry.getAllDefinitions().entrySet().stream()
+                .filter(e -> e.getValue().alertable())
+                .map(Map.Entry::getKey)
+                .collect(Collectors.toSet());
+
+        // Set equality, not a count only (D-19)
+        assertEquals(Set.of("heartRate", "systolicBP", "diastolicBP", "bloodGlucose",
+                "bodyTemperature", "bmi"), alertableKeys);
+    }
+
+    @Test
+    @DisplayName("weight, bloodOxygen and every WELLNESS metric are not alertable")
+    void testNonAlertableMetrics() {
+        registry.applyRecommendations(seedRecommendations());
+
+        Map<String, MetricDefinition> all = registry.getAllDefinitions();
+        assertFalse(all.get("weight").alertable(), "weight seed has all four boundaries NULL");
+        assertNull(all.get("weight").recommended());
+        assertFalse(all.get("bloodOxygen").alertable(), "bloodOxygen has no alert_rule seed");
+        assertNull(all.get("bloodOxygen").recommended());
+
+        for (MetricDefinition def : all.values()) {
+            if (def.category() == MetricCategory.WELLNESS) {
+                assertFalse(def.alertable(), def.canonicalKey() + " (WELLNESS) must not be alertable");
+                assertNull(def.recommended());
+            }
+        }
+    }
+
+    @Test
+    @DisplayName("Every alertable metric carries a recommendation with at least one non-null boundary within hardMin/hardMax")
+    void testRecommendationCompletenessAndBounds() {
+        registry.applyRecommendations(seedRecommendations());
+
+        for (MetricDefinition def : registry.getAllDefinitions().values()) {
+            if (!def.alertable()) {
+                continue;
+            }
+            RecommendedThreshold rec = def.recommended();
+            assertNotNull(rec, "alertable metric must carry a recommendation: " + def.canonicalKey());
+            assertTrue(rec.warningLow() != null || rec.warningHigh() != null
+                            || rec.criticalLow() != null || rec.criticalHigh() != null,
+                    "at least one non-null recommended boundary for " + def.canonicalKey());
+            assertWithinHardLimits(def, "warningLow", rec.warningLow());
+            assertWithinHardLimits(def, "warningHigh", rec.warningHigh());
+            assertWithinHardLimits(def, "criticalLow", rec.criticalLow());
+            assertWithinHardLimits(def, "criticalHigh", rec.criticalHigh());
+        }
+    }
+
+    @Test
+    @DisplayName("Legacy alias keys canonicalize before the merge (glucose -> bloodGlucose)")
+    void testLegacyAliasKeyCanonicalizesDuringMerge() {
+        Map<String, RecommendedThreshold> seeds = new LinkedHashMap<>();
+        seeds.put("glucose", new RecommendedThreshold(new BigDecimal("3.9"), new BigDecimal("7.0"),
+                new BigDecimal("3.0"), new BigDecimal("11.1")));
+
+        registry.applyRecommendations(seeds);
+
+        MetricDefinition glucose = registry.getAllDefinitions().get("bloodGlucose");
+        assertTrue(glucose.alertable(), "legacy glucose row must map onto bloodGlucose");
+        assertNotNull(glucose.recommended());
+        assertEquals(0, new BigDecimal("7.0").compareTo(glucose.recommended().warningHigh()));
+        assertFalse(registry.getAllDefinitions().get("heartRate").alertable(),
+                "metrics absent from the map must stay non-alertable");
+    }
+
+    @Test
+    @DisplayName("RecommendedThreshold.fallback derives the warning band from the normal range (D-06)")
+    void testFallbackDerivation() {
+        RecommendedThreshold fallback = RecommendedThreshold.fallback(
+                new BigDecimal("60"), new BigDecimal("100"));
+
+        assertEquals(new BigDecimal("60"), fallback.warningLow());
+        assertEquals(new BigDecimal("100"), fallback.warningHigh());
+        assertNull(fallback.criticalLow());
+        assertNull(fallback.criticalHigh());
+    }
+
+    /**
+     * Hand-built recommendation map mirroring the alert_rule seed rows in schema.sql
+     * (12-03 canonicalized keys). No database needed: values are the seed four-boundary
+     * columns, warningLow/warningHigh/criticalLow/criticalHigh order.
+     */
+    private Map<String, RecommendedThreshold> seedRecommendations() {
+        Map<String, RecommendedThreshold> seeds = new LinkedHashMap<>();
+        seeds.put("heartRate", new RecommendedThreshold(
+                new BigDecimal("50"), new BigDecimal("100"), new BigDecimal("40"), new BigDecimal("120")));
+        seeds.put("systolicBP", new RecommendedThreshold(
+                new BigDecimal("90"), new BigDecimal("140"), new BigDecimal("80"), new BigDecimal("160")));
+        seeds.put("diastolicBP", new RecommendedThreshold(
+                new BigDecimal("60"), new BigDecimal("90"), new BigDecimal("50"), new BigDecimal("100")));
+        seeds.put("bloodGlucose", new RecommendedThreshold(
+                new BigDecimal("3.9"), new BigDecimal("7.0"), new BigDecimal("3.0"), new BigDecimal("11.1")));
+        seeds.put("bodyTemperature", new RecommendedThreshold(
+                new BigDecimal("36.0"), new BigDecimal("37.5"), new BigDecimal("35.5"), new BigDecimal("38.5")));
+        seeds.put("bmi", new RecommendedThreshold(
+                new BigDecimal("18.5"), new BigDecimal("28"), new BigDecimal("16"), new BigDecimal("35")));
+        return seeds;
+    }
+
+    private void assertWithinHardLimits(MetricDefinition def, String field, BigDecimal value) {
+        if (value == null) {
+            return;
+        }
+        assertTrue(value.compareTo(def.hardMin()) >= 0,
+                field + " must be >= hardMin for " + def.canonicalKey());
+        assertTrue(value.compareTo(def.hardMax()) <= 0,
+                field + " must be <= hardMax for " + def.canonicalKey());
     }
 }

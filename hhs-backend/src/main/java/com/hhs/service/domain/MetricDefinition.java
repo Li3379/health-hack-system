@@ -22,6 +22,11 @@ import java.util.Set;
  * @param normalMax clinical reference normal range upper bound
  * @param placeholder UI input placeholder text
  * @param guideHint clinical guide / reference explanation hint
+ * @param alertable whether the metric can be evaluated by the alert engine, i.e. a usable
+ *                   alert_rule seed exists (D-03/D-19); populated by
+ *                   {@link HealthMetricMetaRegistry#applyRecommendations(Map)} at startup
+ * @param recommended backend-derived recommended boundaries ({@link RecommendedThreshold}, D-06);
+ *                    non-null only when {@code alertable} is true
  */
 public record MetricDefinition(
         String canonicalKey,
@@ -36,10 +41,16 @@ public record MetricDefinition(
         BigDecimal normalMin,
         BigDecimal normalMax,
         String placeholder,
-        String guideHint
+        String guideHint,
+        boolean alertable,
+        RecommendedThreshold recommended
 ) {
 
     public MetricDefinition {
         aliases = aliases != null ? Collections.unmodifiableSet(Set.copyOf(aliases)) : Set.of();
+        if (alertable && recommended == null) {
+            throw new IllegalArgumentException(
+                    "alertable metric must carry a recommended threshold: " + canonicalKey);
+        }
     }
 }
