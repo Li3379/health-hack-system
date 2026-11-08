@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 1
+open_count: 0
 waived_count: 0
-fixed_count: 1
+fixed_count: 2
 total_count: 2
-last_updated: 2026-11-08T11:25:43.437Z
+last_updated: 2026-11-08T11:29:01.155Z
 ---
 
 # Broken Windows Ledger
@@ -15,7 +15,7 @@ last_updated: 2026-11-08T11:25:43.437Z
 
 | id | phase | kind | file | line | description | status | reason | recorded_at | resolved_at |
 |----|-------|------|------|------|-------------|--------|--------|-------------|-------------|
-| 1 | 12 | deviation | hhs-frontend-v2/src/assets/styles/theme.css |  | UI-SPEC Contract 9 global dialog button-weight rules (.el-dialog .el-button--primary 600/400 + line-height 1.5) deferred: 12-07 scoped them to the page plan; 12-08 applied only the page-level portion within its files_modified — the wizard teleports to body so its buttons still render at theme.css 500 14px/1 until a theme.css-scoped change lands | open |  | 2026-11-08T11:24:35.513Z |  |
+| 1 | 12 | deviation | hhs-frontend-v2/src/assets/styles/theme.css |  | UI-SPEC Contract 9 global dialog button-weight rules (.el-dialog .el-button--primary 600/400 + line-height 1.5) deferred: 12-07 scoped them to the page plan; 12-08 applied only the page-level portion within its files_modified — the wizard teleports to body so its buttons still render at theme.css 500 14px/1 until a theme.css-scoped change lands | fixed |  | 2026-11-08T11:24:35.513Z | 2026-11-08T11:29:01.155Z |
 | 2 | 12 | deviation | hhs-frontend-v2/src/assets/styles/theme.css |  | UI-SPEC Contract 9 global dialog button-weight rules (.el-dialog .el-button--primary 600/400 + line-height 1.5) deferred: 12-07 scoped them to the page plan; 12-08 applied only the page-level portion within its files_modified - the wizard teleports to body so its buttons still render at theme.css 500 14px/1 until a theme.css-scoped change lands | fixed |  | 2026-11-08T11:24:44.767Z | 2026-11-08T11:25:43.437Z |
 
 ````json
@@ -27,10 +27,10 @@ last_updated: 2026-11-08T11:25:43.437Z
     "file": "hhs-frontend-v2/src/assets/styles/theme.css",
     "line": null,
     "description": "UI-SPEC Contract 9 global dialog button-weight rules (.el-dialog .el-button--primary 600/400 + line-height 1.5) deferred: 12-07 scoped them to the page plan; 12-08 applied only the page-level portion within its files_modified — the wizard teleports to body so its buttons still render at theme.css 500 14px/1 until a theme.css-scoped change lands",
-    "status": "open",
+    "status": "fixed",
     "reason": "",
     "recorded_at": "2026-11-08T11:24:35.513Z",
-    "resolved_at": null,
+    "resolved_at": "2026-11-08T11:29:01.155Z",
     "milestone": "v1.3"
   },
   {

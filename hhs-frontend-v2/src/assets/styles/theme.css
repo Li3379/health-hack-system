@@ -466,6 +466,21 @@ p { margin: 0; }
   transform: translateY(0) !important;
 }
 
+/* Dialog buttons — UI-SPEC Contract 9 (Phase 12): weight normalization.
+   The threshold wizard teleports to body, so the page-scoped :deep rules in
+   Thresholds.vue cannot reach its footer buttons; normalize at the dialog
+   level instead. Primary moves from 500 14px/1 to 600 14px/1.5 (the 1.5
+   line-height stops the Chinese glyph bottom clipping); secondary buttons
+   drop EP's --el-button-font-weight: 500 to 400 so the weight scale stays
+   two-tier (600 primary / 400 secondary). */
+.el-dialog .el-button--primary {
+  font: 600 14px/1.5 var(--font-ui) !important;
+}
+.el-dialog .el-button:not(.el-button--primary) {
+  font-weight: 400 !important;
+  line-height: 1.5 !important;
+}
+
 /* Button Default (Ghost) */
 .el-button--default {
   background: rgba(255, 255, 255, 0.04) !important;
