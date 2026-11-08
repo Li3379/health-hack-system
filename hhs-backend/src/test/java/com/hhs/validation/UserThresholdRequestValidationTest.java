@@ -33,6 +33,10 @@ class UserThresholdRequestValidationTest {
     private static final String CRITICAL_HIGH_NEGATIVE = "严重高值不能为负数";
     private static final String WARNING_LOW_NEGATIVE = "警告低值不能为负数";
     private static final String CRITICAL_LOW_NEGATIVE = "严重低值不能为负数";
+    private static final String CRITICAL_LOW_VS_WARNING_LOW = "严重低值必须小于警告低值，请调整其中一个";
+    private static final String WARNING_LOW_VS_WARNING_HIGH = "警告低值必须小于警告高值，请调整其中一个";
+    private static final String WARNING_HIGH_VS_CRITICAL_HIGH = "警告高值必须小于严重高值，请调整其中一个";
+    private static final String HEART_RATE_HARD_RANGE = "心率有效生理区间为 20 ~ 300 次/分，请核对后重新输入";
 
     private final ValidatorFactory factory = Validation.buildDefaultValidatorFactory();
     private final Validator validator = factory.getValidator();
@@ -146,10 +150,24 @@ class UserThresholdRequestValidationTest {
                 .map(ConstraintViolation::getMessage)
                 .forEach(messages::add);
 
+        // @ValidThresholdRange hard-limit message (heartRate unit 次/分 keeps the message
+        // pure Chinese; boundary 400 exceeds heartRate hardMax 300)
+        UserThresholdRequest hardLimitRequest = new UserThresholdRequest();
+        hardLimitRequest.setUserId(1L);
+        hardLimitRequest.setMetricKey("heartRate");
+        hardLimitRequest.setWarningHigh(new BigDecimal("400"));
+        validator.validate(hardLimitRequest).stream()
+                .map(ConstraintViolation::getMessage)
+                .forEach(messages::add);
+
         assertTrue(messages.contains(USER_ID_REQUIRED));
         assertTrue(messages.contains(METRIC_KEY_REQUIRED));
         assertTrue(messages.contains(METRIC_KEY_LENGTH));
-        assertEquals(7, messages.size(), "Expected 7 distinct messages, got: " + messages);
+        assertTrue(messages.contains(CRITICAL_LOW_VS_WARNING_LOW));
+        assertTrue(messages.contains(WARNING_LOW_VS_WARNING_HIGH));
+        assertTrue(messages.contains(WARNING_HIGH_VS_CRITICAL_HIGH));
+        assertTrue(messages.contains(HEART_RATE_HARD_RANGE));
+        assertEquals(11, messages.size(), "Expected 11 distinct messages, got: " + messages);
 
         for (String message : messages) {
             assertFalse(LATIN_WORD.matcher(message).find(),

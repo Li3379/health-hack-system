@@ -1,5 +1,6 @@
 package com.hhs.dto;
 
+import com.hhs.validation.ValidThresholdRange;
 import jakarta.validation.constraints.*;
 import lombok.Data;
 
@@ -10,6 +11,7 @@ import java.math.BigDecimal;
  * Used for creating and updating user threshold settings
  */
 @Data
+@ValidThresholdRange
 public class UserThresholdRequest {
 
     @NotNull(message = "用户标识不能为空")
