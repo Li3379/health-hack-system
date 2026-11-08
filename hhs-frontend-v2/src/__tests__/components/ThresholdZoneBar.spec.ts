@@ -89,4 +89,33 @@ describe('ThresholdZoneBar.vue', () => {
 
     expect(wrapper.attributes('aria-label')).toContain('mmHg')
   })
+
+  it('keeps five bands and the full unit in the aria-label when the unit string is very long', () => {
+    const longUnit = 'mmol/L mmol/L mmol/L mmol/L'
+    const wrapper = mount(ThresholdZoneBar, { props: { draft: FULL_DRAFT, unit: longUnit } })
+
+    // 视觉上标签可能被 ellipsis 截断，但带的数量不变，完整文本仍在 aria-label 中
+    expect(wrapper.findAll('.zone-bar__band')).toHaveLength(5)
+    expect(wrapper.attributes('aria-label')).toContain(longUnit)
+  })
+
+  it('renders five em-dash bands and reads 未设置 five times when every boundary is null', () => {
+    const wrapper = mount(ThresholdZoneBar, {
+      props: {
+        draft: { criticalLow: null, warningLow: null, warningHigh: null, criticalHigh: null }
+      }
+    })
+
+    expect(wrapper.findAll('.zone-bar__band')).toHaveLength(5)
+    expect(wrapper.findAll('.zone-bar__value').map(node => node.text())).toEqual([
+      '—',
+      '—',
+      '—',
+      '—',
+      '—'
+    ])
+
+    const label = wrapper.attributes('aria-label') ?? ''
+    expect(label.split('未设置')).toHaveLength(6) // 恰好出现 5 次
+  })
 })
