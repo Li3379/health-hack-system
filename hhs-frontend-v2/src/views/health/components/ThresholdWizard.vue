@@ -161,24 +161,16 @@
         <ThresholdZoneBar :draft="draft" :unit="meta?.unit" />
       </div>
 
-      <!-- 第 3 步：确认保存（自然语言确认语句） -->
+      <!-- 第 3 步：确认保存（自然语言确认语句，只陈述已填边界；全空降级为固定文案） -->
       <div v-else class="wizard-panel">
         <div class="confirm-block">
           <h4 class="confirm-block__title">请确认以下告警行为</h4>
           <p ref="confirmRef" tabindex="-1" role="status" class="confirm-sentence">
-            <template v-if="meta">
-              当 <strong>{{ meta.displayName }}</strong>
-              <template v-if="draft.warningHigh != null">
-                ≥ <strong>{{ draft.warningHigh }}</strong> 时发出黄色提醒；
-              </template>
-              <template v-if="draft.criticalHigh != null">
-                ≥ <strong>{{ draft.criticalHigh }}</strong> 时发出红色紧急提醒；
-              </template>
-              <template v-if="draft.warningLow != null">
-                ≤ <strong>{{ draft.warningLow }}</strong> 时发出黄色提醒；
-              </template>
-              <template v-if="draft.criticalLow != null">
-                ≤ <strong>{{ draft.criticalLow }}</strong> 时发出红色紧急提醒。
+            <template v-if="confirmationSentence.length === 0">尚未设置任何有效阈值</template>
+            <template v-else>
+              <template v-for="(seg, index) in confirmationSentence" :key="index">
+                <strong v-if="seg.strong">{{ seg.text }}</strong>
+                <template v-else>{{ seg.text }}</template>
               </template>
             </template>
           </p>
@@ -312,6 +304,54 @@ const summaryItems = computed<SummaryItem[]>(() => {
     if (message) items.push({ field, label: fieldLabel(field), message })
   }
   return items
+})
+
+/** 确认语句分段：strong 段加粗（指标名/数值，同字号只加字重），纯文本段承载连接语。 */
+interface SentenceSegment {
+  text: string
+  strong: boolean
+}
+
+/**
+ * 第 3 步确认语句（THR-06 / Contract 5）：只为已填写边界生成分句并按
+ * 高值对 → 低值对顺序拼接；全部为 null 时返回空数组，由模板降级为固定文案。
+ * 纯展示元素（role="status"），唯一的「状态处理」就是省略 null 分句与全空降级。
+ */
+const confirmationSentence = computed<SentenceSegment[]>(() => {
+  if (!meta.value || !hasAnyBoundary(draft)) return []
+  const segments: SentenceSegment[] = [
+    { text: '当 ', strong: false },
+    { text: meta.value.displayName, strong: true }
+  ]
+  if (draft.warningHigh != null) {
+    segments.push(
+      { text: ' ≥ ', strong: false },
+      { text: String(draft.warningHigh), strong: true },
+      { text: ' 时发出黄色提醒；', strong: false }
+    )
+  }
+  if (draft.criticalHigh != null) {
+    segments.push(
+      { text: ' ≥ ', strong: false },
+      { text: String(draft.criticalHigh), strong: true },
+      { text: ' 时发出红色紧急提醒；', strong: false }
+    )
+  }
+  if (draft.warningLow != null) {
+    segments.push(
+      { text: ' ≤ ', strong: false },
+      { text: String(draft.warningLow), strong: true },
+      { text: ' 时发出黄色提醒；', strong: false }
+    )
+  }
+  if (draft.criticalLow != null) {
+    segments.push(
+      { text: ' ≤ ', strong: false },
+      { text: String(draft.criticalLow), strong: true },
+      { text: ' 时发出红色紧急提醒。', strong: false }
+    )
+  }
+  return segments
 })
 
 // 每次打开重置状态（destroy-on-close 语义的显式初始化）
@@ -594,6 +634,29 @@ defineExpose({
 /* 违反层级的两个字段同时标红（Contract 3 §层级校验的呈现），复用 Phase 11 错误 token */
 .threshold-field.is-invalid .threshold-field__label {
   color: var(--hhs-color-error-text);
+}
+
+/* 确认语句（Contract 5） */
+.confirm-block__title {
+  font-size: 18px; /* Heading */
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--text-1);
+  margin-bottom: 12px; /* sm-3 */
+}
+
+.confirm-sentence {
+  padding: 12px 16px; /* sm-3 / md */
+  font-size: 14px; /* Body */
+  line-height: 1.5;
+  color: var(--text-1);
+  background: var(--surface-2);
+  border-radius: var(--radius-md);
+}
+
+.confirm-sentence:focus {
+  outline: 2px solid var(--accent-cool); /* 焦点环为非文字图形，≥3:1 通过 */
+  outline-offset: 2px;
 }
 
 /* theme.css 用 !important 把 .el-input__inner 锁成 15px，必须同等优先级覆盖回 14px */
