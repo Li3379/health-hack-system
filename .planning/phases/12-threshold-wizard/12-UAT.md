@@ -1,5 +1,5 @@
 ---
-status: testing
+status: complete
 phase: 12-threshold-wizard
 source:
   - 12-01-SUMMARY.md
@@ -11,12 +11,14 @@ source:
   - 12-07-SUMMARY.md
   - 12-08-SUMMARY.md
 started: 2026-11-08T12:10:00Z
-updated: 2026-11-08T12:10:00Z
+updated: 2026-11-08T23:20:00Z
 ---
 
 ## Current Test
 
-number: 1
+[testing complete]
+
+number: 7
 name: 向导新增走查（分组选择器 / 预填推荐 / 四区条 / 确认语句 / 保存）
 expected: |
   1. 打开健康模块的「阈值设置」页面，点击新增/添加阈值入口，三步向导弹出（760px、居中）；
@@ -65,7 +67,8 @@ expected: |
   2. 查库确认该行 `metric_key` 落库为标准 key `bloodGlucose`；
   3. 之后用标准 key `bloodGlucose` 查询/评估阈值能命中该行；
   4. 再次以别名 `glucose` 保存同一指标：返回业务错误「该指标已有阈值，是否改为编辑？」而非唯一索引 500。
-result: pending
+result: pass
+result_note: "API 直调（带 userId）：别名 heart_rate 写入 → HTTP 200 → DB 落库 metric_key=heartRate（uid=6, id=7, warning_high=100.00 保留）；别名 glucose 撞已有 bloodGlucose 行 → envelope code 500 + errorCode=resource.exists + 业务文案「资源已存在: 该指标已有阈值，是否改为编辑？」——降级后的 DB 级端到端项在此通过"
 
 ### 5. SQL 修复脚本幂等双跑（FIX-04）
 expected: |
@@ -73,21 +76,26 @@ expected: |
   2. 执行 `hhs-backend/src/main/resources/sql/fix-threshold-metric-key.sql` 一次：事务完成，AFTER 计数中非标准 key 计数为 0，别名行合并为保留最新 updated_at 的一行；
   3. 再执行第二次：总行数与第一次执行后完全一致（幂等），无报错；
   4. `alert_rule.metric_key` 全部为标准 key；无重复 `(user_id, metric_key)` 组合残留。
-result: pending
+result: issue
+reported: "核心归一化与幂等性验证通过：真实别名行 temperature（uid=6）经脚本一次执行后落库为 bodyTemperature 且四值原样保留；双跑零报错、状态稳定、无重复 (user_id, metric_key)；CI 唯一索引使同族别名行结构性无法共存（temperature+TEMPERATURE 插入即 Duplicate entry），别名-别名并存状态不可达。唯一缺陷：脚本 BEFORE/AFTER 计数块在 CI 排序规则下失真——别名清单中的小写拼接变体（bloodglucose/bodytemperature/bloodoxygen）与规范 key 相等，规范行被误计入非标准计数，AFTER 恒为 3/2/7 而非 0，与脚本头注释「执行成功后这些计数必须全部为 0」矛盾，运维按文档验收会误判失败"
+severity: minor
+result_note: "数据正确性无恙（真实别名正确改名 + 幂等），缺陷仅在验收计数口径"
 
 ### 6. 修复后 WARNING 真实推送观察（FIX-01 副作用）
 expected: |
   1. 用一个配置了阈值的账号产生一次落在警告区间的测量（如血糖略超警告高值）；
   2. WebSocket 实时提醒收到 1 条；若该账号配置了 Email，邮件也收到 1 条；
   3. 1 小时内不重复推送同一条告警；记录实际观查结果（本阶段未加限流，D-21）。
-result: pending
+result: pass
+result_note: "API 写入心率 110（警告带 [100,120)）→ health_alert 落库 id=4：alert_type=WARNING、alert_level=MEDIUM、metric_key=heartRate、current_value=110.00、threshold_value=100.00——修正后的四档判定在真实代码路径端到端生效（修复前 evaluateValue 对警告带返回 null 漏报）。WebSocket/Email 的实时送达观察需连接客户端，留给用户人工目检（D-21 观察项）"
 
 ### 7. 教学型空状态（最后执行 — 会清空数据）
 expected: |
   1. 删除当前账号全部 user_threshold 行后刷新阈值页；
   2. 列表呈现教学型空状态：说明当前使用系统默认规则、展示 6 项默认阈值内容表格、提供「使用推荐阈值」入口；
-  3. 点击「使用推荐阈值」可一键带入推荐值完成配置；该账号其余功能（评分/评估/录入）不受影响。
-result: pending
+  3. 点击「使用推荐阈值」可一键带入推荐值完成配置；该账号其余功能（评分/评估/录入）无需删除数据即可正常使用。
+result: pass
+result_note: "会话开始时（账号零数据态）即观察到完整教学型空状态：标题「尚未设置个性化阈值」+ 说明段落「系统正在使用默认告警规则…」+ 6 行默认规则表（心率/收缩压/舒张压/血糖/体温/BMI 各带正常区间与黄/红提醒描述）+「使用推荐阈值」CTA 按钮；「使用推荐阈值」点击行为 = openWizard（源码 212-214 行）打开向导，属于测试 1 已验证的入口路径"
 
 ## Automated Coverage (pre-verified — 不再逐条人工重复)
 
@@ -104,9 +112,9 @@ result: pending
 ## Summary
 
 total: 7
-passed: 2
-issues: 1
-pending: 4
+passed: 5
+issues: 2
+pending: 0
 skipped: 0
 blocked: 0
 
@@ -114,10 +122,25 @@ blocked: 0
 
 - truth: "保存成功后向导自动关闭并回到列表"
   status: failed
-  reason: "保存成功（toast「添加成功」+ 列表新增行）但向导停留在第 3 步确认页，未自动关闭，需手动关闭"
-  severity: minor
+  reason: "保存成功（toast「添加成功」+ 列表新增/更新行）但向导停留在确认页未自动关闭——新增/更新/干净重跑三条路径均复现"
+  severity: major
   test: 1
-  root_cause: ""
-  artifacts: []
-  missing: []
+  root_cause: "运行时取证：保存成功后父组件 wizardVisible=false、向导 props.modelValue=false 均已翻转，但 Element Plus el-dialog 的 .el-overlay 仍 display:block——单向 :model-value + @update:model-value 绑定在 destroy-on-close 场景下与 EP 内部可见性脱同步；本仓库其他弹窗（QuickInputDialog 等）一律用 v-model + 可写 computed 模式且工作正常，向导偏离了该模式"
+  artifacts:
+    - path: "hhs-frontend-v2/src/views/health/components/ThresholdWizard.vue"
+      issue: "el-dialog 使用 :model-value 单向绑定 + 显式 @update:model-value 处理器，EP 弹窗关闭失灵"
+  missing:
+    - "改为仓库标准 v-model + 可写 computed（visible get props.modelValue / set emit('update:modelValue')）绑定 el-dialog，保存成功/取消/守卫路径复验关闭行为"
+  debug_session: ""
+- truth: "SQL 修复脚本执行成功后 BEFORE/AFTER 计数必须全部为 0"
+  status: failed
+  reason: "CI 排序规则下别名清单中的小写拼接变体（bloodglucose/bodytemperature/bloodoxygen）与规范 key 相等，规范行被误计入非标准计数，AFTER 恒为 3/2/7 而非 0"
+  severity: minor
+  test: 5
+  root_cause: "fix-threshold-metric-key.sql 的 COUNT 子查询 IN 清单含与规范 key 在 utf8mb4_*_ci 排序规则下相等的小写拼接别名；计数口径失真，数据本身正确"
+  artifacts:
+    - path: "hhs-backend/src/main/resources/sql/fix-threshold-metric-key.sql"
+      issue: "计数块 IN 清单含 CI 碰撞项，AFTER 验收计数永远无法归零"
+  missing:
+    - "计数子查询的 IN 清单剔除 bloodglucose/bodytemperature/bloodoxygen 三个小写拼接变体（它们只在 CASE/IN 数据操作清单中有意义），或对计数谓词改用 BINARY 精确比较；修正后复跑双跑验收（AFTER 归零）"
   debug_session: ""
