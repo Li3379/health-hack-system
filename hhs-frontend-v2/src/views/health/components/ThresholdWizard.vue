@@ -53,12 +53,17 @@
 
       <!-- 第 2 步：四项阈值输入 + 实时四区预览条（说明文案回答「不知道怎么填」） -->
       <div v-else-if="currentStep === 1" ref="fieldsFocusRef" class="wizard-panel">
-        <div class="threshold-field">
+        <FormErrorSummary :summary-items="summaryItems" @focus-field="focusField" />
+        <div class="threshold-field" :class="{ 'is-invalid': !!mergedErrors.criticalHigh }">
           <div class="threshold-field__header">
             <span class="threshold-field__label">严重高值</span>
             <span v-if="isRecommended('criticalHigh')" class="recommend-badge">推荐</span>
           </div>
-          <el-form-item>
+          <el-form-item
+            prop="criticalHigh"
+            data-field="criticalHigh"
+            :error="mergedErrors.criticalHigh"
+          >
             <el-input-number
               v-model="draft.criticalHigh"
               :min="meta?.hardMin"
@@ -68,6 +73,7 @@
               controls-position="right"
               :disabled="!meta"
               style="width: 100%"
+              @update:model-value="clearField('criticalHigh')"
             />
           </el-form-item>
           <p class="threshold-field__hint">
@@ -75,12 +81,16 @@
           </p>
         </div>
 
-        <div class="threshold-field">
+        <div class="threshold-field" :class="{ 'is-invalid': !!mergedErrors.warningHigh }">
           <div class="threshold-field__header">
             <span class="threshold-field__label">警告高值</span>
             <span v-if="isRecommended('warningHigh')" class="recommend-badge">推荐</span>
           </div>
-          <el-form-item>
+          <el-form-item
+            prop="warningHigh"
+            data-field="warningHigh"
+            :error="mergedErrors.warningHigh"
+          >
             <el-input-number
               v-model="draft.warningHigh"
               :min="meta?.hardMin"
@@ -90,6 +100,7 @@
               controls-position="right"
               :disabled="!meta"
               style="width: 100%"
+              @update:model-value="clearField('warningHigh')"
             />
           </el-form-item>
           <p class="threshold-field__hint">
@@ -97,12 +108,12 @@
           </p>
         </div>
 
-        <div class="threshold-field">
+        <div class="threshold-field" :class="{ 'is-invalid': !!mergedErrors.warningLow }">
           <div class="threshold-field__header">
             <span class="threshold-field__label">警告低值</span>
             <span v-if="isRecommended('warningLow')" class="recommend-badge">推荐</span>
           </div>
-          <el-form-item>
+          <el-form-item prop="warningLow" data-field="warningLow" :error="mergedErrors.warningLow">
             <el-input-number
               v-model="draft.warningLow"
               :min="meta?.hardMin"
@@ -112,6 +123,7 @@
               controls-position="right"
               :disabled="!meta"
               style="width: 100%"
+              @update:model-value="clearField('warningLow')"
             />
           </el-form-item>
           <p class="threshold-field__hint">
@@ -119,12 +131,16 @@
           </p>
         </div>
 
-        <div class="threshold-field">
+        <div class="threshold-field" :class="{ 'is-invalid': !!mergedErrors.criticalLow }">
           <div class="threshold-field__header">
             <span class="threshold-field__label">严重低值</span>
             <span v-if="isRecommended('criticalLow')" class="recommend-badge">推荐</span>
           </div>
-          <el-form-item>
+          <el-form-item
+            prop="criticalLow"
+            data-field="criticalLow"
+            :error="mergedErrors.criticalLow"
+          >
             <el-input-number
               v-model="draft.criticalLow"
               :min="meta?.hardMin"
@@ -134,6 +150,7 @@
               controls-position="right"
               :disabled="!meta"
               style="width: 100%"
+              @update:model-value="clearField('criticalLow')"
             />
           </el-form-item>
           <p class="threshold-field__hint">
@@ -176,7 +193,12 @@
           恢复推荐值
         </el-button>
         <el-button @click="handleCancel">放弃设置</el-button>
-        <el-button type="primary" :disabled="primaryDisabled" @click="handlePrimary">
+        <el-button
+          type="primary"
+          :disabled="primaryDisabled"
+          :loading="saving"
+          @click="handlePrimary"
+        >
           {{ currentStep === 2 ? '保存阈值' : '下一步' }}
         </el-button>
       </div>
@@ -188,9 +210,18 @@
 import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { ElMessageBox } from 'element-plus'
 import { useMetricMetaStore } from '@/stores/metricMeta'
-import { ERROR_MESSAGES } from '@/utils/errorMessages'
-import { hasAnyBoundary, type ThresholdDraft } from '@/utils/thresholdValidation'
-import type { UserThreshold } from '@/types/api'
+import { useAuthStore } from '@/stores/auth'
+import { ERROR_MESSAGES, fieldLabel } from '@/utils/errorMessages'
+import {
+  hasAnyBoundary,
+  validateThresholdOrder,
+  type ThresholdDraft
+} from '@/utils/thresholdValidation'
+import { useFormServerErrors, type SummaryItem } from '@/composables/useFormServerErrors'
+import { normalizeApiError } from '@/utils/appError'
+import { thresholdApi } from '@/api/threshold'
+import type { UserThreshold, UserThresholdRequest } from '@/types/api'
+import FormErrorSummary from '@/components/common/FormErrorSummary.vue'
 import ThresholdZoneBar from './ThresholdZoneBar.vue'
 
 /**
@@ -211,13 +242,18 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'update:modelValue', value: boolean): void
   (e: 'saved'): void
+  (e: 'error', error: unknown): void
 }>()
 
 const store = useMetricMetaStore()
+const authStore = useAuthStore()
 
 type DraftField = keyof ThresholdDraft
 
 const FIELD_KEYS: DraftField[] = ['criticalLow', 'warningLow', 'warningHigh', 'criticalHigh']
+
+// 汇总块排序必须与页面字段顺序一致（GOV.UK 原则，Phase 11 D-01）
+const SUMMARY_FIELD_ORDER = ['criticalLow', 'warningLow', 'warningHigh', 'criticalHigh']
 
 // D-01：ElSteps 三步 —— 0 选择指标 / 1 设置阈值 / 2 确认保存
 const currentStep = ref(0)
@@ -233,6 +269,14 @@ const draft = reactive<ThresholdDraft>({
   criticalHigh: null
 })
 
+// Phase 11 服务端 fieldErrors 投影：apply() 只吃 validation kind，绝不清空输入、绝不 toast
+const { fieldErrors, apply, clearField, reset, focusField } = useFormServerErrors({
+  fieldOrder: SUMMARY_FIELD_ORDER
+})
+
+// 保存进行中的提交闩锁：主按钮 loading 并阻止重复提交
+const saving = ref(false)
+
 // 打开时的草稿快照：草稿偏离快照才拦截关闭（T-12-25 防误关丢数据）
 let compareDraft: ThresholdDraft = {}
 let confirmedLeave = false
@@ -242,6 +286,33 @@ const meta = computed(() => store.getDefinition(selectedKey.value))
 const hasAlertableMetrics = computed(
   () => store.alertableHealthMetrics.length + store.alertableWellnessMetrics.length > 0
 )
+
+/**
+ * 客户端校验（D-09：即时反馈、非权威；权威拦截在后端 @ValidThresholdRange）。
+ * 次序违规命名涉及的两个字段，同一句挂到两侧；null = 无界永不违规（D-10）。
+ */
+const clientViolations = computed(() => validateThresholdOrder(draft, meta.value))
+
+/** 服务端 fieldErrors 与客户端违规合并：同一字段以客户端结果优先呈现（实时）。 */
+const mergedErrors = computed<Record<string, string>>(() => {
+  const merged: Record<string, string> = { ...fieldErrors.value }
+  for (const violation of clientViolations.value) {
+    for (const field of violation.fields) {
+      merged[field] = violation.message
+    }
+  }
+  return merged
+})
+
+/** GOV.UK 汇总块数据：顺序与字段声明顺序一致，标签来自 fieldLabel（D-15）。 */
+const summaryItems = computed<SummaryItem[]>(() => {
+  const items: SummaryItem[] = []
+  for (const field of SUMMARY_FIELD_ORDER) {
+    const message = mergedErrors.value[field]
+    if (message) items.push({ field, label: fieldLabel(field), message })
+  }
+  return items
+})
 
 // 每次打开重置状态（destroy-on-close 语义的显式初始化）
 watch(
@@ -256,6 +327,8 @@ watch(
 
 function resetForOpen(): void {
   confirmedLeave = false
+  reset()
+  saving.value = false
   if (props.editing) {
     // D-02：编辑模式跳过第 1 步直接进入第 2 步，指标锁定不可改
     selectedKey.value = props.editing.metricKey
@@ -344,14 +417,54 @@ function goToStep(step: number): void {
 
 const primaryDisabled = computed(() => {
   if (currentStep.value === 0) return !selectedKey.value || !hasAlertableMetrics.value
-  if (currentStep.value === 1) return !hasAnyBoundary(draft)
-  // 确认保存步：提交与校验接线完成前保持禁用
-  return true
+  // D-10/D-12：仅次序违规或四项全空时禁用；部分填写合法，违规清零输入框内容
+  return clientViolations.value.length > 0 || !hasAnyBoundary(draft)
 })
 
 function handlePrimary(): void {
   if (primaryDisabled.value) return
-  goToStep(currentStep.value + 1)
+  if (currentStep.value < 2) {
+    goToStep(currentStep.value + 1)
+    return
+  }
+  void handleSubmit()
+}
+
+/**
+ * 保存（T-12-26）：userId 来自认证 store 而非用户输入，后端会按令牌重新判定归属。
+ * 校验失败 → apply() 内联 + 汇总、零 toast、弹窗保持且输入原样（D-12）；
+ * 其他失败 → emit 给父级，由页面唯一的错误出口呈现单条 toast（T-12-24）。
+ */
+async function handleSubmit(): Promise<void> {
+  if (saving.value || primaryDisabled.value) return
+  reset()
+  const payload: UserThresholdRequest = {
+    userId: authStore.user?.id ?? 0,
+    metricKey: selectedKey.value,
+    warningHigh: draft.warningHigh ?? undefined,
+    criticalHigh: draft.criticalHigh ?? undefined,
+    warningLow: draft.warningLow ?? undefined,
+    criticalLow: draft.criticalLow ?? undefined
+  }
+  saving.value = true
+  try {
+    if (props.editing) {
+      await thresholdApi.updateThreshold(props.editing.id, payload)
+    } else {
+      await thresholdApi.createThreshold(payload)
+    }
+    emit('saved')
+    emit('update:modelValue', false)
+  } catch (raw) {
+    const apiError = normalizeApiError(raw)
+    if (apiError.kind === 'validation') {
+      apply(apiError)
+    } else {
+      emit('error', raw)
+    }
+  } finally {
+    saving.value = false
+  }
 }
 
 /** 步骤切换焦点规则（Contract 1）：新步第一个控件获得焦点，不自动滚动。 */
@@ -373,7 +486,8 @@ defineExpose({
   handleMetricSelect,
   restoreRecommended,
   goToStep,
-  handleBeforeClose
+  handleBeforeClose,
+  handleSubmit
 })
 </script>
 
@@ -475,6 +589,11 @@ defineExpose({
   font-weight: 600; /* theme.css 的 500 只作用于 el-form-item__label，此处自绘 span 不受影响 */
   line-height: 1.4;
   color: var(--text-1);
+}
+
+/* 违反层级的两个字段同时标红（Contract 3 §层级校验的呈现），复用 Phase 11 错误 token */
+.threshold-field.is-invalid .threshold-field__label {
+  color: var(--hhs-color-error-text);
 }
 
 /* theme.css 用 !important 把 .el-input__inner 锁成 15px，必须同等优先级覆盖回 14px */
