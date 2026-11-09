@@ -26,8 +26,25 @@ public class MetricsScorer {
      * @return score from 0-100
      */
     public int calculate(Long userId) {
+        return calculate(userId, AssumptionCollector.noop());
+    }
+
+    /**
+     * Calculate score based on latest health metrics, disclosing the empty-set substitution.
+     *
+     * <p>The neutral-70 branch is the only substitution this scorer performs. The per-metric
+     * penalties below describe score loss, not value substitution, so they add no assumption.</p>
+     *
+     * @param userId    the user ID
+     * @param collector receives the substitution sentence, ignored when {@code null}
+     * @return score from 0-100
+     */
+    public int calculate(Long userId, AssumptionCollector collector) {
         List<RealtimeMetric> metrics = realtimeMetricMapper.getLatestMetricsByUser(userId);
         if (metrics.isEmpty()) {
+            if (collector != null) {
+                collector.add("缺少健康指标数据，指标维度按中性 70 分计算");
+            }
             return 70;
         }
 

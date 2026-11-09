@@ -78,7 +78,7 @@ public class ScoreCalculator {
         totalScore -= (int) ((100 - profileScore) * 0.25);
 
         // 2. Latest Metrics Score (35%)
-        int metricsScore = metricsScorer.calculate(userId);
+        int metricsScore = metricsScorer.calculate(userId, collector);
         factors.put("latestMetrics", Map.of(
                 "score", metricsScore,
                 "weight", 0.35,
@@ -123,7 +123,7 @@ public class ScoreCalculator {
         vo.setScore(totalScore);
         vo.setLevel(getHealthLevel(totalScore));
         vo.setFactors(factors);
-        vo.setDimensionScores(dimensionScoreCalculator.calculate(userId));
+        vo.setDimensionScores(dimensionScoreCalculator.calculate(userId, collector));
         vo.setCalculatedAt(LocalDateTime.now());
         vo.setProfileCompleteness(
                 profileCompletenessCalculator.calculate(profileScorer.latestProfile(userId)).score());
