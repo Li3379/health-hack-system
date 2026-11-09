@@ -486,6 +486,52 @@ describe('RiskBackfill.spec.ts — 风险页就地补填（PRF-06 / PRF-08）', 
       wrapper.unmount()
     })
 
+    it('renders one li for a single assumption and a 4px-gap vertical list for many', async () => {
+      getCompleteness.mockResolvedValue(ok(NO_PROFILE_PAYLOAD))
+      const oneWrapper = mountRisk()
+      await flushPromises()
+      await createButton(oneWrapper).trigger('click')
+      await flushPromises()
+
+      expect(oneWrapper.findAll('.risk-estimate__list li')).toHaveLength(1)
+      // 一条时不出现计数文案
+      expect(oneWrapper.find('.risk-estimate__list').text()).not.toMatch(/\d+\s*条/)
+      oneWrapper.unmount()
+
+      getCompleteness.mockResolvedValue(ok(PARTIAL_PAYLOAD))
+      const manyWrapper = mountRisk()
+      await flushPromises()
+      await createButton(manyWrapper).trigger('click')
+      await flushPromises()
+
+      expect(manyWrapper.findAll('.risk-estimate__list li')).toHaveLength(TWO_ASSUMPTIONS.length)
+      manyWrapper.unmount()
+    })
+
+    it('keeps the panel save button enabled with a partially filled form', async () => {
+      const wrapper = mountRisk()
+      await flushPromises()
+      await createButton(wrapper).trigger('click')
+      await flushPromises()
+
+      ;(wrapper.vm as any).backfill.gender = 'male'
+      await nextTick()
+
+      // 半填状态下按钮不得被禁用：点击后应给出内联校验，而不是什么都不发生。
+      const save = panelButtons(wrapper)[0]
+      expect(save.attributes('disabled')).toBeUndefined()
+
+      await save.trigger('click')
+      await flushPromises()
+
+      expect(wrapper.findAll('.risk-estimate .el-form-item__error').map(n => n.text())).toEqual([
+        '请选择出生日期'
+      ])
+      expect(createProfile).not.toHaveBeenCalled()
+
+      wrapper.unmount()
+    })
+
     it('renders the optional 身高/体重 inputs with no disabled state and no validation rule', async () => {
       const wrapper = mountRisk()
       await flushPromises()
@@ -512,6 +558,29 @@ describe('RiskBackfill.spec.ts — 风险页就地补填（PRF-06 / PRF-08）', 
       expect(wrapper.findAll('.risk-estimate .el-row').map(row => row.attributes('gutter'))).toEqual(
         ['16', '16']
       )
+
+      wrapper.unmount()
+    })
+
+    it('keeps the assumption list and the form as siblings of the alert, never its children', async () => {
+      const wrapper = mountRisk()
+      await flushPromises()
+
+      await createButton(wrapper).trigger('click')
+      await flushPromises()
+
+      const alert = wrapper.find('.risk-estimate .el-alert')
+      // EP 的默认插槽渲染在 <p> 内：列表若放进去会被浏览器提升出去，破坏整块底色。
+      expect(alert.text()).toContain('系统将按以下假设估算本次风险评估')
+      expect(alert.find('li').exists()).toBe(false)
+      expect(alert.find('form').exists()).toBe(false)
+
+      const section = wrapper.find('.risk-estimate')
+      expect(section.find('.risk-estimate__list').exists()).toBe(true)
+      expect(section.find('.risk-estimate__form').exists()).toBe(true)
+      // 两者都是 alert 的兄弟节点
+      expect(alert.element.contains(wrapper.find('.risk-estimate__list').element)).toBe(false)
+      expect(alert.element.contains(wrapper.find('.risk-estimate__form').element)).toBe(false)
 
       wrapper.unmount()
     })
