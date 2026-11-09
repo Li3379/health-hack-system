@@ -30,7 +30,18 @@ public class HealthScoreServiceImpl implements HealthScoreService {
     private final ApplicationEventPublisher eventPublisher;
 
     private static final int CACHE_TTL_MINUTES = 5;
-    private static final String CACHE_KEY_PREFIX = "health:score:";
+
+    /**
+     * Cache key namespace for calculated score payloads.
+     *
+     * <p>Phase 13 added {@code profileCompleteness} and {@code assumptions} to
+     * {@link com.hhs.vo.HealthScoreVO}. Redis deserialization uses
+     * {@code activateDefaultTyping}, so an entry serialized before that change would still
+     * deserialize into the new class with both fields null. Bumping the version lets those
+     * entries expire under the old namespace naturally instead of requiring every reader to
+     * null-check for a shape it never wrote (same precedent as the Phase 12 {@code VERSION_TAG}).</p>
+     */
+    private static final String CACHE_KEY_PREFIX = "health:score:v2:";
 
     /**
      * Calculate health score for a user
@@ -104,6 +115,11 @@ public class HealthScoreServiceImpl implements HealthScoreService {
 
     /**
      * Create default health score for users with no data
+     *
+     * <p>{@code profileCompleteness} stays null here by contract: null means "unknown", which
+     * the frontend renders as no completeness badge. Fabricating 0 would assert the user's
+     * profile is empty when it may be complete. The dashboard banner and profile header read
+     * the dedicated completeness endpoint, which answers for every user.</p>
      */
     private com.hhs.vo.HealthScoreVO createDefaultScore() {
         com.hhs.vo.HealthScoreVO score = new com.hhs.vo.HealthScoreVO();
@@ -113,6 +129,8 @@ public class HealthScoreServiceImpl implements HealthScoreService {
         score.setCalculationMethod("DEFAULT");
         score.setCalculatedAt(java.time.LocalDateTime.now());
         score.setExpiresAt(score.getCalculatedAt().plusMinutes(CACHE_TTL_MINUTES));
+        score.setProfileCompleteness(null);
+        score.setAssumptions(java.util.List.of());
         score.setMessage("暂无健康数据，请先在\"健康数据\"页面添加您的健康记录（如血糖、血压、心率等）");
         score.setFactors(java.util.Map.of(
             "hasData", false,
