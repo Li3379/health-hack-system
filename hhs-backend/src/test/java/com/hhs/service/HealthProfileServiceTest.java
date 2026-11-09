@@ -5,22 +5,24 @@ import com.hhs.dto.HealthProfileRequest;
 import com.hhs.entity.HealthProfile;
 import com.hhs.exception.BusinessException;
 import com.hhs.mapper.HealthProfileMapper;
+import com.hhs.service.domain.ProfileCompletenessCalculator;
+import com.hhs.service.domain.ProfileFieldCatalog;
 import com.hhs.service.impl.HealthProfileServiceImpl;
 import com.hhs.vo.HealthProfileVO;
+import com.hhs.vo.ProfileCompletenessVO;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 /**
@@ -35,7 +37,12 @@ class HealthProfileServiceTest {
     @Mock
     private HealthProfileMapper healthProfileMapper;
 
-    @InjectMocks
+    /**
+     * The real calculator, not a mock: the service test must exercise the actual 60/30/10
+     * weighting so a stubbed score cannot hide a delegation mistake.
+     */
+    private ProfileCompletenessCalculator completenessCalculator;
+
     private HealthProfileServiceImpl healthProfileService;
 
     private HealthProfileRequest testRequest;
@@ -44,6 +51,9 @@ class HealthProfileServiceTest {
 
     @BeforeEach
     void setUp() {
+        completenessCalculator = new ProfileCompletenessCalculator(new ProfileFieldCatalog());
+        healthProfileService = new HealthProfileServiceImpl(healthProfileMapper, completenessCalculator);
+
         testRequest = new HealthProfileRequest();
         testRequest.setGender("male");
         testRequest.setBirthDate(LocalDate.of(1990, 1, 1));
@@ -330,5 +340,77 @@ class HealthProfileServiceTest {
         // Then: Verify BMI is null for invalid input
         assertNotNull(result);
         assertNull(result.bmi()); // BMI should be null when height or weight is zero
+    }
+
+    @Test
+    @DisplayName("测试1.13：获取档案完整度 - 无档案时返回 0 分而非异常")
+    void testGetCompleteness_NoProfileRow() {
+        // Given: The user has no profile row at all
+        when(healthProfileMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(null);
+
+        // When: Ask for completeness
+        ProfileCompletenessVO result = healthProfileService.getCompleteness(testUserId);
+
+        // Then: A missing profile is the 0% case, never a null or an exception
+        assertNotNull(result);
+        assertEquals(0, result.score());
+        assertEquals("基础档案", result.level());
+        assertEquals(0, result.filledCount());
+        assertEquals(result.fields().size(), result.totalCount());
+        assertFalse(result.hasProfile());
+        assertEquals(List.of(ProfileFieldCatalog.NO_PROFILE_ASSUMPTION), result.assumptions());
+        verify(healthProfileMapper, times(1)).selectOne(any(LambdaQueryWrapper.class));
+    }
+
+    @Test
+    @DisplayName("测试1.14：获取档案完整度 - 仅性别与出生日期返回 60 分标准档案")
+    void testGetCompleteness_MinimumViableProfile() {
+        // Given: A row exists but only carries the two required fields
+        HealthProfile sparse = new HealthProfile();
+        sparse.setId(2L);
+        sparse.setUserId(testUserId);
+        sparse.setGender("male");
+        sparse.setBirthDate(LocalDate.of(1990, 1, 1));
+        when(healthProfileMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(sparse);
+
+        // When
+        ProfileCompletenessVO result = healthProfileService.getCompleteness(testUserId);
+
+        // Then: The two required fields are worth exactly 60, the banner-silencing boundary
+        assertEquals(60, result.score());
+        assertEquals("标准档案", result.level());
+        assertEquals(2, result.filledCount());
+        assertEquals(result.fields().size(), result.totalCount());
+        assertTrue(result.hasProfile());
+    }
+
+    @Test
+    @DisplayName("测试1.15：获取档案完整度 - 完整档案返回 100 分且无假设句")
+    void testGetCompleteness_FullyPopulatedProfile() {
+        // Given: Every catalog field carries a usable value, including the derived bmi
+        HealthProfile full = new HealthProfile();
+        full.setId(3L);
+        full.setUserId(testUserId);
+        full.setGender("male");
+        full.setBirthDate(LocalDate.of(1990, 1, 1));
+        full.setHeightCm(new BigDecimal("175"));
+        full.setWeightKg(new BigDecimal("70"));
+        full.setBmi(new BigDecimal("22.86"));
+        full.setBloodType("A+");
+        full.setAllergyHistory("青霉素过敏");
+        full.setFamilyHistory("父亲有糖尿病");
+        full.setLifestyleHabits("规律运动");
+        when(healthProfileMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(full);
+
+        // When
+        ProfileCompletenessVO result = healthProfileService.getCompleteness(testUserId);
+
+        // Then: Nothing is substituted, so the disclosure list is empty
+        assertEquals(100, result.score());
+        assertEquals("完整档案", result.level());
+        assertEquals(result.totalCount(), result.filledCount());
+        assertEquals(result.fields().size(), result.totalCount());
+        assertTrue(result.hasProfile());
+        assertTrue(result.assumptions().isEmpty());
     }
 }
