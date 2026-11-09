@@ -493,8 +493,12 @@ const cancelEdit = () => {
  * 因此与错误汇总的定位行为逐字一致。
  *
  * 成功消费后立刻清空 query：刷新页面不会重复滚动。
+ *
+ * 只读态下 `el-form :disabled="!editing"` 会把控件置为 disabled，`focus()` 是空操作。
+ * 而「完善档案」链接的语义就是「来补填这一项」，因此命中目标时先进入编辑态再聚焦 ——
+ * 否则最常见的情况（已有档案行、只读打开）会只画出一圈 outline 却无法输入。
  */
-function applyFocusTarget(): void {
+async function applyFocusTarget(): Promise<void> {
   const raw = route.query.focus
   if (typeof raw !== 'string' || raw.length === 0) return
   if (!completeness.value) return
@@ -503,6 +507,10 @@ function applyFocusTarget(): void {
   if (entry.filled) return
 
   focusTarget.value = raw
+  if (!editing.value) {
+    editing.value = true
+    await nextTick()
+  }
   focusField(raw)
   void router.replace({ query: {} })
 }
@@ -544,7 +552,7 @@ onMounted(async () => {
 
   // 最后消费 ?focus=：payload 已落定、DOM 已刷出，focusField 才能命中真实元素。
   await nextTick()
-  applyFocusTarget()
+  await applyFocusTarget()
 })
 onUnmounted(() => {
   if (narrowQuery) narrowQuery.removeEventListener('change', onNarrowChange)

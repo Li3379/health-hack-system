@@ -428,8 +428,19 @@ describe('ProfileCompleteness.spec.ts — 档案页完整度引导', () => {
       wrapper.unmount()
     })
 
-    it('cleans the query exactly once after a successful focus', async () => {
+    it('opens edit mode before focusing, because a read-only form cannot take focus', async () => {
       routeQuery = { focus: 'heightCm' }
+      getCompleteness.mockResolvedValue(ok(makeCompleteness({})))
+      const wrapper = mountProfile()
+      await flushPromises()
+
+      // 只读态下 el-form 是 disabled，focus() 为空操作 —— 链接的语义是「来补填」
+      const vm = wrapper.vm as unknown as { editing: boolean }
+      expect(vm.editing).toBe(true)
+      wrapper.unmount()
+    })
+
+    it('cleans the query exactly once after a successful focus', async () => {      routeQuery = { focus: 'heightCm' }
       getCompleteness.mockResolvedValue(ok(makeCompleteness({})))
       const wrapper = mountProfile()
       await flushPromises()
