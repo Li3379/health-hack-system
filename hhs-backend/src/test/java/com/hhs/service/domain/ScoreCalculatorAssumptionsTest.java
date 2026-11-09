@@ -19,6 +19,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -39,6 +41,8 @@ import static org.mockito.Mockito.when;
 class ScoreCalculatorAssumptionsTest {
 
     private static final String NO_PROFILE = "未填写健康档案，风险得分按通用参考值估算";
+    private static final String NO_METRICS = "缺少健康指标数据，指标维度按中性 70 分计算";
+    private static final String NO_BMI_METRIC = "缺少 BMI 指标，体重维度按参考值估算";
 
     @Mock
     private HealthProfileMapper healthProfileMapper;
@@ -136,14 +140,139 @@ class ScoreCalculatorAssumptionsTest {
         assertTrue(vo.getAssumptions().isEmpty());
     }
 
+    @Test
+    @DisplayName("有指标但无 BMI：披露体重维度参考值，且不重复报缺指标")
+    void metricsWithoutBmiDiscloseWeightReferenceValue() {
+        stubNoProfile();
+        stubMetrics(metric("heartRate", "72"));
+        stubNoRiskAssessment();
+        stubNoScreeningReport();
+        stubNoWellnessMetrics();
+
+        List<String> assumptions = scoreCalculator.calculate(1L, new AssumptionCollector())
+                .getAssumptions();
+
+        assertTrue(assumptions.contains(NO_BMI_METRIC),
+                "expected the missing-BMI sentence, got " + assumptions);
+        assertFalse(assumptions.contains(NO_METRICS),
+                "empty-metrics sentence must not appear when metrics exist: " + assumptions);
+    }
+
+    @Test
+    @DisplayName("无指标：只披露缺指标，不额外报缺 BMI")
+    void emptyMetricsDiscloseOnlyTheMetricsSentence() {
+        stubNoProfile();
+        stubNoMetrics();
+        stubNoRiskAssessment();
+        stubNoScreeningReport();
+        stubNoWellnessMetrics();
+
+        List<String> assumptions = scoreCalculator.calculate(1L, new AssumptionCollector())
+                .getAssumptions();
+
+        assertTrue(assumptions.contains(NO_METRICS),
+                "expected the empty-metrics sentence, got " + assumptions);
+        assertFalse(assumptions.contains(NO_BMI_METRIC),
+                "BMI sentence must not double-report the empty metric set: " + assumptions);
+    }
+
+    @Test
+    @DisplayName("指标含 BMI：两条评分路径假设都不出现")
+    void metricsWithBmiDiscloseNeitherSentence() {
+        stubNoProfile();
+        stubMetrics(metric("bmi", "22.0"));
+        stubNoRiskAssessment();
+        stubNoScreeningReport();
+        stubNoWellnessMetrics();
+
+        List<String> assumptions = scoreCalculator.calculate(1L, new AssumptionCollector())
+                .getAssumptions();
+
+        assertFalse(assumptions.contains(NO_BMI_METRIC),
+                "BMI sentence must not appear when the metric exists: " + assumptions);
+        assertFalse(assumptions.contains(NO_METRICS),
+                "empty-metrics sentence must not appear when metrics exist: " + assumptions);
+    }
+
+    @Test
+    @DisplayName("档案齐全且有指标：假设列表为空，完整度 100")
+    void fullyPopulatedUserDisclosesNothing() {
+        stubCompleteProfile();
+        stubMetrics(metric("bmi", "22.0"));
+        stubNoRiskAssessment();
+        stubNoScreeningReport();
+        stubNoWellnessMetrics();
+
+        HealthScoreVO vo = scoreCalculator.calculate(1L, new AssumptionCollector());
+
+        assertNotNull(vo.getAssumptions());
+        assertTrue(vo.getAssumptions().isEmpty(),
+                "a fully populated user must disclose nothing, got " + vo.getAssumptions());
+        assertEquals(100, vo.getProfileCompleteness());
+    }
+
+    @Test
+    @DisplayName("收集器对同一句去重，按插入顺序保留一条")
+    void collectorDeduplicatesRepeatedSentences() {
+        AssumptionCollector collector = new AssumptionCollector();
+        collector.add(NO_BMI_METRIC);
+        collector.add(NO_BMI_METRIC);
+
+        assertEquals(1, collector.toList().size());
+        assertEquals(NO_BMI_METRIC, collector.toList().get(0));
+    }
+
+    @Test
+    @DisplayName("收集器忽略空白与 null 输入")
+    void collectorIgnoresBlankInput() {
+        AssumptionCollector collector = new AssumptionCollector();
+        collector.add(null);
+        collector.add("");
+        collector.add("   ");
+
+        assertTrue(collector.isEmpty());
+        assertTrue(collector.toList().isEmpty());
+    }
+
+    private RealtimeMetric metric(String key, String value) {
+        RealtimeMetric metric = new RealtimeMetric();
+        metric.setMetricKey(key);
+        metric.setValue(new BigDecimal(value));
+        return metric;
+    }
+
+    private HealthProfile completeProfile() {
+        HealthProfile profile = new HealthProfile();
+        profile.setGender("FEMALE");
+        profile.setBirthDate(LocalDate.of(1990, 1, 1));
+        profile.setHeightCm(new BigDecimal("165"));
+        profile.setWeightKg(new BigDecimal("55"));
+        profile.setBmi(new BigDecimal("20.2"));
+        profile.setBloodType("A");
+        profile.setAllergyHistory("青霉素");
+        profile.setFamilyHistory("父亲有高血压");
+        profile.setLifestyleHabits("每周跑步三次");
+        return profile;
+    }
+
     private void stubNoProfile() {
         when(healthProfileMapper.selectList(any(LambdaQueryWrapper.class)))
                 .thenReturn(List.<HealthProfile>of());
     }
 
+    private void stubCompleteProfile() {
+        when(healthProfileMapper.selectList(any(LambdaQueryWrapper.class)))
+                .thenReturn(List.of(completeProfile()));
+    }
+
     private void stubNoMetrics() {
         when(realtimeMetricMapper.getLatestMetricsByUser(any(Long.class)))
                 .thenReturn(List.<RealtimeMetric>of());
+    }
+
+    private void stubMetrics(RealtimeMetric... metrics) {
+        when(realtimeMetricMapper.getLatestMetricsByUser(any(Long.class)))
+                .thenReturn(List.of(metrics));
     }
 
     private void stubNoRiskAssessment() {
