@@ -401,8 +401,10 @@ const backfillAndCreate = async () => {
         gender: backfill.gender,
         birthDate: backfill.birthDate,
         // 可选补（D-06a）：用户填的优先，未动的回落到已存值，两者都为空则不下发。
-        heightCm: backfill.heightCm ?? existing?.heightCm,
-        weightKg: backfill.weightKg ?? existing?.weightKg,
+        // 用 undefined 而不是 null 收口：HealthProfileRequest 的可选属性是 number | undefined，
+        // 而两种写法在服务端等价 —— toEntity 直接 request.getHeightCm()，缺键即 null。
+        heightCm: backfill.heightCm ?? existing?.heightCm ?? undefined,
+        weightKg: backfill.weightKg ?? existing?.weightKg ?? undefined,
         bloodType: existing?.bloodType,
         allergyHistory: existing?.allergyHistory,
         familyHistory: existing?.familyHistory,
