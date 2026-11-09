@@ -5,7 +5,7 @@ milestone_name: 引导式配置与友好错误反馈
 current_phase: 12
 current_phase_name: 阈值配置向导化与告警正确性修复
 status: executing
-stopped_at: Phase 12 complete and verified
+stopped_at: Phase 12 complete (9/9 incl. gap closure), UAT 6/7 pass + 1 env false-positive
 last_updated: "2026-11-08T09:02:30.538Z"
 last_activity: 2026-11-08
 last_activity_desc: Phase 12 execution started
@@ -45,8 +45,8 @@ See: `.planning/PROJECT.md`
 | Phase | Status | Plans | Progress |
 |-------|--------|-------|----------|
 | 11. 全站统一友好错误反馈地基 | ready to plan | 0/0 | 0% |
-| 12. 阈值配置向导化与告警正确性修复 | done | 8/8 | 100% |
-| 13. 健康档案完善引导（非阻塞） | not started | 0/0 | 0% |
+| 12. 阈值配置向导化与告警正确性修复 | done | 9/9 | 100% |
+| 13. 健康档案完善引导（非阻塞） | ready to discuss | 0/0 | 0% |
 | 14. 全站收尾排查与回归验证 | not started | 0/0 | 0% |
 
 ### Completed Phases (v1.0 – v1.2)
@@ -88,8 +88,7 @@ Progress: [███████░░░] 73%
 
 ### Blockers
 
-- Phase 12 开工前需先审计存量 `user_threshold` / `alert_rule` 的别名分布与非法次序，才能编写修复脚本
-- Phase 12 的 `ThresholdRangeChecker` 修复会改变告警产出（原先漏报的告警将开始上报），需 UAT 条目
+- Phase 12 已闭环（9/9 计划 + UAT 执行完毕）。唯一遗留：向导保存关闭需**真人前台复验**（自动化环境标签页隐藏导致 CSS 动画时间轴冻结，见 `.planning/debug/wizard-not-auto-close.md`）
 - Phase 13 的风险评估 BLOCKED / DEGRADED 语义属产品行为变更，需显式产品确认
 
 ### Session Continuity
