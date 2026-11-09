@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
+import { nextTick } from 'vue'
 import { setActivePinia, createPinia } from 'pinia'
 import type { Mock } from 'vitest'
 import type { ProfileCompletenessVO, ProfileFieldStatusVO } from '@/types/api'
@@ -511,6 +512,274 @@ describe('RiskBackfill.spec.ts — 风险页就地补填（PRF-06 / PRF-08）', 
       expect(wrapper.findAll('.risk-estimate .el-row').map(row => row.attributes('gutter'))).toEqual(
         ['16', '16']
       )
+
+      wrapper.unmount()
+    })
+  })
+
+  describe('Task 2 · 保存路径：校验、写入、假设刷新与失败保留', () => {
+    /** 打开面板并返回 wrapper（三条假设路径已由 Task 1 证明）。 */
+    async function openPanel() {
+      const wrapper = mountRisk()
+      await flushPromises()
+      await createButton(wrapper).trigger('click')
+      await flushPromises()
+      expect(wrapper.find('.risk-estimate').exists()).toBe(true)
+      return wrapper
+    }
+
+    function saveButton(wrapper: ReturnType<typeof mountRisk>) {
+      return panelButtons(wrapper)[0]
+    }
+
+    it('surfaces two inline errors plus a two-item summary and saves nothing on an empty form', async () => {
+      const wrapper = await openPanel()
+
+      await saveButton(wrapper).trigger('click')
+      await flushPromises()
+
+      expect(wrapper.findAll('.risk-estimate .el-form-item__error').map(n => n.text())).toEqual([
+        '请选择性别',
+        '请选择出生日期'
+      ])
+      const summary = wrapper.find('.risk-estimate .form-error-summary')
+      expect(summary.exists()).toBe(true)
+      expect(summary.text()).toContain('请修正以下 2 项填写问题')
+      expect(summary.findAll('li')).toHaveLength(2)
+
+      expect(createProfile).not.toHaveBeenCalled()
+      expect(updateProfile).not.toHaveBeenCalled()
+      expect(createRiskAssessment).not.toHaveBeenCalled()
+
+      wrapper.unmount()
+    })
+
+    it('saves the two required values, refetches completeness, then creates — in that order', async () => {
+      const wrapper = await openPanel()
+      const vm = wrapper.vm as any
+      vm.backfill.gender = 'female'
+      vm.backfill.birthDate = '1992-03-04'
+
+      await saveButton(wrapper).trigger('click')
+      await flushPromises()
+
+      expect(createProfile).toHaveBeenCalledTimes(1)
+      const payload = createProfile.mock.calls[0][0]
+      expect(payload.gender).toBe('female')
+      expect(payload.birthDate).toBe('1992-03-04')
+
+      // 挂载时一次 + 保存后一次
+      expect(getCompleteness).toHaveBeenCalledTimes(2)
+      expect(createRiskAssessment).toHaveBeenCalledTimes(1)
+
+      // 顺序：写档案 → 重取完整度 → 创建评估。顺序颠倒会让面板承诺过期假设。
+      const writeOrder = createProfile.mock.invocationCallOrder[0]
+      const refetchOrder = getCompleteness.mock.invocationCallOrder[1]
+      const createOrder = createRiskAssessment.mock.invocationCallOrder[0]
+      expect(writeOrder).toBeLessThan(refetchOrder)
+      expect(refetchOrder).toBeLessThan(createOrder)
+
+      expect(wrapper.find('.risk-estimate').exists()).toBe(false)
+
+      wrapper.unmount()
+    })
+
+    it('updates the existing profile by id instead of creating a second one', async () => {
+      getProfile.mockResolvedValue(
+        ok({
+          id: 42,
+          userId: 1,
+          gender: 'male',
+          birthDate: '1990-01-01',
+          bloodType: 'A',
+          createTime: '2026-01-01 00:00:00',
+          updateTime: '2026-01-01 00:00:00'
+        })
+      )
+      const wrapper = await openPanel()
+      const vm = wrapper.vm as any
+      vm.backfill.gender = 'male'
+      vm.backfill.birthDate = '1990-01-01'
+
+      await saveButton(wrapper).trigger('click')
+      await flushPromises()
+
+      expect(updateProfile).toHaveBeenCalledTimes(1)
+      expect(updateProfile.mock.calls[0][0]).toBe(42)
+      expect(createProfile).not.toHaveBeenCalled()
+      expect(createRiskAssessment).toHaveBeenCalledTimes(1)
+
+      wrapper.unmount()
+    })
+
+    it('sends typed 身高/体重 alongside the required fields', async () => {
+      const wrapper = await openPanel()
+      const vm = wrapper.vm as any
+      vm.backfill.gender = 'male'
+      vm.backfill.birthDate = '1988-05-06'
+      vm.backfill.heightCm = 178
+      vm.backfill.weightKg = 72.5
+
+      await saveButton(wrapper).trigger('click')
+      await flushPromises()
+
+      const payload = createProfile.mock.calls[0][0]
+      expect(payload.heightCm).toBe(178)
+      expect(payload.weightKg).toBe(72.5)
+      // 前端绝不计算 bmi（D-01）：派生值由后端 toEntity 负责。
+      expect(payload.bmi).toBeUndefined()
+
+      wrapper.unmount()
+    })
+
+    it('still saves and still creates when both optional inputs are left blank', async () => {
+      const wrapper = await openPanel()
+      const vm = wrapper.vm as any
+      vm.backfill.gender = 'male'
+      vm.backfill.birthDate = '1988-05-06'
+
+      await saveButton(wrapper).trigger('click')
+      await flushPromises()
+
+      // 可选字段没有规则 → 不得产生任何内联错误
+      expect(wrapper.findAll('.risk-estimate .el-form-item__error')).toHaveLength(0)
+      expect(createProfile).toHaveBeenCalledTimes(1)
+      expect(createRiskAssessment).toHaveBeenCalledTimes(1)
+
+      const payload = createProfile.mock.calls[0][0]
+      expect(payload.heightCm).toBeUndefined()
+      expect(payload.weightKg).toBeUndefined()
+
+      wrapper.unmount()
+    })
+
+    it('falls back to the stored profile height/weight when the prefill never ran', async () => {
+      // 真实竞态：用户点得比 getProfile 快，面板打开时 profileData 仍是 null，
+      // 因此 backfill 的两个可选值保持空 —— 提交时不得把已存值抹成空。
+      let resolveProfile: (value: unknown) => void = () => {}
+      getProfile.mockReturnValue(
+        new Promise(resolve => {
+          resolveProfile = resolve
+        })
+      )
+
+      const wrapper = await openPanel()
+      expect((wrapper.vm as any).backfill.heightCm).toBeNull()
+
+      resolveProfile(
+        ok({
+          id: 11,
+          userId: 1,
+          heightCm: 170,
+          weightKg: 65,
+          createTime: '2026-01-01 00:00:00',
+          updateTime: '2026-01-01 00:00:00'
+        })
+      )
+      await flushPromises()
+
+      const vm = wrapper.vm as any
+      vm.backfill.gender = 'male'
+      vm.backfill.birthDate = '1990-01-01'
+
+      await saveButton(wrapper).trigger('click')
+      await flushPromises()
+
+      const payload = updateProfile.mock.calls[0][1]
+      expect(payload.heightCm).toBe(170)
+      expect(payload.weightKg).toBe(65)
+
+      wrapper.unmount()
+    })
+
+    it('keeps both typed values, keeps the panel open and shows no toast on a 400 save failure', async () => {
+      const wrapper = await openPanel()
+      const vm = wrapper.vm as any
+      vm.backfill.gender = 'male'
+      vm.backfill.birthDate = '1990-01-01'
+      vm.backfill.heightCm = 40
+
+      createProfile.mockRejectedValueOnce({
+        response: {
+          status: 400,
+          data: {
+            code: 400,
+            message: '参数校验失败',
+            errorCode: 'validation.invalid_parameter',
+            fieldErrors: [{ field: 'heightCm', message: '身高不能低于 50 厘米' }]
+          }
+        }
+      })
+
+      await saveButton(wrapper).trigger('click')
+      await flushPromises()
+
+      // validation → 0 toast（GOV.UK 双呈现：内联 + 汇总）
+      expect(toastCount()).toBe(0)
+      expect(wrapper.find('.risk-estimate').exists()).toBe(true)
+      expect(wrapper.findAll('.risk-estimate .el-form-item__error').map(n => n.text())).toEqual([
+        '身高不能低于 50 厘米'
+      ])
+      expect(wrapper.find('.risk-estimate .form-error-summary').exists()).toBe(true)
+
+      // 输入保留（D-12）：失败后不得清空用户已填的值
+      expect(vm.backfill.gender).toBe('male')
+      expect(vm.backfill.birthDate).toBe('1990-01-01')
+      expect(vm.backfill.heightCm).toBe(40)
+
+      expect(createRiskAssessment).not.toHaveBeenCalled()
+
+      wrapper.unmount()
+    })
+
+    it('shows exactly one toast on a 500 save failure and still keeps the panel and the input', async () => {
+      const wrapper = await openPanel()
+      const vm = wrapper.vm as any
+      vm.backfill.gender = 'female'
+      vm.backfill.birthDate = '1994-07-08'
+
+      createProfile.mockRejectedValueOnce({
+        response: { status: 500, data: { message: '服务异常' } }
+      })
+
+      await saveButton(wrapper).trigger('click')
+      await flushPromises()
+
+      expect(toastCount()).toBe(1)
+      expect(wrapper.find('.risk-estimate').exists()).toBe(true)
+      expect(vm.backfill.gender).toBe('female')
+      expect(vm.backfill.birthDate).toBe('1994-07-08')
+      expect(createRiskAssessment).not.toHaveBeenCalled()
+
+      wrapper.unmount()
+    })
+
+    it('marks only the primary action as loading while the save is in flight', async () => {
+      const wrapper = await openPanel()
+      const vm = wrapper.vm as any
+      vm.backfill.gender = 'male'
+      vm.backfill.birthDate = '1990-01-01'
+
+      let resolveSave: (value: unknown) => void = () => {}
+      createProfile.mockReturnValueOnce(
+        new Promise(resolve => {
+          resolveSave = resolve
+        })
+      )
+
+      await saveButton(wrapper).trigger('click')
+      await nextTick()
+
+      const buttons = panelButtons(wrapper)
+      expect(buttons[0].attributes('data-loading')).toBe('true')
+      // 另外两个动作不得因为保存中而禁用：用户仍可选择直接创建或放弃。
+      expect(buttons[1].attributes('disabled')).toBeUndefined()
+      expect(buttons[2].attributes('disabled')).toBeUndefined()
+
+      resolveSave(ok({ id: 9 }))
+      await flushPromises()
+
+      expect(panelButtons(wrapper)).toHaveLength(0)
 
       wrapper.unmount()
     })
