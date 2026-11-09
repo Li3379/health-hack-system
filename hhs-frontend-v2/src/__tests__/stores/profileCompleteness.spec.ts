@@ -3,7 +3,13 @@ import { setActivePinia, createPinia } from 'pinia'
 import { useProfileCompletenessStore } from '@/stores/profileCompleteness'
 import { preventionApi } from '@/api/prevention'
 import { ApiError } from '@/utils/appError'
-import { NO_PROFILE_ASSUMPTION, PROFILE_FIELDS } from '@/utils/profileFields'
+import {
+  firstMissingKeyOf,
+  missingFieldsOf,
+  NO_PROFILE_ASSUMPTION,
+  PROFILE_FIELDS,
+  synthesizeEmptyCompleteness
+} from '@/utils/profileFields'
 import type { ProfileCompletenessVO, ProfileFieldStatusVO } from '@/types/api'
 
 vi.mock('@/api/prevention', () => ({
@@ -376,6 +382,265 @@ describe('useProfileCompletenessStore', () => {
       vi.setSystemTime(new Date(BASE + SILENCE_MS + 1))
 
       expect(store.isDismissed()).toBe(true)
+    })
+  })
+})
+
+describe('档案字段静态目录', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    localStorage.clear()
+    vi.clearAllMocks()
+  })
+
+  /** 目录里第一个未填字段的 key —— 用来把「优先级」与「目录顺序」显式对立起来。 */
+  function firstUnfilledInCatalogOrder(fields: ProfileFieldStatusVO[]): string | null {
+    const found = fields.find(field => !field.filled)
+    return found ? found.key : null
+  }
+
+  function fieldsWithFilled(keys: string[]): ProfileFieldStatusVO[] {
+    return PROFILE_FIELDS.map(field => ({ ...field, filled: keys.includes(field.key) }))
+  }
+
+  describe('firstMissingKey 优先级高于目录顺序', () => {
+    it('returns gender for a completely empty catalog', () => {
+      expect(firstMissingKeyOf(fieldsWithFilled([]))).toBe('gender')
+    })
+
+    it('returns birthDate once gender is filled', () => {
+      expect(firstMissingKeyOf(fieldsWithFilled(['gender']))).toBe('birthDate')
+    })
+
+    it('returns heightCm once both required fields are filled — recommended beats optional despite catalog order', () => {
+      const fields = fieldsWithFilled(['gender', 'birthDate'])
+
+      // 目录顺序下第一个未填项就是 heightCm（bloodType 在它之后），
+      // 但这里断言的重点是：即使把顺序打乱，recommended 仍必须先于 optional。
+      expect(firstMissingKeyOf(fields)).toBe('heightCm')
+      expect(firstUnfilledInCatalogOrder(fields)).toBe('heightCm')
+    })
+
+    it('still prefers heightCm over bloodType when bloodType sits earlier in a shuffled list', () => {
+      const fields = fieldsWithFilled(['gender', 'birthDate'])
+      const bloodType = fields.find(f => f.key === 'bloodType')
+      expect(bloodType).toBeDefined()
+      const heightCmIndex = fields.findIndex(f => f.key === 'heightCm')
+      const shuffledWithoutBloodType = fields.filter(f => f.key !== 'bloodType')
+      // 把 bloodType 插到 heightCm 之前，模拟「目录顺序被改动」的最坏情况
+      shuffledWithoutBloodType.splice(heightCmIndex, 0, bloodType as ProfileFieldStatusVO)
+
+      expect(firstUnfilledInCatalogOrder(shuffledWithoutBloodType)).toBe('bloodType')
+      expect(firstMissingKeyOf(shuffledWithoutBloodType)).toBe('heightCm')
+    })
+
+    it('returns bloodType when every required and recommended field is filled', () => {
+      const keys = PROFILE_FIELDS.filter(f => f.importance !== 'optional').map(f => f.key)
+
+      expect(firstMissingKeyOf(fieldsWithFilled(keys))).toBe('bloodType')
+    })
+
+    it('returns null when every field is filled', () => {
+      expect(firstMissingKeyOf(fieldsWithFilled(PROFILE_FIELDS.map(f => f.key)))).toBeNull()
+    })
+
+    it('returns null for an empty field list', () => {
+      expect(firstMissingKeyOf([])).toBeNull()
+    })
+
+    it('keeps catalog order as the stable tiebreak within the same tier', () => {
+      // allergyHistory（optional）在家庭病史之前；只填必需与推荐时，第一个未填是 bloodType
+      const keys = PROFILE_FIELDS.filter(f => f.importance === 'required' || f.importance === 'recommended').map(
+        f => f.key
+      )
+      const fields = fieldsWithFilled(keys)
+
+      expect(firstMissingKeyOf(fields)).toBe('bloodType')
+      // 同重要度内的平局由目录顺序决定
+      expect(fields.filter(f => f.importance === 'optional' && !f.filled).map(f => f.key)).toEqual([
+        'bloodType',
+        'allergyHistory',
+        'familyHistory',
+        'lifestyleHabits'
+      ])
+    })
+  })
+
+  describe('missingFields 保持目录顺序', () => {
+    it('lists gender before bloodType when both are missing and length equals totalCount - filledCount', () => {
+      const filled = ['birthDate', 'heightCm', 'weightKg', 'bmi', 'familyHistory']
+      const fields = fieldsWithFilled(filled)
+      const missing = missingFieldsOf(fields)
+
+      expect(missing.map(f => f.key)).toEqual([
+        'gender',
+        'bloodType',
+        'allergyHistory',
+        'lifestyleHabits'
+      ])
+      expect(missing.length).toBe(fields.length - filled.length)
+    })
+
+    it('returns an empty array when nothing is missing', () => {
+      expect(missingFieldsOf(fieldsWithFilled(PROFILE_FIELDS.map(f => f.key)))).toEqual([])
+    })
+
+    it('returns a new array, not the input', () => {
+      const fields = fieldsWithFilled(['gender'])
+
+      const missing = missingFieldsOf(fields)
+
+      expect(missing).not.toBe(fields)
+    })
+  })
+
+  describe('与后端 ProfileFieldCatalog 的一致性', () => {
+    it('carries exactly the backend 9 keys in backend order', () => {
+      expect(PROFILE_FIELDS.map(f => f.key)).toEqual([
+        'gender',
+        'birthDate',
+        'heightCm',
+        'weightKg',
+        'bmi',
+        'bloodType',
+        'allergyHistory',
+        'familyHistory',
+        'lifestyleHabits'
+      ])
+    })
+
+    it('carries the backend 9 labels in the same order', () => {
+      expect(PROFILE_FIELDS.map(f => f.label)).toEqual([
+        '性别',
+        '出生日期',
+        '身高',
+        '体重',
+        'BMI',
+        '血型',
+        '过敏史',
+        '家族病史',
+        '生活习惯'
+      ])
+    })
+
+    it('has the 2 required / 3 recommended / 4 optional distribution', () => {
+      const byImportance = PROFILE_FIELDS.reduce<Record<string, number>>((acc, field) => {
+        acc[field.importance] = (acc[field.importance] ?? 0) + 1
+        return acc
+      }, {})
+
+      expect(byImportance.required).toBe(2)
+      expect(byImportance.recommended).toBe(3)
+      expect(byImportance.optional).toBe(4)
+      expect(Object.keys(byImportance).sort()).toEqual(['optional', 'recommended', 'required'])
+    })
+
+    it('every entry starts unfilled and carries a non-blank reason', () => {
+      expect(PROFILE_FIELDS.every(field => field.filled === false)).toBe(true)
+      expect(PROFILE_FIELDS.every(field => field.reason.trim().length > 0)).toBe(true)
+    })
+
+    it('reproduces the corrected UI-SPEC reason copy field by field', () => {
+      const expected: Record<string, string> = {
+        gender: '用于健康报告与 AI 建议中的性别化解读',
+        birthDate: '用于计算年龄，影响心血管与糖尿病风险评估',
+        heightCm: '用于生成 BMI，影响风险评估与健康报告',
+        weightKg: '用于生成 BMI，影响风险评估与健康报告',
+        bmi: '用于风险评估的 BMI 代入；缺失按 22.0 估算',
+        bloodType: '记录在健康报告与 AI 建议中，供就医与用血场景参考',
+        allergyHistory: '让 AI 建议避开与过敏史冲突的饮食与用药提醒',
+        familyHistory: '家族糖尿病史直接影响糖尿病风险评估得分',
+        lifestyleHabits: '用于健康评分与 AI 建议的针对性'
+      }
+
+      for (const field of PROFILE_FIELDS) {
+        expect(field.reason).toBe(expected[field.key])
+      }
+    })
+
+    it('never claims the weight dimension: no reason contains 体重维度', () => {
+      // W4 回归护栏：体重维度只消费实时 bmi 指标，不读档案列，因此没有任何
+      // 档案字段可以诚实地声称它影响「体重维度」。
+      expect(PROFILE_FIELDS.filter(field => field.reason.includes('体重维度'))).toEqual([])
+    })
+
+    it('mentions 风险 only in the risk-chain fields, so gender cannot claim a risk-engine consumer', () => {
+      // 镜像后端 ProfileFieldCatalogTest.onlyRiskChainFieldsMentionRisk：
+      // 真正进入 RiskAssessmentServiceImpl 的字段（birthDate 供年龄、heightCm/weightKg
+      // 供存储 bmi、bmi 直接代入、familyHistory 供糖尿病评分）可以说「风险」；
+      // 另外四个没有通往风险引擎的路径，声称它就是虚假消费者。
+      const mentioningRisk = PROFILE_FIELDS.filter(field => field.reason.includes('风险')).map(
+        field => field.key
+      )
+
+      expect(mentioningRisk).toEqual(['birthDate', 'heightCm', 'weightKg', 'bmi', 'familyHistory'])
+      for (const key of ['gender', 'bloodType', 'allergyHistory', 'lifestyleHabits']) {
+        const field = PROFILE_FIELDS.find(f => f.key === key)
+        expect(field).toBeDefined()
+        expect(field?.reason).not.toContain('风险')
+      }
+    })
+
+    it('carries the backend absent-case assumption sentences', () => {
+      const expected: Record<string, string | null> = {
+        gender: null,
+        birthDate: '缺少出生日期，年龄按 35 岁估算',
+        heightCm: null,
+        weightKg: null,
+        bmi: '缺少 BMI，按 22.0 估算',
+        bloodType: null,
+        allergyHistory: null,
+        familyHistory: '缺少家族病史，糖尿病风险评估按「无家族史」计算',
+        lifestyleHabits: null
+      }
+
+      for (const field of PROFILE_FIELDS) {
+        expect(field.assumption).toBe(expected[field.key])
+      }
+    })
+  })
+
+  describe('synthesizeEmptyCompleteness', () => {
+    it('mirrors the backend 404 payload shape exactly', () => {
+      const payload = synthesizeEmptyCompleteness()
+
+      expect(payload.score).toBe(0)
+      expect(payload.level).toBe('基础档案')
+      expect(payload.filledCount).toBe(0)
+      expect(payload.totalCount).toBe(PROFILE_FIELDS.length)
+      expect(payload.hasProfile).toBe(false)
+      expect(payload.assumptions).toEqual([NO_PROFILE_ASSUMPTION])
+      expect(payload.fields.length).toBe(PROFILE_FIELDS.length)
+    })
+
+    it('totalCount derives from the field list, never from a literal', () => {
+      const payload = synthesizeEmptyCompleteness()
+
+      expect(payload.totalCount).toBe(payload.fields.length)
+    })
+
+    it('returns a fresh fields array each call', () => {
+      const first = synthesizeEmptyCompleteness()
+      first.fields[0].filled = true
+      first.fields[0].label = '被改写'
+
+      const second = synthesizeEmptyCompleteness()
+
+      expect(second.fields[0].filled).toBe(false)
+      expect(second.fields[0].label).toBe('性别')
+      // 模块常量同样未被污染
+      expect(PROFILE_FIELDS[0].filled).toBe(false)
+      expect(PROFILE_FIELDS[0].label).toBe('性别')
+    })
+
+    it('returns a fresh assumptions array each call', () => {
+      const first = synthesizeEmptyCompleteness()
+      first.assumptions.push('被追加的句子')
+
+      const second = synthesizeEmptyCompleteness()
+
+      expect(second.assumptions).toEqual([NO_PROFILE_ASSUMPTION])
+      expect(first.assumptions).not.toBe(second.assumptions)
     })
   })
 })
