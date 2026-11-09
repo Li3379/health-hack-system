@@ -79,6 +79,7 @@ const globalStubs = {
     props: ['span', 'xs', 'sm', 'md', 'lg']
   },
   'el-form': {
+    name: 'el-form',
     template: '<form class="el-form"><slot /></form>',
     props: ['model', 'rules', 'labelWidth', 'labelPosition', 'hideRequiredAsterisk', 'disabled'],
     methods: {
@@ -302,6 +303,22 @@ describe('ProfileCompleteness.spec.ts — 档案页完整度引导', () => {
       expect(bmiItem.exists()).toBe(true)
       expect(bmiItem.find('.field-hint').text()).toContain('REASON-bmi')
       expect(bmiItem.find('.el-tag').exists()).toBe(false)
+      wrapper.unmount()
+    })
+
+    it('hides the required asterisk and keeps the form-item display untouched', async () => {
+      getCompleteness.mockResolvedValue(ok(makeCompleteness({})))
+      const wrapper = mountProfile()
+      await flushPromises()
+
+      const form = wrapper.findComponent({ name: 'el-form' })
+      expect(form.props('hideRequiredAsterisk')).toBe(true)
+      // 宽屏默认右对齐标签；窄屏由 matchMedia 切到 top
+      expect(form.props('labelPosition')).toBe('right')
+
+      // required 规则保留：承诺句只覆盖推荐/可选字段（Copywriting Contract）
+      const rules = form.props('rules') as Record<string, unknown>
+      expect(Object.keys(rules).sort()).toEqual(['birthDate', 'gender'])
       wrapper.unmount()
     })
 
