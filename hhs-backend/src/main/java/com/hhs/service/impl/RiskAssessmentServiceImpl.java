@@ -22,6 +22,19 @@ import java.util.List;
 @Service
 public class RiskAssessmentServiceImpl implements RiskAssessmentService {
 
+    /**
+     * Age-default sentence, recorded in the branch that assigns the default (D-03).
+     *
+     * <p>The catalog exposes the same sentence through its {@code birthDate} {@code FieldSpec}
+     * and via {@link ProfileFieldCatalog#assumptionsFor(HealthProfile)}; the disclosure tests
+     * assert this collected list deep-equals that function's output, so a rewording cannot
+     * silently ship two different sentences.</p>
+     */
+    private static final String MISSING_BIRTH_DATE_ASSUMPTION = "缺少出生日期，年龄按 35 岁估算";
+
+    /** BMI-default sentence; see {@link #MISSING_BIRTH_DATE_ASSUMPTION} for the drift guard. */
+    private static final String MISSING_BMI_ASSUMPTION = "缺少 BMI，按 22.0 估算";
+
     private final RiskAssessmentMapper riskAssessmentMapper;
     private final HealthProfileMapper healthProfileMapper;
     private final HealthMetricMapper healthMetricMapper;
@@ -159,10 +172,27 @@ public class RiskAssessmentServiceImpl implements RiskAssessmentService {
             Long profileId = profile != null ? profile.getId() : null;
 
             if (profile != null) {
-                int age = profile.getBirthDate() != null
-                        ? LocalDate.now().getYear() - profile.getBirthDate().getYear() : 35;
-                BigDecimal bmi = profile.getBmi() != null ? profile.getBmi() : BigDecimal.valueOf(22);
-                boolean familyDiabetes = ProfileFieldCatalog.mentionsDiabetes(profile.getFamilyHistory());
+                int age;
+                if (profile.getBirthDate() == null) {
+                    age = 35;
+                    collector.add(MISSING_BIRTH_DATE_ASSUMPTION);
+                } else {
+                    age = LocalDate.now().getYear() - profile.getBirthDate().getYear();
+                }
+                BigDecimal bmi;
+                if (profile.getBmi() == null) {
+                    bmi = BigDecimal.valueOf(22);
+                    collector.add(MISSING_BMI_ASSUMPTION);
+                } else {
+                    bmi = profile.getBmi();
+                }
+                String familyHistory = profile.getFamilyHistory();
+                if (familyHistory == null || familyHistory.isBlank()) {
+                    collector.add(ProfileFieldCatalog.FAMILY_HISTORY_ABSENT);
+                } else if (!ProfileFieldCatalog.mentionsDiabetes(familyHistory)) {
+                    collector.add(ProfileFieldCatalog.FAMILY_HISTORY_SUPPLIED_NO_DIABETES);
+                }
+                boolean familyDiabetes = ProfileFieldCatalog.mentionsDiabetes(familyHistory);
                 BigDecimal latestBloodSugar = getLatestMetric(recentMetrics, "血糖");
                 int diabetesScore = (age > 45 ? 20 : 10) + (bmi.compareTo(BigDecimal.valueOf(24)) > 0 ? 25 : 10)
                         + (familyDiabetes ? 25 : 0) + (latestBloodSugar != null && latestBloodSugar.compareTo(BigDecimal.valueOf(6.1)) > 0 ? 30 : 0);

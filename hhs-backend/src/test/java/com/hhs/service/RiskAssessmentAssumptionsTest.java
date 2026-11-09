@@ -2,6 +2,7 @@ package com.hhs.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.hhs.entity.HealthMetric;
+import com.hhs.entity.HealthProfile;
 import com.hhs.entity.RiskAssessment;
 import com.hhs.mapper.HealthMetricMapper;
 import com.hhs.mapper.HealthProfileMapper;
@@ -17,11 +18,14 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
@@ -113,6 +117,165 @@ class RiskAssessmentAssumptionsTest {
         assertEquals(vos.get(0).assumptions(), vos.get(2).assumptions());
     }
 
+    @Test
+    @DisplayName("BMI 为空：披露 22.0 代入，糖尿病得分按 bmi 22 计算")
+    void missingBmiDisclosesReferenceValueAndScoreUsesIt() {
+        stubProfile(profileWithoutBmi());
+        stubNoMetrics();
+
+        List<RiskAssessmentVO> vos = service.createAssessment(1L);
+
+        assertEquals(List.of(missingBmiSentence()), vos.get(0).assumptions(),
+                "only the BMI sentence applies when birth date and family history are usable");
+        // age 36 -> 10, bmi defaulted to 22 -> 10, family diabetes -> 25
+        assertEquals(45, vos.get(0).riskScore(),
+                "the diabetes score must be computed with the disclosed bmi of 22");
+    }
+
+    @Test
+    @DisplayName("遗留行出生日期为空：同时披露年龄与 BMI 两句，年龄按 35 岁")
+    void legacyRowWithoutBirthDateDisclosesAgeAndBmiSentences() {
+        HealthProfile profile = profileWithoutBmi();
+        profile.setBirthDate(null);
+        stubProfile(profile);
+        stubNoMetrics();
+
+        List<String> assumptions = service.createAssessment(1L).get(0).assumptions();
+
+        assertEquals(List.of(missingBirthDateSentence(), missingBmiSentence()), assumptions);
+        // age defaulted to 35 -> 10, bmi defaulted to 22 -> 10, family diabetes -> 25
+        assertEquals(45, service.createAssessment(1L).stream()
+                .filter(vo -> "糖尿病".equals(vo.diseaseName()))
+                .findFirst().orElseThrow().riskScore());
+    }
+
+    @Test
+    @DisplayName("家族病史为空：披露「缺少家族病史」")
+    void nullFamilyHistoryDisclosesAbsentSentence() {
+        HealthProfile profile = completeProfile();
+        profile.setFamilyHistory(null);
+        stubProfile(profile);
+        stubNoMetrics();
+
+        assertEquals(List.of(ProfileFieldCatalog.FAMILY_HISTORY_ABSENT),
+                service.createAssessment(1L).get(0).assumptions());
+    }
+
+    @Test
+    @DisplayName("家族病史为空白：与为空同等处理")
+    void blankFamilyHistoryDisclosesAbsentSentence() {
+        HealthProfile profile = completeProfile();
+        profile.setFamilyHistory("   ");
+        stubProfile(profile);
+        stubNoMetrics();
+
+        assertEquals(List.of(ProfileFieldCatalog.FAMILY_HISTORY_ABSENT),
+                service.createAssessment(1L).get(0).assumptions());
+    }
+
+    @Test
+    @DisplayName("已填但未提及糖尿病：披露关键词缺失句，绝不声称字段缺失")
+    void suppliedNonDiabeticFamilyHistoryDisclosesKeywordlessSentence() {
+        HealthProfile profile = completeProfile();
+        profile.setFamilyHistory("父亲有高血压");
+        stubProfile(profile);
+        stubNoMetrics();
+
+        List<String> assumptions = service.createAssessment(1L).get(0).assumptions();
+
+        assertEquals(List.of(ProfileFieldCatalog.FAMILY_HISTORY_SUPPLIED_NO_DIABETES), assumptions);
+        assertFalse(assumptions.contains(ProfileFieldCatalog.FAMILY_HISTORY_ABSENT),
+                "a filled family history must never be reported as missing: " + assumptions);
+    }
+
+    @Test
+    @DisplayName("家族病史提及糖尿病：不做任何家族假设")
+    void diabeticFamilyHistoryDisclosesNothing() {
+        stubProfile(completeProfile());
+        stubNoMetrics();
+
+        assertTrue(service.createAssessment(1L).get(0).assumptions().isEmpty(),
+                "a usable family history causes no substitution");
+    }
+
+    @Test
+    @DisplayName("过敏史为空：引擎不代入该字段，因此不产生假设")
+    void blankAllergyHistoryDisclosesNothing() {
+        HealthProfile profile = completeProfile();
+        profile.setAllergyHistory("  ");
+        stubProfile(profile);
+        stubNoMetrics();
+
+        assertTrue(service.createAssessment(1L).get(0).assumptions().isEmpty(),
+                "allergy history has no substitution branch in the risk engine");
+    }
+
+    @Test
+    @DisplayName("每种档案形态的披露列表都与档案目录逐字相等")
+    void everyProfileShapeMatchesCatalogSource() {
+        for (HealthProfile profile : allProfileShapes()) {
+            stubProfile(profile);
+            stubNoMetrics();
+
+            assertEquals(ProfileFieldCatalog.assumptionsFor(profile),
+                    service.createAssessment(1L).get(0).assumptions(),
+                    "the create path must disclose the catalog's own list for " + profile);
+        }
+    }
+
+    private List<HealthProfile> allProfileShapes() {
+        HealthProfile nullTwoFields = profileWithoutBmi();
+        nullTwoFields.setBirthDate(null);
+
+        HealthProfile noFamily = completeProfile();
+        noFamily.setFamilyHistory(null);
+
+        HealthProfile nonDiabeticFamily = completeProfile();
+        nonDiabeticFamily.setFamilyHistory("父亲有高血压");
+
+        return List.of(nullTwoFields, noFamily, nonDiabeticFamily, completeProfile());
+    }
+
+    private String missingBirthDateSentence() {
+        return assumptionOf("birthDate");
+    }
+
+    private String missingBmiSentence() {
+        return assumptionOf("bmi");
+    }
+
+    private String assumptionOf(String key) {
+        return new ProfileFieldCatalog().fields().stream()
+                .filter(spec -> spec.key().equals(key))
+                .map(ProfileFieldCatalog.FieldSpec::assumption)
+                .findFirst()
+                .orElseThrow();
+    }
+
+    private HealthProfile profileWithoutBmi() {
+        HealthProfile profile = new HealthProfile();
+        profile.setGender("FEMALE");
+        profile.setBirthDate(LocalDate.now().minusYears(36));
+        profile.setHeightCm(new BigDecimal("165"));
+        profile.setWeightKg(new BigDecimal("55"));
+        profile.setFamilyHistory("父亲有糖尿病");
+        return profile;
+    }
+
+    private HealthProfile completeProfile() {
+        HealthProfile profile = new HealthProfile();
+        profile.setGender("FEMALE");
+        profile.setBirthDate(LocalDate.now().minusYears(36));
+        profile.setHeightCm(new BigDecimal("165"));
+        profile.setWeightKg(new BigDecimal("55"));
+        profile.setBmi(new BigDecimal("20.2"));
+        profile.setBloodType("A");
+        profile.setAllergyHistory("青霉素");
+        profile.setFamilyHistory("父亲有糖尿病");
+        profile.setLifestyleHabits("每周跑步三次");
+        return profile;
+    }
+
     private void stubMissingProfile() {
         when(healthProfileMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(null);
     }
@@ -120,5 +283,9 @@ class RiskAssessmentAssumptionsTest {
     private void stubNoMetrics() {
         when(healthMetricMapper.selectList(any(LambdaQueryWrapper.class)))
                 .thenReturn(List.<HealthMetric>of());
+    }
+
+    private void stubProfile(HealthProfile profile) {
+        when(healthProfileMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(profile);
     }
 }
