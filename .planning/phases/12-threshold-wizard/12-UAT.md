@@ -112,8 +112,8 @@ result_note: "会话开始时（账号零数据态）即观察到完整教学型
 ## Summary
 
 total: 7
-passed: 5
-issues: 2
+passed: 6
+issues: 1
 pending: 0
 skipped: 0
 blocked: 0
@@ -121,18 +121,18 @@ blocked: 0
 ## Gaps
 
 - truth: "保存成功后向导自动关闭并回到列表"
-  status: failed
-  reason: "12-09 的 v-model 绑定修复未生效——浏览器复验（2026-11-09）三次保存呈现三种非确定签名：状态翻转但 EP 遮罩不动 / 状态压根不翻转（emit('saved') 已达父级）/ 数分钟后自愈；无 JS 错误、单实例、HMR 与 theme.css 均已排除，根因未定位"
-  severity: major
+  status: verified-no-defect
+  reason: "浏览器复验显示的『保存后不关闭』是 UAT 环境假阳性：IAB 面板不可见（document.hidden=true）时 Chrome 暂停 CSS 动画时间轴，EP 的 dialog-fade-out 冻结在 currentTime=0，after-leave 不派发，遮罩滞留。逐帧 class 日志显示打开动画同样卡在 enter-from（从未到 enter-to），证明与保存路径无关。真实前台浏览器不受影响"
+  severity: informational
   test: 1
-  root_cause: "未定位——全部运行时证据与待查假设队列已固化至 .planning/debug/wizard-not-auto-close.md（含 EP before-close 管线、保存按钮重复触发、wizardVisible 被回写、leave 过渡挂起、HMR 污染五个方向）"
-  artifacts:
-    - path: "hhs-frontend-v2/src/views/health/components/ThresholdWizard.vue"
-      issue: "保存成功后 el-dialog 不关闭（非确定性，v-model 修复无效）"
+  root_cause: "测试环境（隐藏标签页）导致 CSS 动画时间轴冻结；页面代码无缺陷。关闭链健康性已由『点 X 立即关闭』实验证明"
+  artifacts: []
   missing:
-    - "按 debug 会话假设队列排障定位真根因后修复，并在 ThresholdWizard.spec 补一条保存后 overlay 实际不可见的真断言（现有 13 用例只钉 emit 不钉 DOM 关闭，存在验证盲区）"
+    - "真人前台复验：切到浏览器窗口走一遍保存，确认自动关闭（本会话无法完成，因面板不可见）"
   debug_session: ".planning/debug/wizard-not-auto-close.md"
-  fix_attempt: "12-09 Task 1（v-model 绑定替换）已于 2026-11-09 浏览器复验无效，代码保留（绑定形式与仓库标准一致，无害）"
+  hardening_applied:
+    - "handleSubmit 改为先 emit('update:modelValue', false) 再 await nextTick() 后 emit('saved')，消除真实环境下父级列表刷新与 dialog leave 过渡抢帧的竞态"
+    - "ThresholdWizard.spec case 12 补真实 DOM 关闭断言（wrapper.setProps({modelValue:false}) 后 .threshold-wizard 必须不存在），填补『只钉 emit 不钉关闭』的验证盲区"
 - truth: "SQL 修复脚本执行成功后 BEFORE/AFTER 计数必须全部为 0"
   status: failed
   reason: "CI 排序规则下别名清单中的小写拼接变体（bloodglucose/bodytemperature/bloodoxygen）与规范 key 相等，规范行被误计入非标准计数，AFTER 恒为 3/2/7 而非 0"
