@@ -51,6 +51,15 @@
             />
             <div class="score-info">
               <p class="score-tips">{{ getScoreTips(scoreData.level) }}</p>
+              <!--
+                Contract 4 落点：`.score-info` 内、`.score-tips` 之后、`.score-meta` 之前。
+                `?? null` 是必要的：`profileCompleteness` 在 NO_DATA 路径上由后端刻意留成
+                null（13-03），而本组件对 null/undefined 一律不渲染 —— 绝不画一个假的 0%。
+              -->
+              <EstimateBadge
+                :completeness="scoreData.profileCompleteness ?? null"
+                @complete="goProfileWithFocus"
+              />
               <div class="score-meta">
                 <span>计算时间: {{ formatDateTime(scoreData.calculatedAt) }}</span>
                 <span v-if="scoreData.isCached" class="cache-badge">
@@ -195,7 +204,7 @@
       <div v-else-if="reportLoading" class="report-loading">
         <el-icon class="is-loading" :size="48"><Loading /></el-icon>
         <p>正在生成健康报告，请稍候...</p>
-        <el-button @click="cancelGenerate">取消</el-button>
+        <el-button @click="cancelGenerate">放弃生成</el-button>
       </div>
     </el-dialog>
 
@@ -279,9 +288,16 @@ import { scoreApi } from '@/api/score'
 import { formatDateTime, getScoreLevelLabel } from '@/utils/format'
 import { useECharts } from '@/composables/useECharts'
 import HealthScoreCircle from '@/components/HealthScoreCircle.vue'
+import EstimateBadge from '@/components/common/EstimateBadge.vue'
+import { useProfileCompletenessStore } from '@/stores/profileCompleteness'
 import type { HealthScoreVO, HealthReportVO } from '@/types/api'
 
 const router = useRouter()
+/**
+ * 徽标的跳转目标只依赖 `firstMissingKey()`，与评分载荷无关：完整度由专用接口喂给
+ * store（13-05），因此即使 HealthScoreVO 不带字段清单，也能给出精确的落点。
+ */
+const completenessStore = useProfileCompletenessStore()
 const loading = ref(false)
 const recalculating = ref(false)
 const historyLoading = ref(false)
@@ -411,6 +427,12 @@ let reportAbortController: AbortController | null = null
 
 const goToAddMetric = () => {
   router.push('/health/metrics?action=add')
+}
+
+/** 徽标的跳转（Contract 7）：带 ?focus= 指向优先级最高的未填字段；无未填则不携带。 */
+const goProfileWithFocus = () => {
+  const key = completenessStore.firstMissingKey()
+  router.push({ path: '/prevention/profile', query: key ? { focus: key } : {} })
 }
 
 const fetchScore = async () => {
@@ -613,6 +635,10 @@ const getScoreColor = (score: number): string => {
 }
 
 onMounted(async () => {
+  // 徽标的落点键：fire-and-forget，绝不推迟评分渲染。store 单飞（13-05），
+  // 与任何并发调用共享同一个 pending promise，因此这里不会发第二个请求。
+  completenessStore.fetchCompleteness()
+
   await fetchScore()
   await nextTick()
   initRadarChart()
@@ -771,6 +797,11 @@ onUnmounted(() => { cleanupScrollTriggers() })
   color: var(--text-2);
   margin-bottom: 16px;
   line-height: 1.6;
+}
+
+/* Contract 4 的落点间距（12px）。颜色、边框、焦点环都在 theme.css 全局声明，此处不重复。 */
+.score-info .hhs-estimate-badge {
+  margin-bottom: 12px;
 }
 
 .score-meta {
