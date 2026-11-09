@@ -6,6 +6,7 @@ import type {
   HealthMetricRequest,
   HealthMetricVO,
   HealthMetricTrendVO,
+  ProfileCompletenessVO,
   RiskAssessmentVO
 } from '@/types/api'
 
@@ -22,6 +23,13 @@ export const preventionApi = {
 
   updateProfile(id: number, data: HealthProfileRequest) {
     return request.put<HealthProfileVO>(`/api/prevention/health-profile/${id}`, data)
+  },
+
+  // 档案完整度：对已登录用户该端点永不 404 —— 无档案时后端返回 200 + score 0 +
+  // hasProfile false（13-02）。因此这里透传 `{ silent: true }` 只为让真实的传输层
+  // 故障不要在一个纯引导型表面弹红条；store 仍需自己区分「404 合成 0%」与「失败留空」。
+  getCompleteness(config?: AxiosRequestConfig) {
+    return request.get<ProfileCompletenessVO>('/api/prevention/profile/completeness', config)
   },
 
   // 健康指标
