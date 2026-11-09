@@ -20,11 +20,13 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
@@ -276,6 +278,80 @@ class RiskAssessmentAssumptionsTest {
         return profile;
     }
 
+    @Test
+    @DisplayName("历史列表：按当前档案重算 BMI 假设，不读存储快照")
+    void listRecomputesAssumptionsFromCurrentProfile() {
+        stubAssessmentRows(assessmentRow(7L, 1L));
+        stubProfile(profileWithoutBmi());
+
+        List<RiskAssessmentVO> vos = service.listByUserId(1L);
+
+        assertEquals(1, vos.size());
+        assertEquals(List.of(missingBmiSentence()), vos.get(0).assumptions(),
+                "the read path must re-derive the sentence from the current profile");
+        assertTrue(vos.get(0).profileCompleteness() < 100);
+    }
+
+    @Test
+    @DisplayName("历史列表：当前档案无任何代入时披露为空")
+    void listDisclosesNothingForCompleteProfile() {
+        stubAssessmentRows(assessmentRow(7L, 1L));
+        stubProfile(completeProfile());
+
+        List<RiskAssessmentVO> vos = service.listByUserId(1L);
+
+        assertNotNull(vos.get(0).assumptions());
+        assertTrue(vos.get(0).assumptions().isEmpty(),
+                "a complete current profile needs no disclosure: " + vos.get(0).assumptions());
+        assertEquals(100, vos.get(0).profileCompleteness());
+    }
+
+    @Test
+    @DisplayName("历史列表：当前档案已删除时下发通用句，与创建路径一致")
+    void listWithDeletedProfileDisclosesGenericSentence() {
+        stubAssessmentRows(assessmentRow(7L, 1L));
+        stubMissingProfile();
+
+        List<RiskAssessmentVO> vos = service.listByUserId(1L);
+
+        assertEquals(List.of(ProfileFieldCatalog.NO_PROFILE_ASSUMPTION), vos.get(0).assumptions(),
+                "the read path and the create path must agree for a deleted profile");
+        assertEquals(0, vos.get(0).profileCompleteness());
+    }
+
+    @Test
+    @DisplayName("详情：本人记录按当前档案重算假设")
+    void detailRecomputesAssumptionsForOwner() {
+        when(riskAssessmentMapper.selectById(7L)).thenReturn(assessmentRow(7L, 1L));
+        stubProfile(profileWithoutBmi());
+
+        RiskAssessmentVO vo = service.getById(7L, 1L);
+
+        assertNotNull(vo);
+        assertEquals(List.of(missingBmiSentence()), vo.assumptions());
+    }
+
+    @Test
+    @DisplayName("详情：他人记录仍然返回 null（归属校验不回退）")
+    void detailKeepsOwnershipCheck() {
+        when(riskAssessmentMapper.selectById(7L)).thenReturn(assessmentRow(7L, 2L));
+
+        assertNull(service.getById(7L, 1L),
+                "another user's assessment must not be readable");
+    }
+
+    private RiskAssessment assessmentRow(Long id, Long userId) {
+        RiskAssessment row = new RiskAssessment();
+        row.setId(id);
+        row.setUserId(userId);
+        row.setDiseaseName("糖尿病");
+        row.setRiskLevel("LOW");
+        row.setRiskScore(45);
+        row.setSuggestion("当前风险较低，保持健康生活习惯即可。");
+        row.setCreateTime(LocalDateTime.now());
+        return row;
+    }
+
     private void stubMissingProfile() {
         when(healthProfileMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(null);
     }
@@ -287,5 +363,10 @@ class RiskAssessmentAssumptionsTest {
 
     private void stubProfile(HealthProfile profile) {
         when(healthProfileMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(profile);
+    }
+
+    private void stubAssessmentRows(RiskAssessment... rows) {
+        when(riskAssessmentMapper.selectList(any(LambdaQueryWrapper.class)))
+                .thenReturn(List.of(rows));
     }
 }
