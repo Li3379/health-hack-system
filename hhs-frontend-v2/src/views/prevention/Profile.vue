@@ -28,6 +28,7 @@
         :label-position="isNarrow ? 'top' : 'right'"
         :hide-required-asterisk="true"
         :disabled="!editing"
+        @focusout="onFocusOut"
       >
         <FormErrorSummary
           ref="summaryRef"
@@ -41,6 +42,7 @@
               label="性别"
               prop="gender"
               data-field="gender"
+              :class="{ 'is-focus-target': focusTarget === 'gender' }"
               :error="fieldErrors['gender']"
             >
               <el-radio-group v-model="form.gender" @change="clearField('gender')">
@@ -59,6 +61,7 @@
               label="出生日期"
               prop="birthDate"
               data-field="birthDate"
+              :class="{ 'is-focus-target': focusTarget === 'birthDate' }"
               :error="fieldErrors['birthDate']"
             >
               <el-date-picker
@@ -86,6 +89,7 @@
               label="身高(cm)"
               prop="heightCm"
               data-field="heightCm"
+              :class="{ 'is-focus-target': focusTarget === 'heightCm' }"
               :error="fieldErrors['heightCm']"
             >
               <el-input-number
@@ -109,6 +113,7 @@
               label="体重(kg)"
               prop="weightKg"
               data-field="weightKg"
+              :class="{ 'is-focus-target': focusTarget === 'weightKg' }"
               :error="fieldErrors['weightKg']"
             >
               <el-input-number
@@ -135,7 +140,11 @@
                否则 bloodType 的服务端错误无处显示（WR-11）。不可计算时只显示占位值，
                分类 tag 用 v-if 挡住，避免把「—」送进 getBmiType。 -->
           <el-col :xs="24" :md="12">
-            <el-form-item label="BMI" data-field="bmi">
+            <el-form-item
+              label="BMI"
+              data-field="bmi"
+              :class="{ 'is-focus-target': focusTarget === 'bmi' }"
+            >
               <el-input :value="bmi ?? '—'" readonly>
                 <template #append>
                   <el-tag v-if="bmi" :type="getBmiType(bmi)">{{ getBmiLabel(bmi) }}</el-tag>
@@ -152,6 +161,7 @@
               label="血型"
               prop="bloodType"
               data-field="bloodType"
+              :class="{ 'is-focus-target': focusTarget === 'bloodType' }"
               :error="fieldErrors['bloodType']"
             >
               <el-select
@@ -179,6 +189,7 @@
           label="过敏史"
           prop="allergyHistory"
           data-field="allergyHistory"
+          :class="{ 'is-focus-target': focusTarget === 'allergyHistory' }"
           :error="fieldErrors['allergyHistory']"
         >
           <el-input
@@ -200,6 +211,7 @@
           label="家族病史"
           prop="familyHistory"
           data-field="familyHistory"
+          :class="{ 'is-focus-target': focusTarget === 'familyHistory' }"
           :error="fieldErrors['familyHistory']"
         >
           <el-input
@@ -221,6 +233,7 @@
           label="生活习惯"
           prop="lifestyleHabits"
           data-field="lifestyleHabits"
+          :class="{ 'is-focus-target': focusTarget === 'lifestyleHabits' }"
           :error="fieldErrors['lifestyleHabits']"
         >
           <el-input
@@ -244,6 +257,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { gsap, cleanupScrollTriggers, DUR, EASE } from '@/composables/useGsap'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { preventionApi } from '@/api/prevention'
@@ -265,6 +279,11 @@ const profileData = ref<HealthProfileVO | null>(null)
 
 const completenessStore = useProfileCompletenessStore()
 const completeness = computed(() => completenessStore.data)
+
+const route = useRoute()
+const router = useRouter()
+/** 当前被 ?focus= 点亮的字段 key；失焦即清空，避免常驻高亮。 */
+const focusTarget = ref<string | null>(null)
 
 const { fieldErrors, summaryItems, apply, setErrors, clearField, reset, focusField } =
   useFormServerErrors()
@@ -465,6 +484,42 @@ const cancelEdit = () => {
   }
 }
 
+/**
+ * 消费 `?focus=`（Contract 7）。
+ *
+ * 只认「存在于 fields[] 且尚未填写」的 key —— 这是 T-13-25 的缓解：攻击者能控制的
+ * 只是这个字符串，任何不在目录里的值都退化为空操作。真正的聚焦复用
+ * useFormServerErrors.focusField（内部已做 CSS.escape 与 scrollIntoView），
+ * 因此与错误汇总的定位行为逐字一致。
+ *
+ * 成功消费后立刻清空 query：刷新页面不会重复滚动。
+ */
+function applyFocusTarget(): void {
+  const raw = route.query.focus
+  if (typeof raw !== 'string' || raw.length === 0) return
+  if (!completeness.value) return
+  const entry = completeness.value.fields.find(field => field.key === raw)
+  if (!entry) return
+  if (entry.filled) return
+
+  focusTarget.value = raw
+  focusField(raw)
+  void router.replace({ query: {} })
+}
+
+/**
+ * 焦点离开「被点亮的那个字段容器」时撤销高亮。
+ * relatedTarget 为 null（点了页面空白、或浏览器不提供）时保守地保留高亮。
+ */
+function onFocusOut(event: FocusEvent): void {
+  if (!focusTarget.value) return
+  const related = event.relatedTarget
+  if (!(related instanceof HTMLElement)) return
+  const container = document.querySelector(`[data-field="${CSS.escape(focusTarget.value)}"]`)
+  if (container && container.contains(related)) return
+  focusTarget.value = null
+}
+
 onMounted(async () => {
   // 先等完整度落定，再渲染/取档案：单飞且可等待（13-05），并发消费者不会重复请求。
   await completenessStore.fetchCompleteness()
@@ -486,6 +541,10 @@ onMounted(async () => {
       { y: 0, autoAlpha: 1, duration: DUR.mid, stagger: 0.06, clearProps: 'transform,autoAlpha,visibility,opacity' }
     , '-=0.15')
   })
+
+  // 最后消费 ?focus=：payload 已落定、DOM 已刷出，focusField 才能命中真实元素。
+  await nextTick()
+  applyFocusTarget()
 })
 onUnmounted(() => {
   if (narrowQuery) narrowQuery.removeEventListener('change', onNarrowChange)
