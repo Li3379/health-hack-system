@@ -7,6 +7,7 @@ import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -31,6 +32,7 @@ public class ScoreCalculator {
     private final ScreeningScorer screeningScorer;
     private final WellnessScorer wellnessScorer;
     private final DimensionScoreCalculator dimensionScoreCalculator;
+    private final ProfileCompletenessCalculator profileCompletenessCalculator;
 
     /**
      * Calculate health score for a user
@@ -47,11 +49,27 @@ public class ScoreCalculator {
      * @return calculated health score VO
      */
     public HealthScoreVO calculate(Long userId) {
+        return calculate(userId, AssumptionCollector.noop());
+    }
+
+    /**
+     * Calculate health score for a user, disclosing every substituted default value.
+     *
+     * <p>The collector is an explicit parameter rather than a Spring scope because this runs
+     * outside any request from {@code HealthReportServiceImpl}. Each scorer records its own
+     * substitution at the line where the default is applied, so the returned
+     * {@code assumptions} cannot drift from the values that produced the score.</p>
+     *
+     * @param userId    the user ID
+     * @param collector receives the substitution sentences, ignored when {@code null}
+     * @return calculated health score VO, never with a null assumptions list
+     */
+    public HealthScoreVO calculate(Long userId, AssumptionCollector collector) {
         Map<String, Object> factors = new HashMap<>();
         int totalScore = 100;
 
         // 1. Health Profile Score (25%)
-        int profileScore = profileScorer.calculate(userId);
+        int profileScore = profileScorer.calculate(userId, collector);
         factors.put("healthProfile", Map.of(
                 "score", profileScore,
                 "weight", 0.25,
@@ -107,6 +125,9 @@ public class ScoreCalculator {
         vo.setFactors(factors);
         vo.setDimensionScores(dimensionScoreCalculator.calculate(userId));
         vo.setCalculatedAt(LocalDateTime.now());
+        vo.setProfileCompleteness(
+                profileCompletenessCalculator.calculate(profileScorer.latestProfile(userId)).score());
+        vo.setAssumptions(collector == null ? List.of() : collector.toList());
 
         return vo;
     }
