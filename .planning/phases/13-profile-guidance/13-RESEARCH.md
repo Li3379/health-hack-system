@@ -599,26 +599,26 @@ const showBanner = computed(() =>
 | A6 | `gender` 的 `required: true` 保留，`birthDate` 后端本就 `@NotNull` | Summary 三 / Pitfall | 若改为软提示，需同步放宽 `HealthProfileRequest` 的 `@NotNull`，会改变既有 API 契约 |
 | A7 | 不修 `case "glucose"` 与 `"血糖"` 死分支 | Pitfall 6 | 若修，`metabolic` 维度分数会变化，属跨阶段回归风险 |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **健康评分贡献是否等于完整度？**
    - What we know: D-01 要求完整度重构为加权口径；`ProfileScorer.calculate` 的唯一外部调用点是 `ScoreCalculator:54`；空档案当前返回 70。
    - What's unclear: D-01 没有说"健康评分里的档案贡献必须等于完整度"。
-   - Recommendation: 新增 `ProfileCompletenessCalculator` 作为权威完整度来源，`ProfileScorer.calculate` **保留 70 中性语义**（方案 b），完整度只用于展示与披露。若用户坚持"口径统一"，则选方案 (a) 并在 PLAN 里显式声明评分变化为预期行为。
+   - **RESOLVED (2026-11-09, 方案 b 采纳):** 新增 `ProfileCompletenessCalculator` 作为权威完整度来源；`ProfileScorer.calculate` 保留 70 中性语义不动，完整度只用于展示与披露。健康评分历史无断点，零回归风险。
 
 2. **风险页 `assumptions[]` 的来源：读时重算 vs 加列持久化？**
    - What we know: `createAssessment` 删旧插新；`listByUserId`/`getById` 从 DB 行重建；`risk_assessment` 表无假设列；`schema.sql` 只在空卷执行。
    - What's unclear: PRF-06 的徽标是描述"本次评估"还是"当前档案"。
-   - Recommendation: 读时重算（零 DDL、零迁移脚本），并把详情对话框标题措辞调整为与语义一致；若产品坚持保真，则加两列 + 幂等 ALTER 脚本（见 Pitfall 8）。
+   - **RESOLVED (2026-11-09, 读时重算采纳):** 列表/详情展示时按当前档案重新推导假设，零 DDL 零迁移；徽标语义定为「当前档案下，该评估所依赖的默认假设」，详情对话框标题措辞相应调整。
 
 3. **横幅静默是否应按用户隔离？**
    - What we know: D-05 给定键名 `hhs_profile_reminder_dismissed_at`（无 userId）；`storage.ts` 用 `hhs_token`/`hhs_user` 下划线风格。
    - What's unclear: 多账号同浏览器场景是否需隔离。
-   - Recommendation: 按锁定键名实现（A5）；在 `logout()` 时**不**清理该键（它是提醒偏好而非会话状态），并在 PLAN 里记录该已知限制。
+   - **RESOLVED (2026-11-09, 按锁定键名):** 实现 `hhs_profile_reminder_dismissed_at`（无 userId，多账号共享静默期）；`logout()` 不清理该键（提醒偏好非会话状态）；已知限制写入 PLAN。
 
 4. **完整度端点是否也需要 `silent` 语义？**
    - What we know: `preventionApi.getProfile` 已支持 `config?: AxiosRequestConfig` 透传 `{ silent: true }`（`api/prevention.ts:18-21`）；`request.ts` 拦截器本身已不展示任何东西。
-   - Recommendation: 新端点沿用同一签名 `getCompleteness(config?: AxiosRequestConfig)`，调用点传 `{ silent: true }`；404 不弹 toast（档案不存在是正常状态，对齐 `Profile.vue:250-284` 的既有判断：`status === 404 || code === 'health.profile_not_found'`）。
+   - **RESOLVED (2026-11-09):** 新端点沿用 `getCompleteness(config?: AxiosRequestConfig)` 签名，调用点传 `{ silent: true }`；404 / `health.profile_not_found` 不弹 toast（档案不存在是正常状态）。
 
 ## Environment Availability
 
