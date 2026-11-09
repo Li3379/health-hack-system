@@ -277,6 +277,10 @@ Plans:
 
 - [x] 12-08-PLAN.md — 列表页接入向导、教学型空状态与重复指标恢复动作
 
+**Wave 7** *(gap closure, blocked on Wave 6 completion)*
+
+- [x] 12-09-PLAN.md — UAT 缺口修复：向导保存后关闭绑定 + SQL 计数 BINARY 精确化
+
 **Wave 7** *(gaps, blocked on Wave 6 completion)*
 
 - [ ] 12-09-PLAN.md — 缺口闭环（UAT 测试 1/测试 5）：向导 el-dialog 改仓库标准 v-model + 可写 computed 修复保存后不自动关闭；SQL 修复脚本计数子查询 BINARY 大小写精确化使 AFTER 验收计数归零
@@ -328,6 +332,6 @@ Plans:
 | 9. 保健指标管理页录入对齐 | 2/2 | Complete    | 2026-11-05 |
 | 10. 指标录入通用交互组件封装与全站验证 | 2/2 | Complete    | 2026-11-05 |
 | 11. 全站统一友好错误反馈地基 | 8/8 | Complete    | 2026-11-07 |
-| 12. 阈值配置向导化与告警正确性修复 | 8/8 | Complete    | 2026-11-08 |
+| 12. 阈值配置向导化与告警正确性修复 | 9/9 | Complete    | 2026-11-09 |
 | 13. 健康档案完善引导（非阻塞） | 0/0 | Not started | - |
 | 14. 全站收尾排查与回归验证 | 0/0 | Not started | - |
