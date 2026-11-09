@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
+import { setActivePinia, createPinia } from 'pinia'
 import type { Mock } from 'vitest'
 
 /**
@@ -10,9 +11,17 @@ import type { Mock } from 'vitest'
 vi.mock('@/api/prevention', () => ({
   preventionApi: {
     getProfile: vi.fn(),
+    getCompleteness: vi.fn(),
     createProfile: vi.fn(),
     updateProfile: vi.fn()
   }
+}))
+
+// Profile.vue 现在用 useRoute / useRouter 消费 ?focus=；useRoute 是 inject 实现，
+// 不 mock 就会 TypeError: Cannot read properties of undefined (reading 'query')。
+vi.mock('vue-router', () => ({
+  useRoute: () => ({ query: {} }),
+  useRouter: () => ({ replace: vi.fn(), push: vi.fn() })
 }))
 
 // 部分 mock：保住组件导出，只替换 ElMessage，以便对每次调用（含对象式）计数。
@@ -47,6 +56,7 @@ import { preventionApi } from '@/api/prevention'
 import { ElMessage } from 'element-plus'
 
 const getProfile = preventionApi.getProfile as unknown as Mock
+const getCompleteness = preventionApi.getCompleteness as unknown as Mock
 const updateProfile = preventionApi.updateProfile as unknown as Mock
 const ElMessageMock = ElMessage as unknown as Mock &
   Record<'error' | 'success' | 'warning' | 'info', Mock>
@@ -163,8 +173,27 @@ function toastCount(): number {
 
 describe('ProfileErrorSample.spec.ts — 健康档案全页表单双呈现', () => {
   beforeEach(() => {
+    // 档案页现在会读完整度 store，需要一个 active pinia（与其余 view spec 同构）。
+    setActivePinia(createPinia())
     vi.clearAllMocks()
     getProfile.mockResolvedValue(PROFILE_RES)
+    // fields 为空数组：这些测试聚焦错误呈现，说明行数量必须保持 0，
+    // 既有的 .el-form-item__error 计数（2）才不会被新增 DOM 干扰。
+    // hasProfile / assumptions 必须给全（13-05 的 VO 已要求），否则是类型错误。
+    // 用 mockResolvedValue 而非 Once：挂载一次 + 保存后可能的重取都必须有值。
+    getCompleteness.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: {
+        score: 60,
+        level: '标准档案',
+        filledCount: 2,
+        totalCount: 9,
+        hasProfile: true,
+        assumptions: [],
+        fields: []
+      }
+    })
     updateProfile.mockResolvedValue({ code: 200, message: 'success', data: {} })
   })
 
