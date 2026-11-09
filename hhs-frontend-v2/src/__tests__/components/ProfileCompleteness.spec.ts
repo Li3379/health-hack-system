@@ -74,12 +74,11 @@ describe('ProfileCompleteness.vue', () => {
     })
 
     it('drives the segment and legend count from fields.length, not a hard-coded 9', () => {
-      const fourFields = makeFields([
-        'gender',
-        'birthDate',
-        'heightCm',
-        'weightKg'
-      ])
+      // 真正的 4 项 payload（不是 9 项里有 4 项已填）
+      const fourFields = PROFILE_FIELDS.slice(0, 4).map(field => ({
+        ...field,
+        filled: true
+      }))
       const wrapper = mountCompleteness(
         makeCompleteness({ fields: fourFields, score: 44, level: '基础档案' })
       )
