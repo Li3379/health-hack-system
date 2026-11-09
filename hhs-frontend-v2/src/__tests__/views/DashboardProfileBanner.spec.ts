@@ -94,6 +94,7 @@ import { scoreApi } from '@/api/score'
 import { healthApi } from '@/api/health'
 import { statsApi } from '@/api/stats'
 import { preventionApi } from '@/api/prevention'
+import * as gsapTools from '@/composables/useGsap'
 
 const getScore = scoreApi.getScore as unknown as Mock
 const getMetrics = healthApi.getMetrics as unknown as Mock
@@ -302,6 +303,46 @@ describe('DashboardProfileBanner.spec.ts — 仪表盘档案引导表面', () =>
       expect(wrapper.find('.profile-banner').text()).toContain('40%')
       wrapper.unmount()
     })
+
+    it('keeps the compact row at score 60 while the banner is gone — the deliberate asymmetry', async () => {
+      getCompleteness.mockResolvedValue(ok(makeCompleteness({ score: 60, level: '标准档案' })))
+      const wrapper = mountDashboard()
+      await flushPromises()
+
+      // 完整度行是信息性的（门控只有 completeness != null），横幅是打扰性的（< 60）
+      expect(wrapper.find('.profile-banner').exists()).toBe(false)
+      expect(wrapper.find('.stub-completeness').exists()).toBe(true)
+      wrapper.unmount()
+    })
+
+    it('renders the compact row inside .score-content after the score display, not beside it', async () => {
+      const wrapper = mountDashboard()
+      await flushPromises()
+
+      const scoreDisplay = wrapper.find('.score-display').element
+      const row = wrapper.find('.stub-completeness').element
+
+      // 评分环仍是本卡视觉焦点：完整度行落在它「之下」，而不是并排抢焦点
+      expect(scoreDisplay.contains(row)).toBe(false)
+      expect(row.parentElement).toBe(scoreDisplay.parentElement)
+
+      const siblings = Array.from(row.parentElement?.children ?? [])
+      expect(siblings.indexOf(row as Element)).toBeGreaterThan(siblings.indexOf(scoreDisplay))
+      wrapper.unmount()
+    })
+
+    it('keeps the existing score card content alongside the compact row', async () => {
+      const wrapper = mountDashboard()
+      await flushPromises()
+
+      expect(wrapper.find('.stub-health-score').exists()).toBe(true)
+      expect(wrapper.find('.stub-health-score').attributes('data-score')).toBe('82')
+      expect(wrapper.find('.stub-completeness').exists()).toBe(true)
+
+      const cardButtons = wrapper.findAll('.card-header .el-button').map(node => node.text())
+      expect(cardButtons.some(label => label.includes('查看详情'))).toBe(true)
+      wrapper.unmount()
+    })
   })
 
   describe('完善档案：带 focus 跳转，不写静默时间戳', () => {
@@ -385,6 +426,25 @@ describe('DashboardProfileBanner.spec.ts — 仪表盘档案引导表面', () =>
       expect(getCompleteness).toHaveBeenCalledWith({ silent: true })
       wrapper.unmount()
     })
+
+    it('does not refetch completeness on dismissal (T-13-30: no request amplification)', async () => {
+      const wrapper = mountDashboard()
+      await flushPromises()
+      expect(getCompleteness).toHaveBeenCalledTimes(1)
+
+      await bannerButtons(wrapper)[1].trigger('click')
+      await flushPromises()
+      expect(getCompleteness).toHaveBeenCalledTimes(1)
+
+      // × 走同一个动作，同样不得再发请求 —— 反复关闭不能放大请求量
+      const closeButton = wrapper.find('.profile-banner__close')
+      if (closeButton.exists()) {
+        await closeButton.trigger('click')
+        await flushPromises()
+      }
+      expect(getCompleteness).toHaveBeenCalledTimes(1)
+      wrapper.unmount()
+    })
   })
 
   describe('失败态（Contract 8：绝不把失败渲染成 0%）', () => {
@@ -399,6 +459,23 @@ describe('DashboardProfileBanner.spec.ts — 仪表盘档案引导表面', () =>
       wrapper.unmount()
     })
 
+    it('hides both guidance surfaces on failure but keeps the welcome, stats and content grid', async () => {
+      getCompleteness.mockRejectedValue({
+        response: { status: 500, data: { code: 500, message: '服务异常' } }
+      })
+      const wrapper = mountDashboard()
+      await flushPromises()
+
+      // 失败被限制在引导表面内，页面其余部分照常
+      expect(wrapper.find('.profile-banner').exists()).toBe(false)
+      expect(wrapper.find('.stub-completeness').exists()).toBe(false)
+      expect(wrapper.find('.welcome-title').text()).toContain('测试用户')
+      expect(wrapper.find('.stats-grid').exists()).toBe(true)
+      expect(wrapper.find('.content-grid').exists()).toBe(true)
+      expect(wrapper.find('.quick-entry').exists()).toBe(true)
+      wrapper.unmount()
+    })
+
     it('never renders a fabricated 0% when the payload is still null', async () => {
       getCompleteness.mockReturnValue(new Promise(() => {}))
       const wrapper = mountDashboard()
@@ -407,6 +484,82 @@ describe('DashboardProfileBanner.spec.ts — 仪表盘档案引导表面', () =>
       expect(wrapper.find('.profile-banner').exists()).toBe(false)
       expect(wrapper.find('.stub-completeness').exists()).toBe(false)
       expect(wrapper.text()).not.toContain('档案完整度 0%')
+      wrapper.unmount()
+    })
+
+    it('still renders the banner for a real 0% payload, because 404 is a legitimate state', async () => {
+      getCompleteness.mockResolvedValue(
+        ok({
+          score: 0,
+          level: '基础档案',
+          filledCount: 0,
+          totalCount: PROFILE_FIELDS.length,
+          hasProfile: false,
+          assumptions: ['未填写健康档案，风险得分按通用参考值估算'],
+          fields: PROFILE_FIELDS.map(field => ({ ...field }))
+        })
+      )
+      const wrapper = mountDashboard()
+      await flushPromises()
+
+      // 0% 是新用户的合法值，与「加载失败」必须可区分
+      expect(wrapper.find('.profile-banner').exists()).toBe(true)
+      expect(wrapper.find('.profile-banner').text()).toContain('0%')
+      wrapper.unmount()
+    })
+  })
+
+  describe('动画与组件选择（Contract 3 动画 note）', () => {
+    it('never hands a banner or completeness selector to a GSAP helper', async () => {
+      const wrapper = mountDashboard()
+      await flushPromises()
+
+      const helpers = [
+        gsapTools.staggerReveal,
+        gsapTools.tilt3D,
+        gsapTools.parallax,
+        gsapTools.buttonPress,
+        gsapTools.hoverLift,
+        gsapTools.hoverShine,
+        gsapTools.rippleClick,
+        gsapTools.magneticHover
+      ] as unknown as Mock[]
+
+      // 至少有一个 helper 真的被调用了，否则下面的循环是空转
+      expect(helpers.some(helper => helper.mock.calls.length > 0)).toBe(true)
+
+      for (const helper of helpers) {
+        for (const call of helper.mock.calls) {
+          const selector = String(call[0])
+          expect(selector).not.toContain('profile-banner')
+          expect(selector).not.toContain('completeness')
+        }
+      }
+      wrapper.unmount()
+    })
+
+    it('renders the banner as a self-drawn div, never as el-alert', async () => {
+      const wrapper = mountDashboard()
+      await flushPromises()
+
+      expect(wrapper.find('.profile-banner').exists()).toBe(true)
+      expect(wrapper.find('.profile-banner').element.tagName).toBe('DIV')
+      expect(wrapper.find('.profile-banner').find('.el-alert').exists()).toBe(false)
+      wrapper.unmount()
+    })
+
+    it('labels the status region by its own title, not a static aria-label', async () => {
+      const wrapper = mountDashboard()
+      await flushPromises()
+
+      const banner = wrapper.find('.profile-banner')
+      const labelledBy = banner.attributes('aria-labelledby')
+
+      expect(banner.attributes('role')).toBe('status')
+      expect(banner.attributes('aria-label')).toBeUndefined()
+      expect(labelledBy).toBeTruthy()
+      // 标题含动态数值，静态 aria-label 会立刻过期
+      expect(wrapper.find(`#${labelledBy as string}`).text()).toContain('档案完整度 40%')
       wrapper.unmount()
     })
   })

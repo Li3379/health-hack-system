@@ -22,6 +22,11 @@
       因此「刷新多个页面最多出现一条提示」是由结构保证的，而不是靠纪律。
       v-if 的 loadFailed 是双保险：组件自身已按 completeness != null 门控，
       在调用点再声明一次让失败契约在这里可见（UI-SPEC Contract 8）。
+
+      横幅**刻意没有任何入场动画**，也不进入下面 onMounted 的 GSAP 时间线 ——
+      gsap 在隐藏标签页会冻结，入场动画会把提示卡在 autoAlpha: 0 上永不出现
+      （Phase 12 的 wizard-not-auto-close 踩过同一个坑）。它只用 v-if 切换，
+      因此 .profile-banner 与 .completeness 这两个类名不出现在任何选择器字符串里。
     -->
     <ProfileReminderBanner
       v-if="!completenessStore.loadFailed"
