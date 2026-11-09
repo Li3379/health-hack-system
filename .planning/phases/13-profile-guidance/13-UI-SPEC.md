@@ -1,10 +1,11 @@
 ---
 phase: "13"
 slug: "profile-guidance"
-status: draft
+status: approved
 shadcn_initialized: false
 preset: none
 created: "2026-11-09"
+reviewed_at: "2026-11-09"
 ---
 
 # Phase 13 — UI Design Contract
@@ -198,7 +199,7 @@ Enumerated by `node -e "const fs=require('fs');const b='node_modules/element-plu
 |------|------|------|-------|---------------|
 | 60% | 主导 / 背景 | `--bg` `#0a0b0e` | `--bg` `#f5f7fa` | 仪表盘页底、档案页页底、横幅之间的留白 |
 | 30% | 次主导 / 表面 | `--surface-1` `#111217`、`--surface-2` `#171921`、`--surface-3` `#1f222d` | `#ffffff`、`#f0f2f5`、`#e4e7ed` | `el-card` 卡片面、横幅底色、补填面板底色、未填分段与「标准档案」pill 底色 |
-| 10% | 强调 | `--accent-cool` `#5EEAD4` | `--accent-cool` `#0d9488` | **仅限**：已填分段填充、图例 ✓ 图标、「完整档案」pill 的底纹（经 `--accent-cool-soft`）、自动聚焦高亮环 |
+| 10% | 强调 | `--accent-cool` `#5EEAD4` | `--accent-cool` `#0d9488` | **仅限**：已填分段填充、图例 ✓ 图标、「完整档案」pill 的底纹（经 `--accent-cool-soft`）、焦点环（`:focus-visible` 与 `.is-focus-target` 两种状态） |
 
 **强调色绝不用于文字。** Light 主题下 `#0d9488` 在白底仅 **3.74:1**，不达 AA 正文 4.5:1。已填分段的填充 vs 未填分段（`#e4e7ed`）实测 **3.02:1**，满足非文字图形 3:1；Dark 为 **10.71:1**。
 
@@ -234,7 +235,7 @@ Enumerated by `node -e "const fs=require('fs');const b='node_modules/element-plu
 
 **WCAG 1.4.1 由文字标签满足，不依赖形状或颜色。** 徽标内的「必需 / 推荐 / 可选」三个中文词是唯一的语义载体：它们在 `--text-1`（15.83:1）或 `--text-2`（8.38:1 Light / 11.30:1 Dark）上均远超 AA 正文 4.5:1，任何色觉或低视力用户读到的都是完整语义。
 
-**明确记录一项已知限制（不试图消除）：** 三档之间的**形状**差异（实心 / 实线 / 虚线）仅作辅助线索，**不作为可达性依赖项**。原因：`--border-strong` 在 Light 为 `rgba(0,0,0,0.15)`（与白卡面合成 ≈ `#d9d9d9`，**1.41:1**）、Dark 为 `rgba(67,70,81,0.9)`（**1.84:1**），实线与虚线在 1px 描边上的视觉差异对低视力用户难以分辨；「必需」chip 的 `--accent-warm-soft` 底色与白卡面仅 **1.07:1**，同样近乎不可见。本契约**不接受**「即使完全失明于颜色也能分辨」这类过度声明 —— 正确的说法是：「文字标签承担全部语义；描边样式只服务正常视力用户的快速扫读」。
+**明确记录一项已知限制（不试图消除）：** 三档之间的**形状**差异（实心 / 实线 / 虚线）仅作辅助线索，**不作为可达性依赖项**。原因：`--border-strong` 在 Light 为 `rgba(0,0,0,0.15)`（与白卡面合成 ≈ `#d9d9d9`，**1.41:1**）、Dark 为 `rgba(67,70,81,0.9)`（**1.84:1**），实线与虚线在 1px 描边上的视觉差异对低视力用户难以分辨；「必需」chip 的 `--accent-warm-soft` 底色与白卡面仅 **≈1.10:1**（叠 `--bg` 约 1.02:1），同样近乎不可见。本契约**不接受**「即使完全失明于颜色也能分辨」这类过度声明 —— 正确的说法是：「文字标签承担全部语义；描边样式只服务正常视力用户的快速扫读」。
 
 **为什么不把边框提到 ≥3:1：** 三档徽标是**非交互、非必需的装饰性标识**，不是 UI 组件边界（WCAG 1.4.11 不适用），也不是信息的必要载体（1.4.1 已由文字满足）。把 `--border-strong` 全局提到 3:1 会改变全站既有卡片/表格边界的分量（`theme.css:24` 是共享 token），属于本阶段之外的全局视觉变更，不得在此处夹带。若未来要提升，应在独立的 token 演进阶段改 `--border-strong` 并同步核对全站。
 
@@ -1076,12 +1077,12 @@ Applicable state considerations resolved: 26 covered (24 explicit, 2 backstop, 0
 
 ## Checker Sign-Off
 
-- [ ] Dimension 1 Copywriting: PASS
-- [ ] Dimension 2 Visuals: PASS
-- [ ] Dimension 3 Color: PASS
-- [ ] Dimension 4 Typography: PASS
-- [ ] Dimension 5 Spacing: PASS
-- [ ] Dimension 6 Registry Safety: PASS
-- [ ] Dimension 7 Inventory Provenance: PASS
+- [x] Dimension 1 Copywriting: PASS
+- [x] Dimension 2 Visuals: PASS
+- [x] Dimension 3 Color: PASS
+- [x] Dimension 4 Typography: PASS
+- [x] Dimension 5 Spacing: PASS
+- [x] Dimension 6 Registry Safety: PASS
+- [x] Dimension 7 Inventory Provenance: PASS
 
-**Approval:** pending
+**Approval:** approved — 2026-11-09 (7/7 PASS)
