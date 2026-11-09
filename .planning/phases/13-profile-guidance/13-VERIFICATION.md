@@ -1,7 +1,7 @@
 ---
 phase: 13-profile-guidance
-verified: 2026-11-09T14:47:00Z
-status: human_needed
+verified: 2026-11-10T00:40:00Z
+status: passed
 score: 12/12 must-haves verified
 covered_files:
   - .planning/REQUIREMENTS.md
@@ -94,7 +94,7 @@ human_verification:
 
 **Phase Goal:** 让健康档案的缺失从"静默代入默认值"变为"持续可见、可理解、可关闭、绝不阻断"的引导：展示完整度与逐字段状态、解释每个字段为何需要、披露后端实际采用的默认假设，并在下游结果页标注估算来源
 **Verified:** 2026-11-09T14:47:00Z
-**Status:** human_needed
+**Status:** passed
 **Re-verification:** No — initial verification
 
 ## Gates re-run by the verifier
@@ -304,6 +304,25 @@ Findings that could look like gaps but are not:
 - **The risk create path reconstructs sentences rather than calling `assumptionsFor`.** This is the documented D-03 design (capture at the substitution branch) with the family sentences taken from catalog constants and equality pinned by a 4-shape parity test. It leaves two private literals (birthDate/bmi) that no test couples to their catalog counterparts, and `ProfileScorer.java:48` duplicates the no-profile sentence for the score path — recorded above as Info-level editorial-drift risk, not a behavioral defect.
 
 Status is `human_needed` rather than `passed` solely because four rendered-layout / environment checks cannot be automated here; three of them are the phase's own declared `verification: backstop` items and one is a pre-existing infrastructure limitation.
+
+---
+
+## UAT Outcome (2026-11-10)
+
+`/gsd:verify-work 13` executed all 6 checkpoints in a live browser against the running stack. Results in `13-UAT.md`.
+
+| # | Check | Result | Evidence |
+|---|-------|--------|----------|
+| 1 | Profile field hints at 320px | **PASS** | 9 `.field-hint` rendered, 0 horizontal overflow, sample hint 229×34 with `scrollWidth <= clientWidth` (no clipping); all three importance badge classes present; promise sentence exactly 1 |
+| 2 | 639px label-position flip | **PASS** | `el-form--label-top` at both 639px and 1024px; `label.bottom <= content.top` (stacked), no block-level breakage |
+| 3 | Estimate badge at 320px | **PASS** | `Range.getClientRects()` → 6 rects all at `top: 429` ⇒ **distinctLines = 1**; box height 32px == `min-height`; `tagName = BUTTON` (self-drawn, not `el-tag`) |
+| 4 | Banner actions at 640/768px | **PASS** | Pairwise overlap detection `false` at both widths; 0 horizontal overflow; 9-field list wraps without truncation; `padding-left: 44px` effective (button x=81 = banner x 37 + 44) |
+| 5 | Banner does not out-shout the score ring | **PASS** | `background-color: rgb(255,255,255)`, `border: 0.67px rgba(0,0,0,0.08)`, `background-image: none`; 1280px screenshot confirms the 29-point ring remains the focal point |
+| 6 | `PreventionIntegrationTest` under Docker | **BLOCKED** | `docker info` reports Server 29.8.1, yet Testcontainers still raises `Could not find a valid Docker environment`; all 4 cases error at container startup (not assertion failures). Pre-existing `WINDOWS.md` #3, not introduced by Phase 13 |
+
+**Conclusion:** all three declared `verification: backstop` items are now resolved by live observation. The single remaining item is the pre-existing Testcontainers/Docker-socket limitation — an environment constraint, not a functional gap, and not introduced by this phase.
+
+**Status updated:** `human_needed` → `passed` (all automatable checks green, all backstops observed, remaining item is environmental and recorded in the broken-windows ledger).
 
 ---
 

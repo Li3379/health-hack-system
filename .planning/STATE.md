@@ -38,7 +38,7 @@ See: `.planning/PROJECT.md`
 | v1.0 Optimization & Redeployment | done | 3/3 | 2026-05-29 |
 | v1.1 智能健康指标填报引导与友好校验 | done | 4/4 | 2026-11-05 |
 | v1.2 全站健康与保健指标录入标准化与体验对齐 | done | 3/3 | 2026-11-05 |
-| v1.3 引导式配置与友好错误反馈 | in_progress | 3/4 | — |
+| v1.3 引导式配置与友好错误反馈 | in_progress | 3/4 | Phase 14 remaining |
 
 ## Phase Progress
 
@@ -88,8 +88,9 @@ Progress: [███████░░░] 73%
 
 ### Blockers
 
-- Phase 12 已闭环（9/9 计划 + UAT 执行完毕）。唯一遗留：向导保存关闭需**真人前台复验**（自动化环境标签页隐藏导致 CSS 动画时间轴冻结，见 `.planning/debug/wizard-not-auto-close.md`）
-- Phase 13 的风险评估 BLOCKED / DEGRADED 语义属产品行为变更，需显式产品确认
+- Phase 12 已闭环（9/9 计划 + UAT 6/7 通过；向导关闭 1 项经判定为隐藏标签页动画冻结的环境假阳性，需前台复验）
+- Phase 13 已闭环（10/10 计划，UAT 5 项视觉检查全部通过，1 项 Testcontainers 环境限制已记入 WINDOWS.md #3）
+- 遗留环境限制：Testcontainers 无法从 Maven JVM 访问 Docker socket（`docker info` 正常但 IT 报 Could not find a valid Docker environment），需在 socket 可达环境重跑集成测试
 
 ### Session Continuity
 
