@@ -123,6 +123,15 @@
         </div>
       </section>
 
+      <!-- 徽标落在表格之外（Contract 4 隔离规则 1）：永不进入 .el-table。 -->
+      <div class="risk-disclosure">
+        <EstimateBadge
+          v-if="!panelOpen"
+          :completeness="completeness?.score ?? null"
+          @complete="goProfileWithFocus"
+        />
+      </div>
+
       <el-table v-loading="loading" :data="assessments" stripe>
         <el-table-column prop="diseaseName" label="疾病名称" width="150" />
         <el-table-column prop="riskLevel" label="风险等级" width="120">
@@ -185,12 +194,24 @@
           {{ formatDateTime(currentAssessment.createTime) }}
         </el-descriptions-item>
       </el-descriptions>
+
+      <!--
+        「本次评估采用的假设」：读时按当前档案重算，因此标题刻意不声称是创建时冻结的记录
+        （RESEARCH open question 2 的 RESOLVED 决定）。列表原样渲染后端句子。
+      -->
+      <div v-if="currentAssessment?.assumptions?.length" class="risk-dialog-assumptions">
+        <p class="risk-dialog-assumptions__title">本次评估采用的假设</p>
+        <ul class="risk-dialog-assumptions__list">
+          <li v-for="item in currentAssessment.assumptions" :key="item">{{ item }}</li>
+        </ul>
+      </div>
     </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { useRouter } from 'vue-router'
 import { gsap, cleanupScrollTriggers, DUR, EASE } from '@/composables/useGsap'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
@@ -198,6 +219,7 @@ import { preventionApi } from '@/api/prevention'
 import { formatDateTime } from '@/utils/format'
 import { useFormServerErrors } from '@/composables/useFormServerErrors'
 import FormErrorSummary from '@/components/common/FormErrorSummary.vue'
+import EstimateBadge from '@/components/common/EstimateBadge.vue'
 import { useProfileCompletenessStore } from '@/stores/profileCompleteness'
 import { showError } from '@/utils/showError'
 import type { HealthProfileRequest, HealthProfileVO, RiskAssessmentVO } from '@/types/api'
@@ -212,6 +234,8 @@ const pagination = reactive({
   size: 10,
   total: 0
 })
+
+const router = useRouter()
 
 const completenessStore = useProfileCompletenessStore()
 const completeness = computed(() => completenessStore.data)
@@ -436,6 +460,12 @@ const backfillAndCreate = async () => {
   })
 }
 
+/** 徽标的跳转（Contract 7）：带 ?focus= 指向优先级最高的未填字段。 */
+const goProfileWithFocus = () => {
+  const key = completenessStore.firstMissingKey()
+  router.push({ path: '/prevention/profile', query: key ? { focus: key } : {} })
+}
+
 const viewDetail = (row: RiskAssessmentVO) => {
   currentAssessment.value = row
   detailVisible.value = true
@@ -541,6 +571,31 @@ onUnmounted(() => { cleanupScrollTriggers() })
 @media (max-width: 639px) {
   .risk-estimate__actions { flex-direction: column; align-items: stretch; }
   .risk-estimate__actions :deep(.el-button) { width: 100%; }
+}
+
+/* ---------- Contract 4：徽标落点 ---------- */
+.risk-disclosure {
+  margin-bottom: 16px;                            /* md：与表格、与徽标上文各留 md */
+}
+
+/* ---------- 详情对话框：本次评估采用的假设 ---------- */
+.risk-dialog-assumptions {
+  margin-top: 16px;
+}
+.risk-dialog-assumptions__title {
+  margin: 0 0 8px;
+  font: 600 14px/1.4 var(--font-ui);
+  color: var(--text-1);
+}
+.risk-dialog-assumptions__list {
+  margin: 0;
+  padding-left: 24px;
+  list-style: disc;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font: 400 14px/1.5 var(--font-ui);
+  color: var(--text-2);
 }
 
 /* ---------- Contract 6：按钮/标签归一化 ---------- */
