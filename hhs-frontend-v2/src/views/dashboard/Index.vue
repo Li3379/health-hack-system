@@ -17,6 +17,20 @@
       </div>
     </div>
 
+    <!--
+      档案完善引导横幅 —— 全站唯一实例（D-05）。档案页、风险页、评分页都不渲染它，
+      因此「刷新多个页面最多出现一条提示」是由结构保证的，而不是靠纪律。
+      v-if 的 loadFailed 是双保险：组件自身已按 completeness != null 门控，
+      在调用点再声明一次让失败契约在这里可见（UI-SPEC Contract 8）。
+    -->
+    <ProfileReminderBanner
+      v-if="!completenessStore.loadFailed"
+      :completeness="completeness"
+      :dismissed="bannerDismissed"
+      @complete="goProfileWithFocus"
+      @dismiss="completenessStore.dismiss()"
+    />
+
     <!-- Stats Grid -->
     <el-skeleton :loading="scoreLoading" animated>
       <template #template>
@@ -88,6 +102,15 @@
           <el-empty v-else description="暂无评分数据">
             <el-button type="primary" @click="goToMetrics">添加数据</el-button>
           </el-empty>
+          <!-- 紧凑完整度行：信息性，不打扰 —— 门控只有 completeness != null，不是 score < 60。
+               它读的是与横幅同一个 store payload，因此两个表面永不会对分数各执一词；
+               评分环仍是本卡的视觉焦点，这一行只在其下补充说明（UI-SPEC §视觉焦点）。 -->
+          <ProfileCompleteness
+            v-if="completeness"
+            :completeness="completeness"
+            variant="compact"
+            class="score-completeness"
+          />
         </div>
       </div>
 
@@ -162,6 +185,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useAlertStore } from '@/stores/alert'
+import { useProfileCompletenessStore } from '@/stores/profileCompleteness'
 import {
   staggerReveal, countUp, cleanupScrollTriggers,
   tilt3D, magneticHover, parallax, glowPulse,
@@ -179,11 +203,38 @@ import { formatRelativeTime, getScoreLevelLabel } from '@/utils/format'
 import HealthScoreCircle from '@/components/HealthScoreCircle.vue'
 import SparklineChart from '@/components/SparklineChart.vue'
 import ActivityRings from '@/components/ActivityRings.vue'
+import ProfileReminderBanner from '@/components/common/ProfileReminderBanner.vue'
+import ProfileCompleteness from '@/components/common/ProfileCompleteness.vue'
 import type { HealthScoreVO } from '@/types/api'
 
 const router = useRouter()
 const authStore = useAuthStore()
 const alertStore = useAlertStore()
+const completenessStore = useProfileCompletenessStore()
+
+/*
+  横幅与紧凑行共用同一份 payload（单次 fetch 服务两个表面）。
+  null 是合法值：旧后端或首载未落定时两者都不渲染，绝不合成 0%。
+*/
+const completeness = computed(() => completenessStore.data)
+
+/*
+  `void completenessStore.dismissedAt` 不是噪音：isDismissed() 读的是 localStorage，
+  Pinia 无法追踪它。触碰这个响应式镜像才能让本 computed 在 dismiss() 之后重新求值，
+  否则关闭后横幅要等下一次其它状态变化才消失。
+*/
+const bannerDismissed = computed(() => {
+  void completenessStore.dismissedAt
+  return completenessStore.isDismissed()
+})
+
+/*
+  主 CTA：带 ?focus= 跳到档案页，但**不**写静默时间戳 —— 用户可能中途放弃，
+  下次回来仍应看到提醒。静默的唯一写入点是 store.dismiss()。
+*/
+const goProfileWithFocus = (focusKey: string | null) => {
+  router.push({ path: '/prevention/profile', query: focusKey ? { focus: focusKey } : {} })
+}
 
 const healthScore = ref(0)
 const metricCount = ref(0)
@@ -341,6 +392,10 @@ const getFactorLabel = (key: string): string => {
 }
 
 onMounted(async () => {
+  // 档案完整度：不 await —— 它是引导型数据，不该拖慢已有的 GSAP 入场时间线。
+  // store 内部单飞（13-05），与 13-07 / 13-09 并发挂载时也只发一次 HTTP。
+  completenessStore.fetchCompleteness()
+
   await fetchHealthScore()
   fetchMetricCount()
   fetchAlerts()
@@ -575,8 +630,21 @@ onUnmounted(() => {
 }
 
 /* Score */
-.score-content { min-height: 240px; display: flex; align-items: center; justify-content: center; }
+/*
+  column 而不是 row：紧凑完整度行必须落在评分环「之下」而不是并排抢焦点。
+  UI-SPEC §视觉焦点 声明评分环是本卡的主锚点，横幅/完整度行让位给它。
+*/
+.score-content {
+  min-height: 240px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
 .score-display { display: flex; flex-direction: row; align-items: center; text-align: left; gap: 24px; }
+/* 分段条要横跨卡片宽度才有「九项里填了几项」的可读性 */
+.score-completeness { width: 100%; }
 .score-info { max-width: 260px; }
 .score-tip { font: 400 14px/1.5 var(--font-ui); color: var(--text-3); margin-bottom: 12px; }
 .score-factors { text-align: left; }
@@ -702,5 +770,17 @@ onUnmounted(() => {
   .stats-grid { grid-template-columns: 1fr; }
   .content-grid { grid-template-columns: 1fr; }
   .stat-value { font-size: 24px; }
+}
+
+/* ---------- Phase 13 Contract 6: 页面级按钮归一化 ----------
+   theme.css 把 EP 主按钮锁成 500 14px/1，行高 1 会裁切中文字形下缘；
+   次按钮继承 --el-button-font-weight: 500。本契约只承认 400/600 两档。
+   横幅内部的样式仍在 ProfileReminderBanner.vue 自己的 scoped 块里，不在此复制。 */
+.dashboard :deep(.el-button--primary) {
+  font: 600 14px/1.5 var(--font-ui) !important;
+}
+.dashboard :deep(.el-button:not(.el-button--primary)) {
+  font-weight: 400 !important;
+  line-height: 1.5 !important;
 }
 </style>
