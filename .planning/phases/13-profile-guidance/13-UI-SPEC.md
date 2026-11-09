@@ -175,7 +175,7 @@ Enumerated by `node -e "const fs=require('fs');const b='node_modules/element-plu
 | 逐字段图例项「✓ 身高」 | 12px / 400 / 1.4，色 `--text-2` | Label |
 | 影响句「缺少身高、体重或 BMI…」 | 14px / 400 / 1.5，色 `--text-2` | Body |
 | 字段标签「身高(cm)」 | 14px / 600 / 1.5，色 `--text-1` | Body + semibold（比说明重一档） |
-| 字段说明「用于计算 BMI…」 | 12px / 400 / 1.4，色 `--text-2`（**`--text-3` 浅色仅 3.97:1 不可用**） | Label |
+| 字段说明「用于生成 BMI…」 | 12px / 400 / 1.4，色 `--text-2`（**`--text-3` 浅色仅 3.97:1 不可用**） | Label |
 | 重要度徽标「必需 / 推荐 / 可选」 | 12px / 400 / 1.4 | Label |
 | 不填承诺句 | 14px / 400 / 1.5，色 `--text-1` | Body |
 | 横幅标题 | 14px / 600 / 1.5，色 `--text-1` | Body + semibold |
@@ -453,7 +453,7 @@ Enumerated by `node -e "const fs=require('fs');const b='node_modules/element-plu
 
   <p class="field-hint">
     <span class="hhs-imp-badge hhs-imp-badge--recommended">推荐</span>
-    <span class="field-hint__text">用于计算 BMI，影响体重维度评分</span>
+    <span class="field-hint__text">用于生成 BMI，影响风险评估与健康报告</span>
   </p>
 </el-form-item>
 ```
@@ -787,6 +787,24 @@ mql.addEventListener('change', (e) => { isNarrow.value = e.matches })
           </el-form-item>
         </el-col>
       </el-row>
+
+      <!-- 第 2 行：可选补（D-06a）。没有 :rules 条目，留空是合法提交。 -->
+      <el-row :gutter="16">
+        <el-col :xs="24" :sm="12">
+          <el-form-item label="身高（可选）" prop="heightCm" data-field="heightCm" :error="fieldErrors['heightCm']">
+            <el-input-number v-model="backfill.heightCm" :min="50" :max="300"
+                             placeholder="可不填" style="width: 100%"
+                             @change="clearField('heightCm')" />
+          </el-form-item>
+        </el-col>
+        <el-col :xs="24" :sm="12">
+          <el-form-item label="体重（可选）" prop="weightKg" data-field="weightKg" :error="fieldErrors['weightKg']">
+            <el-input-number v-model="backfill.weightKg" :min="20" :max="500" :precision="1"
+                             placeholder="可不填" style="width: 100%"
+                             @change="clearField('weightKg')" />
+          </el-form-item>
+        </el-col>
+      </el-row>
     </el-form>
   </div>
 
@@ -998,6 +1016,8 @@ mql.addEventListener('change', (e) => { isNarrow.value = e.matches })
 | 假设条目 · 缺家族病史（字段为空） | `缺少家族病史，糖尿病风险评估按「无家族史」计算` |
 | 假设条目 · 家族病史已填但未提及糖尿病 | `家族病史未提及糖尿病，糖尿病风险评估按「无家族史」计算` |
 | 假设条目 · 完全无档案 | `未填写健康档案，风险得分按通用参考值估算` |
+| 假设条目 · 评分路径无实时指标 | `缺少健康指标数据，指标维度按中性 70 分计算`（`HealthScoreVO.assumptions`，后端 `MetricsScorer` 空指标分支产出；当前无前端表面渲染该数组，但它是 API 可见文案，故仍受本契约约束） |
+| 假设条目 · 评分路径无 BMI 实时指标 | `缺少 BMI 指标，体重维度按参考值估算`（`HealthScoreVO.assumptions`，后端 `DimensionScoreCalculator` 在体重惩罚因缺 `bmi` 键而跳过时产出；同上，API 可见文案） |
 | 档案不存在时的引导 | `填写性别与出生日期即可启用风险评估与健康评分，其余字段可随时补充。` |
 | 保存档案成功 | `档案已保存`（沿用既有 `ElMessage.success` 措辞习惯） |
 | 错误态 · 加载失败 | `无法加载健康档案，请稍后重试`（字典键 `profile.loadFailed`，已存在，**不新增**） |
@@ -1035,7 +1055,7 @@ Applicable state considerations resolved: 26 covered (24 explicit, 2 backstop, 0
 | long-text | E3 横幅标题与正文 | ✅ covered | 正文 `flex: 1; min-width: 0` 自然换行；标题不截断；最长的缺失字段枚举（9 项全缺）在 640px 下约 3 行，`flex-wrap: wrap` 让动作区整体下移。 |
 | long-text | E4 估算徽标（窄屏） | 🧪 backstop | 文案固定 14 个中文字符，`min-height: 32px` + `padding: 4px 12px`，320px 下不折行（实测字宽 ≈ 174px）。需在 320px 视口做一次视觉复核；若折行则允许两行并移除 `min-height` 约束。 |
 | long-text | E5 假设条目 | ✅ covered | 每条 `flex-direction: column; gap: 4px` 的 `<li>`，`list-style: disc` + `padding-left: 24px` 悬挂缩进，长句自然折行且第二行左对齐于首行文字（非项目符号）。 |
-| long-text | E6 补填表单标签 | ✅ covered | 标签 `性别` / `出生日期` 均 ≤4 字，`label-width="120px"` 充裕；<640px 改为上置标签（Contract 2 的同一媒体查询）。 |
+| long-text | E6 补填表单标签 | ✅ covered | 标签 `性别` / `出生日期` ≤4 字，`身高（可选）` / `体重（可选）` 6 字，`label-width="120px"` 均充裕；<640px 改为上置标签（Contract 2 的同一媒体查询）。 |
 | long-text | E8 仪表盘紧凑行 | ✅ covered | 头部 `flex-wrap: wrap`，`62%` 与 pill 不折行；`完善档案` 链接独占一行。 |
 | long-text | E3 横幅动作区 | 🧪 backstop | 3 个控件（2 按钮 + ×）在 640–768px 之间最紧。已声明 `flex-wrap` + `padding-left: 44px`；需在 640px / 768px 两个断点做视觉复核。 |
 | overflow | E1 图例 | ✅ covered | 容器 `width: 100%`，`flex-wrap: wrap`，永不横向溢出；无 `overflow: hidden`（不裁字）。 |
@@ -1132,3 +1152,13 @@ Applicable state considerations resolved: 26 covered (24 explicit, 2 backstop, 0
 本契约的 Color / Typography / Spacing / Registry Safety 四节未做任何改动；Checker Sign-Off 的 7/7 PASS 结论维持。修订仅涉及 Copywriting Contract 的文案与 Contract 5 的两个结构性说明。
 
 **未修订项说明：** 假设条目与影响句中「体重维度」以外的其余「维度」措辞均未改动，因为 `MetricsScorer` 确实按实时指标产出维度分。本契约的 Color / Typography / Spacing / Registry 四节不受 R-1/R-2 影响，7/7 PASS 结论维持（见 R-3）。
+
+### R-4（骨架与文案同步，2026-11-09，最终修订轮）
+
+R-1/R-2 改的是**文字说明**，但两处 HTML 骨架仍保留了修订前的形态。执行者照抄骨架会直接回退修订，因此本轮把骨架本身同步：
+
+| 条目 | 问题 | 修订 |
+|------|------|------|
+| Contract 2 骨架示例 | L456 的 `<span class="field-hint__text">用于计算 BMI，影响体重维度评分</span>` 仍是 R-1 已判为失真的句子（体重维度只消费 `RealtimeMetric`，不读档案） | 骨架字符串改为 Copywriting Contract「字段说明 · 身高」行：`用于生成 BMI，影响风险评估与健康报告`。契约内唯一字符串，逐字相同 |
+| Contract 5 骨架字段集 | R-2 只改了说明表（4 个输入），骨架仍只有 `性别` + `出生日期` 一个 `el-row` | 骨架补第 2 个 `el-row :gutter="16"`：`身高（可选）` / `体重（可选）` 两个 `el-input-number`，`:min`/`:max` 对齐 DTO（50–300 cm / 20–500 kg），体重带 `:precision="1"`，**无 `:rules` 条目**、不设 `:disabled`，`placeholder="可不填"`。落实 D-06a |
+| Copywriting Contract 假设条目 | `HealthScoreVO.assumptions` 的两条评分路径句子（`缺少健康指标数据，指标维度按中性 70 分计算` / `缺少 BMI 指标，体重维度按参考值估算`）虽无前端表面渲染，但经 API 对用户可见，未入表则契约不再是文案唯一来源 | 补两行「假设条目 · 评分路径无实时指标 / 无 BMI 实时指标」，与 13-03 的后端常量逐字一致 |
