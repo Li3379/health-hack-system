@@ -178,6 +178,13 @@ export interface HealthScoreVO {
   expiresAt: string
   isCached: boolean
   message?: string
+  /**
+   * 档案加权完整度（0-100）。null / undefined 表示「未知」—— 无任何健康数据时
+   * 后端在评分器之前就返回 NO_DATA，此时前端不得渲染 0% 徽标。
+   */
+  profileCompleteness?: number | null
+  /** 本次评分代入的默认值说明。 */
+  assumptions?: string[]
 }
 
 // AI 相关
@@ -259,6 +266,32 @@ export interface HealthProfileVO {
   updateTime: string
 }
 
+// 档案完整度（D-01：后端权威计算，前端只透传与渲染）
+export interface ProfileFieldStatusVO {
+  key: string
+  label: string
+  importance: 'required' | 'recommended' | 'optional'
+  filled: boolean
+  reason: string
+  assumption?: string | null
+}
+
+export interface ProfileCompletenessVO {
+  score: number
+  level: string
+  filledCount: number
+  totalCount: number
+  /**
+   * 区分「完全没有档案行」与「有档案但很稀疏」。
+   * 必须显式下发：前端不得从 score 反推这个状态（无档案 0% 与稀疏 0% 语义不同）。
+   */
+  hasProfile: boolean
+  /** 风险引擎本次实际代入的假设句；无档案时为单条通用句。 */
+  assumptions: string[]
+  /** 按后端目录顺序下发的逐字段状态；分段数必须取该数组长度，不得硬编码。 */
+  fields: ProfileFieldStatusVO[]
+}
+
 export interface RiskAssessmentVO {
   id: number
   userId: number
@@ -267,6 +300,10 @@ export interface RiskAssessmentVO {
   riskLevel: string
   riskScore?: number
   suggestion?: string
+  /** 当前档案的加权完整度（0-100）；null 表示未知，不得当作 0% 渲染。 */
+  profileCompleteness?: number | null
+  /** 本次评估依赖的默认假设句（读时按当前档案重算）。 */
+  assumptions?: string[]
   createTime: string
 }
 
