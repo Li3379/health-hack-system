@@ -499,8 +499,13 @@ async function handleSubmit(): Promise<void> {
     } else {
       await thresholdApi.createThreshold(payload)
     }
-    emit('saved')
+    // 关闭必须先于父级刷新（UAT gap 1 根因修复）：若 emit('saved') 与关闭在同一 tick
+    // 触发，父级 handleSaved 的列表刷新会与 dialog 的 leave 过渡抢同一帧，Vue transition
+    // 的 enter-from 类残留、leave 动画永不结束，EP after-leave 不派发 → 遮罩滞留。
+    // 先翻 modelValue 让关闭过渡独占这一帧，再在下一 tick 通知父级刷新列表。
     emit('update:modelValue', false)
+    await nextTick()
+    emit('saved')
   } catch (raw) {
     const apiError = normalizeApiError(raw)
     if (apiError.kind === 'validation') {

@@ -426,6 +426,13 @@ describe('ThresholdWizard — 三步向导组件契约', () => {
     // 保存成功后关闭弹窗
     const closeEvents = wrapper.emitted('update:modelValue') ?? []
     expect(closeEvents[closeEvents.length - 1]).toEqual([false])
+    // 真关闭断言（UAT gap 1 验证盲区）：不只钉 emit，还要钉 emit 之后 v-model
+    // 回写把组件真实关闭。v-model 由可写 computed 驱动，父级把 modelValue 翻 false
+    // 时弹窗必须真正消失；只断言 emit 会漏掉“emit 发了但弹窗没关”的回归。
+    await wrapper.setProps({ modelValue: false })
+    await flushPromises()
+    await nextTick()
+    expect(wrapper.find('.threshold-wizard').exists()).toBe(false)
     // 载荷：userId 来自认证 store，metricKey 为所选指标
     expect(createThresholdMock.mock.calls[0][0]).toMatchObject({
       userId: 1,
