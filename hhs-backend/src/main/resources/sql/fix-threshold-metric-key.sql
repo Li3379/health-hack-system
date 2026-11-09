@@ -52,31 +52,32 @@
 -- ============ Step 0：执行前计数（人工记录留存，T-12-10） ============
 -- 非标准计数 = 各表中 metric_key 仍落在上述别名全集内的行数；
 -- 执行成功后（见文末 AFTER 块）这些计数必须全部为 0，ut_total 只减不增。
+-- 计数采用大小写精确匹配（utf8mb4_*_ci 下小写拼接变体与规范 key 不敏感相等，不区分会把规范行误计入非标准计数、永远无法归零）。
 SELECT 'BEFORE' AS phase,
        (SELECT COUNT(*) FROM user_threshold) AS ut_total,
        (SELECT COUNT(*) FROM user_threshold
-         WHERE metric_key IN ('glucose','GLUCOSE','glu','GLU',
+         WHERE BINARY metric_key IN ('glucose','GLUCOSE','glu','GLU',
                               'blood_glucose','BLOOD_GLUCOSE','bloodglucose',
                               'temperature','TEMPERATURE','temp','TEMP',
                               'body_temperature','BODY_TEMPERATURE','bodytemperature',
                               'spo2','SPO2','blood_oxygen','BLOOD_OXYGEN','bloodoxygen')
        ) AS ut_noncanonical,
        (SELECT COUNT(*) FROM alert_rule
-         WHERE metric_key IN ('glucose','GLUCOSE','glu','GLU',
+         WHERE BINARY metric_key IN ('glucose','GLUCOSE','glu','GLU',
                               'blood_glucose','BLOOD_GLUCOSE','bloodglucose',
                               'temperature','TEMPERATURE','temp','TEMP',
                               'body_temperature','BODY_TEMPERATURE','bodytemperature',
                               'spo2','SPO2','blood_oxygen','BLOOD_OXYGEN','bloodoxygen')
        ) AS ar_noncanonical,
        (SELECT COUNT(*) FROM alert_template
-         WHERE metric_key IN ('glucose','GLUCOSE','glu','GLU',
+         WHERE BINARY metric_key IN ('glucose','GLUCOSE','glu','GLU',
                               'blood_glucose','BLOOD_GLUCOSE','bloodglucose',
                               'temperature','TEMPERATURE','temp','TEMP',
                               'body_temperature','BODY_TEMPERATURE','bodytemperature',
                               'spo2','SPO2','blood_oxygen','BLOOD_OXYGEN','bloodoxygen')
        ) AS at_noncanonical,
        (SELECT COUNT(*) FROM health_alert
-         WHERE metric_key IN ('glucose','GLUCOSE','glu','GLU',
+         WHERE BINARY metric_key IN ('glucose','GLUCOSE','glu','GLU',
                               'blood_glucose','BLOOD_GLUCOSE','bloodglucose',
                               'temperature','TEMPERATURE','temp','TEMP',
                               'body_temperature','BODY_TEMPERATURE','bodytemperature',
@@ -338,31 +339,32 @@ COMMIT;
 -- ============ Step 4：执行后计数（幂等验收，T-12-10） ============
 -- 所有 *_noncanonical 必须为 0；ut_total 应等于 BEFORE 的 ut_total 减去被合并
 -- 删除的行数。再次执行本脚本时，本 AFTER 计数应与本次完全一致（零行变更）。
+-- 计数采用大小写精确匹配（utf8mb4_*_ci 下小写拼接变体与规范 key 不敏感相等，不区分会把规范行误计入非标准计数、验收计数永远无法归零）。
 SELECT 'AFTER' AS phase,
        (SELECT COUNT(*) FROM user_threshold) AS ut_total,
        (SELECT COUNT(*) FROM user_threshold
-         WHERE metric_key IN ('glucose','GLUCOSE','glu','GLU',
+         WHERE BINARY metric_key IN ('glucose','GLUCOSE','glu','GLU',
                               'blood_glucose','BLOOD_GLUCOSE','bloodglucose',
                               'temperature','TEMPERATURE','temp','TEMP',
                               'body_temperature','BODY_TEMPERATURE','bodytemperature',
                               'spo2','SPO2','blood_oxygen','BLOOD_OXYGEN','bloodoxygen')
        ) AS ut_noncanonical,
        (SELECT COUNT(*) FROM alert_rule
-         WHERE metric_key IN ('glucose','GLUCOSE','glu','GLU',
+         WHERE BINARY metric_key IN ('glucose','GLUCOSE','glu','GLU',
                               'blood_glucose','BLOOD_GLUCOSE','bloodglucose',
                               'temperature','TEMPERATURE','temp','TEMP',
                               'body_temperature','BODY_TEMPERATURE','bodytemperature',
                               'spo2','SPO2','blood_oxygen','BLOOD_OXYGEN','bloodoxygen')
        ) AS ar_noncanonical,
        (SELECT COUNT(*) FROM alert_template
-         WHERE metric_key IN ('glucose','GLUCOSE','glu','GLU',
+         WHERE BINARY metric_key IN ('glucose','GLUCOSE','glu','GLU',
                               'blood_glucose','BLOOD_GLUCOSE','bloodglucose',
                               'temperature','TEMPERATURE','temp','TEMP',
                               'body_temperature','BODY_TEMPERATURE','bodytemperature',
                               'spo2','SPO2','blood_oxygen','BLOOD_OXYGEN','bloodoxygen')
        ) AS at_noncanonical,
        (SELECT COUNT(*) FROM health_alert
-         WHERE metric_key IN ('glucose','GLUCOSE','glu','GLU',
+         WHERE BINARY metric_key IN ('glucose','GLUCOSE','glu','GLU',
                               'blood_glucose','BLOOD_GLUCOSE','bloodglucose',
                               'temperature','TEMPERATURE','temp','TEMP',
                               'body_temperature','BODY_TEMPERATURE','bodytemperature',
