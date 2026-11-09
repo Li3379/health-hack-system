@@ -267,4 +267,115 @@ describe('useProfileCompletenessStore', () => {
       expect(store.firstMissingKey()).toBe('heightCm')
     })
   })
+
+  describe('7 天静默窗口', () => {
+    const BASE = Date.parse('2026-11-09T00:00:00.000Z')
+
+    beforeEach(() => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date(BASE))
+    })
+
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('is not dismissed when no key is present', () => {
+      const store = useProfileCompletenessStore()
+
+      expect(localStorage.getItem(DISMISS_KEY)).toBeNull()
+      expect(store.isDismissed()).toBe(false)
+    })
+
+    it('is dismissed immediately after dismiss()', () => {
+      const store = useProfileCompletenessStore()
+
+      store.dismiss()
+
+      expect(store.isDismissed()).toBe(true)
+    })
+
+    it('dismiss() writes a parseable ISO string under hhs_profile_reminder_dismissed_at', () => {
+      const store = useProfileCompletenessStore()
+
+      store.dismiss()
+
+      const raw = localStorage.getItem(DISMISS_KEY)
+      expect(raw).toBe(new Date(BASE).toISOString())
+      expect(Number.isNaN(Date.parse(raw as string))).toBe(false)
+    })
+
+    it('dismiss() bumps the reactive dismissedAt mirror so consumers re-evaluate', () => {
+      const store = useProfileCompletenessStore()
+
+      expect(store.dismissedAt).toBeNull()
+      store.dismiss()
+
+      expect(store.dismissedAt).toBe(new Date(BASE).toISOString())
+    })
+
+    it('is still dismissed 1 ms before the 7-day boundary', () => {
+      const store = useProfileCompletenessStore()
+      store.dismiss()
+
+      vi.setSystemTime(new Date(BASE + SILENCE_MS - 1))
+
+      expect(store.isDismissed()).toBe(true)
+    })
+
+    it('is no longer dismissed at exactly the 7-day boundary plus 1 ms', () => {
+      const store = useProfileCompletenessStore()
+      store.dismiss()
+
+      vi.setSystemTime(new Date(BASE + SILENCE_MS + 1))
+
+      expect(store.isDismissed()).toBe(false)
+    })
+
+    it('is still dismissed at exactly 7 days', () => {
+      const store = useProfileCompletenessStore()
+      store.dismiss()
+
+      vi.setSystemTime(new Date(BASE + SILENCE_MS))
+
+      expect(store.isDismissed()).toBe(true)
+    })
+
+    it('is no longer dismissed after 8 days', () => {
+      const store = useProfileCompletenessStore()
+      store.dismiss()
+
+      vi.setSystemTime(new Date(BASE + 8 * 24 * 60 * 60 * 1000))
+
+      expect(store.isDismissed()).toBe(false)
+    })
+
+    it('fails open on a corrupt timestamp: "not-a-date" is treated as not dismissed', () => {
+      localStorage.setItem(DISMISS_KEY, 'not-a-date')
+      const store = useProfileCompletenessStore()
+
+      expect(store.isDismissed()).toBe(false)
+    })
+
+    it('fails open on an empty string value', () => {
+      localStorage.setItem(DISMISS_KEY, '')
+      const store = useProfileCompletenessStore()
+
+      expect(store.isDismissed()).toBe(false)
+    })
+
+    it('re-dismissing restarts the 7-day window from the new instant', () => {
+      const store = useProfileCompletenessStore()
+      store.dismiss()
+
+      // 第 6 天再次关闭：窗口从这一刻重新起算
+      vi.setSystemTime(new Date(BASE + 6 * 24 * 60 * 60 * 1000))
+      store.dismiss()
+
+      // 距第一次关闭已 7 天 + 1ms，但距第二次关闭只 1ms
+      vi.setSystemTime(new Date(BASE + SILENCE_MS + 1))
+
+      expect(store.isDismissed()).toBe(true)
+    })
+  })
 })
