@@ -1,13 +1,12 @@
 <template>
   <el-dialog
-    :model-value="modelValue"
+    v-model="visible"
     :title="isEditMode ? '编辑阈值' : '新增阈值'"
     width="760px"
     class="threshold-wizard"
     :close-on-click-modal="false"
     destroy-on-close
     :before-close="handleBeforeClose"
-    @update:model-value="handleVisibleChange"
   >
     <div class="wizard-steps">
       <el-steps :active="currentStep" finish-status="finish" align-center>
@@ -276,6 +275,14 @@ const saving = ref(false)
 let compareDraft: ThresholdDraft = {}
 let confirmedLeave = false
 
+// el-dialog 双向绑定（仓库标准模式，同 UniversalMetricDialog.vue）：EP 内部所有关闭路径
+// （ESC/X/守卫）经同一可写 computed 出口回写父组件，避免单向绑定在 destroy-on-close
+// 下与 EP 内部可见性脱同步导致遮罩滞留（UAT gap 1 / THR-06）
+const visible = computed({
+  get: () => props.modelValue,
+  set: val => emit('update:modelValue', val)
+})
+
 const isEditMode = computed(() => props.editing !== null)
 const meta = computed(() => store.getDefinition(selectedKey.value))
 const hasAlertableMetrics = computed(
@@ -447,10 +454,6 @@ function handleBeforeClose(done: () => void): void {
 
 function handleCancel(): void {
   handleBeforeClose(() => emit('update:modelValue', false))
-}
-
-function handleVisibleChange(visible: boolean): void {
-  emit('update:modelValue', visible)
 }
 
 function goToStep(step: number): void {
