@@ -10,6 +10,7 @@ import com.hhs.service.RiskAssessmentService;
 import com.hhs.vo.HealthProfileVO;
 import com.hhs.vo.HealthMetricVO;
 import com.hhs.vo.HealthMetricTrendVO;
+import com.hhs.vo.ProfileCompletenessVO;
 import com.hhs.vo.RiskAssessmentVO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -173,6 +174,15 @@ public class PreventionController {
     public Result<HealthProfileVO> createProfileAlias(@RequestBody @Valid HealthProfileRequest request) {
         Long userId = SecurityUtils.getCurrentUserId();
         return Result.success(healthProfileService.create(userId, request));
+    }
+
+    @Operation(summary = "获取档案完整度", description = "返回当前登录用户的档案完整度分数、等级与逐字段状态")
+    @GetMapping("/profile/completeness")
+    @PreAuthorize("isAuthenticated()")
+    public Result<ProfileCompletenessVO> getProfileCompleteness() {
+        Long userId = SecurityUtils.getCurrentUserId();
+        log.debug("Get profile completeness request: userId={}", userId);
+        return Result.success(healthProfileService.getCompleteness(userId));
     }
 
     @Operation(summary = "获取健康指标 (别名)")

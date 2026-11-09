@@ -6,7 +6,9 @@ import com.hhs.entity.HealthProfile;
 import com.hhs.exception.BusinessException;
 import com.hhs.mapper.HealthProfileMapper;
 import com.hhs.service.HealthProfileService;
+import com.hhs.service.domain.ProfileCompletenessCalculator;
 import com.hhs.vo.HealthProfileVO;
+import com.hhs.vo.ProfileCompletenessVO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,6 +21,7 @@ import java.math.RoundingMode;
 public class HealthProfileServiceImpl implements HealthProfileService {
 
     private final HealthProfileMapper healthProfileMapper;
+    private final ProfileCompletenessCalculator completenessCalculator;
 
     /**
      * Create a new health profile for a user
@@ -54,6 +57,27 @@ public class HealthProfileServiceImpl implements HealthProfileService {
         wrapper.eq(HealthProfile::getUserId, userId);
         HealthProfile profile = healthProfileMapper.selectOne(wrapper);
         return profile != null ? toVO(profile) : null;
+    }
+
+    /**
+     * Get the authoritative completeness of a user's health profile.
+     *
+     * <p>Uses the same single-row wrapper as {@link #getByUserId(Long)} so the profile header
+     * and the completeness score can never disagree about which row is current. Uniqueness is
+     * enforced upstream by {@link #create(Long, HealthProfileRequest)}, which rejects a second
+     * row for the same user, so the user-scoped wrapper matches at most one row and needs no
+     * ordering. The absent row is delegated to the calculator, which owns the 0% answer.</p>
+     *
+     * @param userId User ID
+     * @return the completeness payload; never {@code null}
+     */
+    @Override
+    @Transactional(timeout = 30, readOnly = true)
+    public ProfileCompletenessVO getCompleteness(Long userId) {
+        LambdaQueryWrapper<HealthProfile> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(HealthProfile::getUserId, userId);
+        HealthProfile profile = healthProfileMapper.selectOne(wrapper);
+        return completenessCalculator.calculate(profile);
     }
 
     /**

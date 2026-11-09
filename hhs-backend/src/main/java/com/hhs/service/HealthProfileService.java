@@ -2,6 +2,7 @@ package com.hhs.service;
 
 import com.hhs.dto.HealthProfileRequest;
 import com.hhs.vo.HealthProfileVO;
+import com.hhs.vo.ProfileCompletenessVO;
 
 /**
  * Health Profile Service
@@ -26,6 +27,18 @@ public interface HealthProfileService {
      * @return HealthProfileVO if exists, null otherwise
      */
     HealthProfileVO getByUserId(Long userId);
+
+    /**
+     * Get the authoritative completeness of a user's health profile.
+     *
+     * <p>A missing profile row is a normal state, not an error: it yields a 0% payload with
+     * {@code hasProfile == false} rather than an exception or {@code null}. Callers therefore
+     * never need a null check, and the guidance surfaces can render the 0% case directly.</p>
+     *
+     * @param userId User ID
+     * @return the completeness payload; never {@code null}
+     */
+    ProfileCompletenessVO getCompleteness(Long userId);
 
     /**
      * Update an existing health profile
