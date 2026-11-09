@@ -97,7 +97,9 @@ public class RiskAssessmentServiceImpl implements RiskAssessmentService {
     public RiskAssessmentVO getById(Long id, Long userId) {
         RiskAssessment r = riskAssessmentMapper.selectById(id);
         if (r == null || !r.getUserId().equals(userId)) return null;
-        return toVO(r);
+        HealthProfile profile = getProfileByUserId(r.getUserId());
+        return toVO(r, profileCompletenessCalculator.calculate(profile).score(),
+                disclosedAssumptions(profile));
     }
 
     /**
@@ -112,7 +114,13 @@ public class RiskAssessmentServiceImpl implements RiskAssessmentService {
                 new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<RiskAssessment>()
                         .eq(RiskAssessment::getUserId, userId)
                         .orderByDesc(RiskAssessment::getCreateTime));
-        return assessments.stream().map(this::toVO).toList();
+        if (assessments.isEmpty()) {
+            return List.of();
+        }
+        HealthProfile profile = getProfileByUserId(userId);
+        int completeness = profileCompletenessCalculator.calculate(profile).score();
+        List<String> assumptions = disclosedAssumptions(profile);
+        return assessments.stream().map(r -> toVO(r, completeness, assumptions)).toList();
     }
 
     private HealthProfile getProfileByUserId(Long userId) {
@@ -148,11 +156,7 @@ public class RiskAssessmentServiceImpl implements RiskAssessmentService {
         return ProfileFieldCatalog.assumptionsFor(profile);
     }
 
-    private RiskAssessmentVO toVO(RiskAssessment r) {
-        return toVO(r, null, List.of());
-    }
-
-    private RiskAssessmentVO toVO(RiskAssessment r, Integer profileCompleteness, List<String> assumptions) {
+    private RiskAssessmentVO toVO(RiskAssessment r, int profileCompleteness, List<String> assumptions) {
         return new RiskAssessmentVO(r.getId(), r.getUserId(), r.getProfileId(), r.getDiseaseName(),
                 r.getRiskLevel(), r.getRiskScore(), r.getSuggestion(), profileCompleteness,
                 r.getCreateTime(), assumptions);
