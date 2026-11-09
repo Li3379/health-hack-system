@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 3
+open_count: 4
 waived_count: 0
 fixed_count: 2
-total_count: 5
-last_updated: 2026-11-09T13:10:01.346Z
+total_count: 6
+last_updated: 2026-11-09T13:27:01.200Z
 ---
 
 # Broken Windows Ledger
@@ -20,6 +20,7 @@ last_updated: 2026-11-09T13:10:01.346Z
 | 3 | 13 | unrun-verify | hhs-backend/src/test/java/com/hhs/integration/PreventionIntegrationTest.java |  | PreventionIntegrationTest not run: Testcontainers cannot reach the Docker daemon in this environment (Failsafe excludes it from Surefire); pre-existing, also fails for HealthScoreIntegrationTest | open |  | 2026-11-09T12:07:34.828Z |  |
 | 4 | 13 | unrun-verify | hhs-frontend-v2/src/components/common/EstimateBadge.vue |  | Backstop: verify the estimate badge label does not wrap at a 320px viewport | open |  | 2026-11-09T13:09:53.236Z |  |
 | 5 | 13 | unrun-verify | hhs-frontend-v2/src/components/common/ProfileReminderBanner.vue |  | Backstop: verify the banner's two buttons plus close control do not collide at 640px or 768px | open |  | 2026-11-09T13:10:01.346Z |  |
+| 6 | 13 | unrun-verify | hhs-frontend-v2/src/views/prevention/Profile.vue |  | Hint wrapping and the 639px label-position flip cannot be measured in happy-dom; CSS rules implemented, visual review pending at 320-639px | open |  | 2026-11-09T13:27:01.200Z |  |
 
 ````json
 [
@@ -85,6 +86,19 @@ last_updated: 2026-11-09T13:10:01.346Z
     "status": "open",
     "reason": "",
     "recorded_at": "2026-11-09T13:10:01.346Z",
+    "resolved_at": null,
+    "milestone": "v1.3"
+  },
+  {
+    "id": 6,
+    "kind": "unrun-verify",
+    "phase": "13",
+    "file": "hhs-frontend-v2/src/views/prevention/Profile.vue",
+    "line": null,
+    "description": "Hint wrapping and the 639px label-position flip cannot be measured in happy-dom; CSS rules implemented, visual review pending at 320-639px",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-11-09T13:27:01.200Z",
     "resolved_at": null,
     "milestone": "v1.3"
   }
