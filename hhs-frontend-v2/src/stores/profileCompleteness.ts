@@ -85,14 +85,14 @@ export const useProfileCompletenessStore = defineStore('profileCompleteness', ()
    * 提醒是否处于静默期。
    *
    * 失败方向是「显示提醒」：键缺失、值不可解析都返回 false（T-13-17，fail-open）。
-   * 边界精确到毫秒：正好 7 天仍算静默，7 天 + 1ms 恢复显示。
+   * 边界精确到毫秒：正好 7 天仍算静默（`<=`），7 天 + 1ms 恢复显示。
    */
   const isDismissed = (): boolean => {
     const raw = localStorage.getItem(DISMISS_KEY)
     if (!raw) return false
     const parsed = Date.parse(raw)
     if (Number.isNaN(parsed)) return false
-    return Date.now() - parsed < SILENCE_MS
+    return Date.now() - parsed <= SILENCE_MS
   }
 
   /** 记录关闭时间戳。整个 store 里这是本键唯一的写入点（横幅组件只 emit）。 */
