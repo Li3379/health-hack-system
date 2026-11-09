@@ -6,11 +6,18 @@
           <span>健康档案</span>
           <el-button v-if="!editing" type="primary" @click="editing = true">编辑</el-button>
           <div v-else>
-            <el-button @click="cancelEdit">取消</el-button>
+            <el-button @click="cancelEdit">放弃编辑</el-button>
             <el-button type="primary" @click="handleSubmit">保存</el-button>
           </div>
         </div>
       </template>
+
+      <!-- 完整度头部：数据未到达（null）时整块不渲染，也不画骨架屏 ——
+           加载态由 el-form 的 v-loading 掩码承担，一种状态一种指示（Contract 8）。 -->
+      <ProfileCompleteness v-if="completeness" :completeness="completeness" variant="full" />
+
+      <!-- 不填承诺：全页只出现一次，紧贴完整度块之后、错误汇总之前（Contract 2）。 -->
+      <p class="profile-promise">推荐与可选字段不填也可保存，不影响核心功能使用。</p>
 
       <el-form
         ref="formRef"
@@ -18,6 +25,8 @@
         :model="form"
         :rules="rules"
         label-width="120px"
+        :label-position="isNarrow ? 'top' : 'right'"
+        :hide-required-asterisk="true"
         :disabled="!editing"
       >
         <FormErrorSummary
@@ -26,7 +35,7 @@
           @focus-field="focusField"
         />
 
-        <el-row :gutter="20">
+        <el-row :gutter="16">
           <el-col :xs="24" :md="12">
             <el-form-item
               label="性别"
@@ -38,6 +47,11 @@
                 <el-radio value="male">男</el-radio>
                 <el-radio value="female">女</el-radio>
               </el-radio-group>
+              <!-- 说明行独占控件下方一行：文案来自后端 fields[].reason，绝不在此硬编码。 -->
+              <p v-if="fieldMeta('gender')" class="field-hint">
+                <span :class="importanceClass('gender')">{{ importanceLabel('gender') }}</span>
+                <span class="field-hint__text">{{ hintFor('gender') }}</span>
+              </p>
             </el-form-item>
           </el-col>
           <el-col :xs="24" :md="12">
@@ -56,11 +70,17 @@
                 style="width: 100%"
                 @change="clearField('birthDate')"
               />
+              <p v-if="fieldMeta('birthDate')" class="field-hint">
+                <span :class="importanceClass('birthDate')">{{
+                  importanceLabel('birthDate')
+                }}</span>
+                <span class="field-hint__text">{{ hintFor('birthDate') }}</span>
+              </p>
             </el-form-item>
           </el-col>
         </el-row>
 
-        <el-row :gutter="20">
+        <el-row :gutter="16">
           <el-col :xs="24" :md="12">
             <el-form-item
               label="身高(cm)"
@@ -76,6 +96,12 @@
                 style="width: 100%"
                 @change="clearField('heightCm')"
               />
+              <p v-if="fieldMeta('heightCm')" class="field-hint">
+                <span :class="importanceClass('heightCm')">{{
+                  importanceLabel('heightCm')
+                }}</span>
+                <span class="field-hint__text">{{ hintFor('heightCm') }}</span>
+              </p>
             </el-form-item>
           </el-col>
           <el-col :xs="24" :md="12">
@@ -94,20 +120,31 @@
                 style="width: 100%"
                 @change="clearField('weightKg')"
               />
+              <p v-if="fieldMeta('weightKg')" class="field-hint">
+                <span :class="importanceClass('weightKg')">{{
+                  importanceLabel('weightKg')
+                }}</span>
+                <span class="field-hint__text">{{ hintFor('weightKg') }}</span>
+              </p>
             </el-form-item>
           </el-col>
         </el-row>
 
-        <el-row :gutter="20">
-          <!-- BMI 只有在身高与体重都填写后才可计算；v-if 只作用于 BMI 列，
-               血型列必须始终可见/可选，否则 bloodType 的服务端错误无处显示（WR-11）。 -->
-          <el-col v-if="bmi" :xs="24" :md="12">
-            <el-form-item label="BMI">
-              <el-input :value="bmi" readonly>
+        <el-row :gutter="16">
+          <!-- BMI 始终渲染，说明行才有稳定的落点；血型列同样始终可见/可选，
+               否则 bloodType 的服务端错误无处显示（WR-11）。不可计算时只显示占位值，
+               分类 tag 用 v-if 挡住，避免把「—」送进 getBmiType。 -->
+          <el-col :xs="24" :md="12">
+            <el-form-item label="BMI" data-field="bmi">
+              <el-input :value="bmi ?? '—'" readonly>
                 <template #append>
-                  <el-tag :type="getBmiType(bmi)">{{ getBmiLabel(bmi) }}</el-tag>
+                  <el-tag v-if="bmi" :type="getBmiType(bmi)">{{ getBmiLabel(bmi) }}</el-tag>
                 </template>
               </el-input>
+              <p v-if="fieldMeta('bmi')" class="field-hint">
+                <span :class="importanceClass('bmi')">{{ importanceLabel('bmi') }}</span>
+                <span class="field-hint__text">{{ hintFor('bmi') }}</span>
+              </p>
             </el-form-item>
           </el-col>
           <el-col :xs="24" :md="12">
@@ -128,6 +165,12 @@
                 <el-option label="AB型" value="AB" />
                 <el-option label="O型" value="O" />
               </el-select>
+              <p v-if="fieldMeta('bloodType')" class="field-hint">
+                <span :class="importanceClass('bloodType')">{{
+                  importanceLabel('bloodType')
+                }}</span>
+                <span class="field-hint__text">{{ hintFor('bloodType') }}</span>
+              </p>
             </el-form-item>
           </el-col>
         </el-row>
@@ -145,6 +188,12 @@
             placeholder="请输入过敏史，如：青霉素过敏、花粉过敏等"
             @input="clearField('allergyHistory')"
           />
+          <p v-if="fieldMeta('allergyHistory')" class="field-hint">
+            <span :class="importanceClass('allergyHistory')">{{
+              importanceLabel('allergyHistory')
+            }}</span>
+            <span class="field-hint__text">{{ hintFor('allergyHistory') }}</span>
+          </p>
         </el-form-item>
 
         <el-form-item
@@ -160,6 +209,12 @@
             placeholder="请输入家族病史，如：父亲有高血压、母亲有糖尿病等"
             @input="clearField('familyHistory')"
           />
+          <p v-if="fieldMeta('familyHistory')" class="field-hint">
+            <span :class="importanceClass('familyHistory')">{{
+              importanceLabel('familyHistory')
+            }}</span>
+            <span class="field-hint__text">{{ hintFor('familyHistory') }}</span>
+          </p>
         </el-form-item>
 
         <el-form-item
@@ -175,6 +230,12 @@
             placeholder="请输入生活习惯，如：吸烟、饮酒、运动频率等"
             @input="clearField('lifestyleHabits')"
           />
+          <p v-if="fieldMeta('lifestyleHabits')" class="field-hint">
+            <span :class="importanceClass('lifestyleHabits')">{{
+              importanceLabel('lifestyleHabits')
+            }}</span>
+            <span class="field-hint__text">{{ hintFor('lifestyleHabits') }}</span>
+          </p>
         </el-form-item>
       </el-form>
     </el-card>
@@ -188,6 +249,8 @@ import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { preventionApi } from '@/api/prevention'
 import { useFormServerErrors } from '@/composables/useFormServerErrors'
 import FormErrorSummary from '@/components/common/FormErrorSummary.vue'
+import ProfileCompleteness from '@/components/common/ProfileCompleteness.vue'
+import { useProfileCompletenessStore } from '@/stores/profileCompleteness'
 import { showError } from '@/utils/showError'
 import { normalizeApiError } from '@/utils/appError'
 import type { HealthProfileRequest, HealthProfileVO } from '@/types/api'
@@ -200,8 +263,51 @@ const formRef = ref<FormInstance>()
 const summaryRef = ref<InstanceType<typeof FormErrorSummary> | null>(null)
 const profileData = ref<HealthProfileVO | null>(null)
 
+const completenessStore = useProfileCompletenessStore()
+const completeness = computed(() => completenessStore.data)
+
 const { fieldErrors, summaryItems, apply, setErrors, clearField, reset, focusField } =
   useFormServerErrors()
+
+/**
+ * 窄屏判定：用 matchMedia 而不是 resize 轮询，与 <style scoped> 的 639px 断点一致。
+ * 窄屏时标签改为上方堆叠（EP 原生 label-position），不改 el-form-item 的 display ——
+ * 它是 flex 容器，改成 block 会连带破坏说明行的 flex-basis: 100%。
+ */
+const isNarrow = ref(false)
+const narrowQuery =
+  typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+    ? window.matchMedia('(max-width: 639px)')
+    : null
+if (narrowQuery) {
+  isNarrow.value = narrowQuery.matches
+  narrowQuery.addEventListener('change', onNarrowChange)
+}
+
+function onNarrowChange(event: MediaQueryListEvent): void {
+  isNarrow.value = event.matches
+}
+
+/**
+ * 字段元信息全部取自后端 payload（`fields[].reason` / `.importance`）。
+ * 模板里不写任何一条说明文案：一旦前后端各存一份，风险引擎改了替代规则时页面会继续
+ * 承诺旧行为（Contract 2 / T-13-26）。
+ */
+const IMPORTANCE_LABELS: Record<string, string> = {
+  required: '必需',
+  recommended: '推荐',
+  optional: '可选'
+}
+
+const fieldMeta = (key: string) => completeness.value?.fields.find(field => field.key === key)
+const hintFor = (key: string): string => fieldMeta(key)?.reason ?? ''
+const importanceFor = (key: string): string => fieldMeta(key)?.importance ?? ''
+const importanceClass = (key: string): string =>
+  'hhs-imp-badge hhs-imp-badge--' + (importanceFor(key) || 'optional')
+const importanceLabel = (key: string): string => {
+  const importance = importanceFor(key)
+  return importance ? (IMPORTANCE_LABELS[importance] ?? '') : ''
+}
 
 const form = reactive<HealthProfileRequest>({
   gender: '',
@@ -323,8 +429,12 @@ const handleSubmit = async () => {
         await preventionApi.createProfile(form)
         ElMessage.success('创建成功')
       }
-      editing.value = false
+      // 保存成功后的完整度重算必须留在成功路径内：写库成功 → 重读档案 → 重算完整度，
+      // 三步都完成后才回到只读态，用户看到的新分数才是服务端算出来的（T-13-29）。
+      // 失败路径完全不发第二个 getCompleteness —— 一次失败的保存不得显示「未挣得的提升」。
       await fetchProfile()
+      await completenessStore.fetchCompleteness()
+      editing.value = false
     } catch (error) {
       // validation → 0 toast，内联 + 汇总承担呈现（GOV.UK 双呈现）。
       const err = showError(error, 'profile.saveFailed')
@@ -355,7 +465,9 @@ const cancelEdit = () => {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
+  // 先等完整度落定，再渲染/取档案：单飞且可等待（13-05），并发消费者不会重复请求。
+  await completenessStore.fetchCompleteness()
   fetchProfile()
 
   nextTick(() => {
@@ -375,7 +487,10 @@ onMounted(() => {
     , '-=0.15')
   })
 })
-onUnmounted(() => { cleanupScrollTriggers() })
+onUnmounted(() => {
+  if (narrowQuery) narrowQuery.removeEventListener('change', onNarrowChange)
+  cleanupScrollTriggers()
+})
 </script>
 
 <style scoped>
@@ -387,5 +502,72 @@ onUnmounted(() => { cleanupScrollTriggers() })
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+/* theme.css 全局把标签锁成 500 字重（第 3 种字重）。本契约只有 400/600。 */
+.profile-page :deep(.el-form-item__label) {
+  font: 600 14px/1.5 var(--font-ui) !important;
+}
+
+/* EP 默认 18px 是 off-grid 值。 */
+.profile-page :deep(.el-form-item) {
+  margin-bottom: 16px;
+}
+
+/* theme.css 把输入框正文锁成 15px，归一到 14px Body。 */
+.profile-page :deep(.el-input__inner),
+.profile-page :deep(.el-textarea__inner) {
+  font: 400 14px/1.5 var(--font-ui) !important;
+}
+
+/* EP 的 .el-form-item__content 是 flex + wrap + align-items:center；
+   说明行必须以 100% 基准独占下一行，否则会和输入框挤在一行。 */
+.field-hint {
+  flex-basis: 100%;
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  margin-top: 4px;
+  font: 400 12px/1.4 var(--font-ui);
+  /* 说明文字是本阶段的核心教育内容，必须达 AA。
+     --text-3 浅色仅 3.97:1 不达 4.5:1，因此用 --text-2（Light 8.38:1 / Dark 11.30:1）。 */
+  color: var(--text-2);
+}
+.field-hint__text {
+  flex: 1;
+  min-width: 0;
+}
+
+/* 自动聚焦目标（Contract 7）：程序化 focus 不触发 :focus-visible，
+   因此用显式类给出可见环，失焦即移除。 */
+.profile-page :deep(.el-form-item.is-focus-target) {
+  outline: 2px solid var(--accent-cool);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+.profile-promise {
+  margin-bottom: 16px;
+  font: 400 14px/1.5 var(--font-ui);
+  color: var(--text-1);
+}
+
+/* 窄屏：标签从右对齐改为上方堆叠，否则 120px 标签列挤掉输入宽度。
+   用 EP 原生的 label-position，不改 el-form-item 的 display。 */
+@media (max-width: 639px) {
+  .profile-page :deep(.el-form-item__label) {
+    justify-content: flex-start;
+    padding: 0 0 4px 0;
+  }
+}
+
+/* 主按钮：theme.css 锁成 500 14px/1 → 600 14px/1.5（行高 1 会裁切中文字形下缘）。 */
+.profile-page :deep(.el-button--primary) {
+  font: 600 14px/1.5 var(--font-ui) !important;
+}
+/* 次按钮：EP 默认 --el-button-font-weight: 500 → 400。 */
+.profile-page :deep(.el-button:not(.el-button--primary)) {
+  font-weight: 400 !important;
+  line-height: 1.5 !important;
 }
 </style>
