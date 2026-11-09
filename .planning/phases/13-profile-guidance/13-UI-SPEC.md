@@ -23,6 +23,25 @@ created: "2026-11-09"
 
 **全程无弹窗、无固定宽度面板、无路由门禁。** Phase 12 已知的「760px 固定宽弹窗在 <640px 溢出」不会在本阶段复现 —— 四个表面全部是文档流内布局，宽度 `100%` 自适应。
 
+### 视觉焦点（每个表面只有一个主焦点）
+
+每个表面必须能让执行者一眼判断「用户先看什么」，**不得多于一个同级主焦点**。焦点由字号 + 字重 + 对比度三者共同建立，不靠颜色（accent 不用于文字，见 Color 节）。
+
+| 表面 | 主焦点（第一视点） | 建立手段 | 次级层次（明确降一档） |
+|------|-------------------|---------|----------------------|
+| S1 档案页完整度头部 | **`62%` 数值** | 唯一 24px/600 字号；`--text-1`；`tabular-nums` | 等级 pill、`已填 5 / 9`、图例项（12px/400 `--text-2`）；影响句（14px/400 `--text-2`） |
+| S1 仪表盘紧凑完整度行 | **`62%` 数值** | 24px/600 `--text-1` | pill、`完善档案` 链接（12px/400 下划线） |
+| S2 字段行 × 9 | **输入控件本身** | 唯一可交互元素 + `width: 100%` 占满内容列；标签 14px/600 `--text-1`（17.01:1）把视线引到控件，说明行降到 12px/400 `--text-2` | 说明行（12px/400 `--text-2` 8.38:1）、重要度徽标（20px 高 chip）；**不靠控件描边对比度建立层次** —— `--border-strong` 仅 1.41:1（Light），它是既有 EP 输入框边界，本阶段不改 |
+| S3 估算徽标 | **动作片段 `完善档案`**（徽标整体是一个控件时，焦点落在可点击动作上） | 下划线 + `--text-1`（17.01:1）；状态片段 `--text-2` 降一档 | 状态片段 `基于不完整档案估算`（8.38:1，仍达 AA） |
+| S3 风险页假设列表（对话框） | **假设条目列表** | 14px/400 `--text-2` 带项目符号的实列表 | 区块标题 `本次评估采用的假设`（14px/600 `--text-1`）—— 标题是入口，条目是内容 |
+| S4a 仪表盘横幅 | **`完善档案` 主按钮** | 唯一 primary 按钮；`600 14px/1.5` | 标题 `档案完整度 62%，还缺 N 项`（14px/600）、正文（14px/400 `--text-2`）、`稍后提醒` 次按钮、× 关闭 |
+| S4b 补填面板 | **`保存档案并创建` 主按钮** | 唯一 primary 按钮 | `el-alert` 标题（14px/600）、假设列表、表单、`直接创建（按估算）` 次按钮、`放弃创建` text 按钮 |
+
+**跨表面优先级（同一屏内多于一个表面时）：**
+1. 仪表盘（S4a + S1 compact）：横幅在页面最上方且带边框 + 图标，是首屏第一焦点；完整度紧凑行紧随健康评分数字之后，是第二层次。**横幅不与健康评分圆环争夺焦点** —— 二者由 `.stats-grid` 分隔，横幅用 `surface-1` 底 + 单条边框（不是高饱和填充）。
+2. 风险页（S4b + S3）：面板展开时 S4b 是焦点，表格上方的估算徽标 `v-if="!panelOpen"` **隐藏**（Contract 5 已声明），避免两个同级提示并列。
+3. 档案页（S1 + S2）：完整度头部在表单之上，`62%` 是页面第一视点；9 个字段行平级，不设「最重要字段」的视觉强调（重要度已由徽标承担，不再叠加颜色或字号差异）。
+
 ---
 
 ## Design System
@@ -91,7 +110,7 @@ Enumerated by `node -e "const fs=require('fs');const b='node_modules/element-plu
 
 ## Spacing Scale
 
-声明的间距值**全部是 4 的倍数**，且每个 token 绑定到本契约中某个具体 CSS 声明。
+声明的间距值**全部是 4 的倍数**（含组件属性：`el-row :gutter` 必须是 4 的倍数 —— Element Plus 把 gutter 对半分给左右两侧，`gutter="16"` 每侧渲染 8px，`gutter="20"` 每侧渲染 **10px** 的 off-grid 值），且每个 token 绑定到本契约中某个具体 CSS 声明。
 
 | Token | Value | Usage（绑定到具体声明） |
 |-------|-------|-------|
@@ -104,13 +123,14 @@ Enumerated by `node -e "const fs=require('fs');const b='node_modules/element-plu
 
 **No exceptions.** 所有间距值都是 4 的倍数。
 
-**三条必须覆盖的 Element Plus 默认间距（否则运行时渲染 off-grid 值）：**
+**四条必须覆盖的 Element Plus 默认间距（否则运行时渲染 off-grid 值）：**
 
 | EP 默认 | 归一化目标 | 声明位置 |
 |---|---|---|
 | `.el-form-item { margin-bottom: 18px }` | `16px` | Contract 2、Contract 5 |
 | `.el-alert { --el-alert-padding: 8px 16px }` | `12px 16px` | Contract 5 |
 | `.el-button + .el-button { margin-left: 12px }` | `0`（间距交给父级 `gap: 8px`） | Contract 6 |
+| `el-row :gutter="20"`（EP 对半分给两列 → 每侧 10px） | `:gutter="16"`（每侧 8px） | Contract 2（既有档案页栅格）、Contract 5（补填面板栅格） |
 
 **两条必须覆盖的 Element Plus 组件几何：**
 
@@ -139,7 +159,7 @@ Enumerated by `node -e "const fs=require('fs');const b='node_modules/element-plu
 | `.el-form-item__label { font: 500 14px/1.5 … !important }`（`theme.css:660-664`） | **500 字重** | 档案页 9 个标签、补填面板 2 个标签 | 页面级 `:deep()` 覆盖为 `600 14px/1.5`（Contract 6） |
 | `.el-input__inner { font: 400 15px/1.5 … !important }`（`theme.css:516-519`） | 15px | 身高 / 体重 / 文本域 / 日期框 | 覆盖为 `400 14px/1.5`（Contract 6） |
 | `.el-button--primary { font: 500 14px/1 … !important }`（`theme.css:449-459`） | **500 字重 / 行高 1** | 横幅 `完善档案`、补填面板 `保存档案并创建` | 页面级覆盖为 `600 14px/1.5`（Contract 6） |
-| EP `.el-button { --el-button-font-weight: 500 }` | **500 字重** | 横幅 `稍后提醒`、补填面板 `直接创建（按估算）` / `取消` | 覆盖为 `400`（Contract 6） |
+| EP `.el-button { --el-button-font-weight: 500 }` | **500 字重** | 横幅 `稍后提醒`、补填面板 `直接创建（按估算）` / `放弃创建` | 覆盖为 `400`（Contract 6） |
 | `.el-tag { font: 500 11px/1.4 mono !important }`（`theme.css:542-549`） | 11px / 500 | 三档 pill、重要度徽标、估算徽标 | **不使用 `el-tag`**，全部自绘（Contract 1 / 2 / 4） |
 | `.el-alert__title { font-size: 14px; line-height: 24px }`（EP 默认） | 行高 24px | 补填面板的假设标题 | 覆盖为 `600 14px/1.4`（Contract 5） |
 
@@ -204,15 +224,19 @@ Enumerated by `node -e "const fs=require('fs');const b='node_modules/element-plu
 
 三档 pill 的**形状与尺寸完全一致**（`height: 24px`、`radius-sm`、同一字号字重），差异只在底纹；WCAG 1.4.1 由 pill 内文字（基础/标准/完整档案）满足，不依赖颜色。
 
-### 重要度三档（形状 + 文字双冗余，颜色仅辅助）
+### 重要度三档（**文字标签是唯一信息载体**，形状与颜色仅作辅助）
 
-| 重要度 | 徽标几何 | 背景 | 边框 | 文字色 | 冗余手段 |
+| 重要度 | 徽标几何 | 背景 | 边框 | 文字色 | 辅助手段 |
 |--------|----------|------|------|--------|---------|
-| 必需 | 实心 chip，`height: 20px`、`padding: 0 4px`、`radius-sm` | `--accent-warm-soft` | 无 | `--text-1` | **实心** vs 空心 + 文字「必需」 |
-| 推荐 | 空心 chip，同几何 | 透明 | `1px solid var(--border-strong)` | `--text-2` | **实线描边** + 文字「推荐」 |
-| 可选 | 空心 chip，同几何 | 透明 | `1px dashed var(--border-strong)` | `--text-2` | **虚线描边** + 文字「可选」 |
+| 必需 | 实心 chip，`height: 20px`、`padding: 0 4px`、`radius-sm` | `--accent-warm-soft` | 无 | `--text-1` | 底纹 + 文字「必需」 |
+| 推荐 | 空心 chip，同几何 | 透明 | `1px solid var(--border-strong)` | `--text-2` | 实线描边 + 文字「推荐」 |
+| 可选 | 空心 chip，同几何 | 透明 | `1px dashed var(--border-strong)` | `--text-2` | 虚线描边 + 文字「可选」 |
 
-三者靠**实心 / 实线 / 虚线**三种不同形状区分，即使完全失明于颜色也能分辨（WCAG 1.4.1）。
+**WCAG 1.4.1 由文字标签满足，不依赖形状或颜色。** 徽标内的「必需 / 推荐 / 可选」三个中文词是唯一的语义载体：它们在 `--text-1`（15.83:1）或 `--text-2`（8.38:1 Light / 11.30:1 Dark）上均远超 AA 正文 4.5:1，任何色觉或低视力用户读到的都是完整语义。
+
+**明确记录一项已知限制（不试图消除）：** 三档之间的**形状**差异（实心 / 实线 / 虚线）仅作辅助线索，**不作为可达性依赖项**。原因：`--border-strong` 在 Light 为 `rgba(0,0,0,0.15)`（与白卡面合成 ≈ `#d9d9d9`，**1.41:1**）、Dark 为 `rgba(67,70,81,0.9)`（**1.84:1**），实线与虚线在 1px 描边上的视觉差异对低视力用户难以分辨；「必需」chip 的 `--accent-warm-soft` 底色与白卡面仅 **1.07:1**，同样近乎不可见。本契约**不接受**「即使完全失明于颜色也能分辨」这类过度声明 —— 正确的说法是：「文字标签承担全部语义；描边样式只服务正常视力用户的快速扫读」。
+
+**为什么不把边框提到 ≥3:1：** 三档徽标是**非交互、非必需的装饰性标识**，不是 UI 组件边界（WCAG 1.4.11 不适用），也不是信息的必要载体（1.4.1 已由文字满足）。把 `--border-strong` 全局提到 3:1 会改变全站既有卡片/表格边界的分量（`theme.css:24` 是共享 token），属于本阶段之外的全局视觉变更，不得在此处夹带。若未来要提升，应在独立的 token 演进阶段改 `--border-strong` 并同步核对全站。
 
 ### 估算徽标
 
@@ -437,7 +461,7 @@ Enumerated by `node -e "const fs=require('fs');const b='node_modules/element-plu
 
 | 行 | 内容 | 对齐 |
 |----|------|------|
-| 第 1 行 | `el-form-item` 的 `label`（`label-width="120px"`，右对齐） + 输入控件 | 沿用现有 2 列 `el-row :gutter="20"` 栅格：性别｜出生日期 / 身高｜体重 / BMI｜血型 / 过敏史（整行）/ 家族病史（整行）/ 生活习惯（整行） |
+| 第 1 行 | `el-form-item` 的 `label`（`label-width="120px"`，右对齐） + 输入控件 | 2 列 `el-row :gutter="16"` 栅格（既有档案页当前是 `gutter="20"`，**必须改为 16** —— EP 将 gutter 对半分给左右两侧，20 会渲染成每侧 10px 的 off-grid 值；16 → 每侧 8px = sm token）：性别｜出生日期 / 身高｜体重 / BMI｜血型 / 过敏史（整行）/ 家族病史（整行）/ 生活习惯（整行） |
 | 第 2 行 | `.field-hint`：重要度徽标 + 「为何需要」说明 | 徽标在左，说明在右，`align-items: flex-start`，`gap: 4px`；说明占满剩余宽度，自然换行 |
 
 **徽标放说明行首位而非标签行** —— 标签列只有 120px 宽，塞入「身高(cm)」+ 徽标会右对齐错位；放在说明行首位时徽标紧邻它所限定的文字，且 9 个徽标在左边缘形成可扫读的竖列。
@@ -554,12 +578,12 @@ mql.addEventListener('change', (e) => { isNarrow.value = e.matches })
 **位置：** `.dashboard` 的第一个子块，紧跟 `.welcome-section` 之后、`.stats-grid` 之前，`margin-bottom: 24px`。
 
 ```html
-<div v-if="showBanner" class="profile-banner" role="status">
+<div v-if="showBanner" class="profile-banner" role="status" aria-labelledby="profile-banner-title">
   <span class="profile-banner__icon" aria-hidden="true">
     <el-icon :size="18"><InfoFilled /></el-icon>
   </span>
   <div class="profile-banner__body">
-    <p class="profile-banner__title">档案完整度 {{ score }}%，还缺 {{ missing.length }} 项</p>
+    <p class="profile-banner__title" id="profile-banner-title">档案完整度 {{ score }}%，还缺 {{ missing.length }} 项</p>
     <p class="profile-banner__desc">{{ missingNames }}，健康评分与风险结果会按参考值估算。</p>
   </div>
   <div class="profile-banner__actions">
@@ -569,6 +593,8 @@ mql.addEventListener('change', (e) => { isNarrow.value = e.matches })
   </div>
 </div>
 ```
+
+**可访问名（必须声明）：** `role="status"` 只提供 live region 语义，**本身不提供可访问名**；读屏用户跳转至该区域时会得到一个无名 region。因此 `aria-labelledby="profile-banner-title"` 指向横幅标题（`档案完整度 62%，还缺 3 项`），让区域在 landmarks / regions 列表中有可辨识名称。`id` 必须是**页面内唯一**（横幅全站单实例，此处无冲突）。**不要**用 `aria-label` 硬编码一句静态文本 —— 标题含 `{{ score }}` 与 `{{ missing.length }}` 动态值，`aria-labelledby` 才能随数据更新。
 
 **必须声明的 CSS（`dashboard/Index.vue` `<style scoped>`）：**
 
@@ -715,7 +741,15 @@ mql.addEventListener('change', (e) => { isNarrow.value = e.matches })
 
 ## Component Contract 5 — 风险评估就地补填面板（S4b）
 
-**触发：** 点击 `创建评估` 时，若 `completeness.score < 100` **不立即调用 API**，改为在表格上方展开本面板并 `scrollIntoView({ block: 'center' })`、聚焦第一个输入。若 `score === 100`，保持既有行为（直接创建）。
+**触发（判定顺序强制，先假设后分数）：** 点击 `创建评估` 时按下表**从上到下**求值，命中即停：
+
+| 序 | 条件 | 结果 |
+|----|------|------|
+| 1 | `pendingAssumptions.length === 0`（含 `completeness` 为 null 或不可用） | **直接创建**，不展开面板 —— 没有要披露的假设就没有要补填的动机（Contract 8 末行，优先级最高） |
+| 2 | `pendingAssumptions.length > 0` 且 `completeness.score < 100` | **不立即调用 API**：表格上方展开本面板，`scrollIntoView({ block: 'center' })`，聚焦第一个输入 |
+| 3 | `pendingAssumptions.length > 0` 且 `completeness.score === 100`（理论上不应出现，仅作防御） | 直接创建；同时 `showError` 不触发（数据自相矛盾时不打扰用户，留待后端修正） |
+
+**为什么假设优先于分数：** 面板的唯一内容就是假设列表（`pendingAssumptions`）。假设为空时展开面板会得到一个「标题 + 空列表 + 表单」的界面，用户无从理解为何要补填 —— 这违反 Contract 8「没有假设就没有要披露的内容」。`score < 100` 只描述完整度，不描述「本次评估实际代入了什么」。Contract 8 的末行与本表第 1 序是同一条规则的两种表述，执行时任一处命中均按第 1 序处理。
 
 **结构（`el-alert` 只承载标题，列表与表单是兄弟节点）：**
 
@@ -758,7 +792,7 @@ mql.addEventListener('change', (e) => { isNarrow.value = e.matches })
   <div class="risk-estimate__actions">
     <el-button type="primary" :loading="saving" @click="backfillAndCreate">保存档案并创建</el-button>
     <el-button @click="createAnyway">直接创建（按估算）</el-button>
-    <el-button text @click="cancel">取消</el-button>
+    <el-button text @click="cancel">放弃创建</el-button>
   </div>
 </section>
 ```
@@ -833,7 +867,7 @@ mql.addEventListener('change', (e) => { isNarrow.value = e.matches })
 |------|------|
 | `保存档案并创建` | 校验补填表单 → `createProfile`/`updateProfile` → 重新拉取完整度（刷新假设列表）→ 关闭面板 → `createRiskAssessment()` |
 | `直接创建（按估算）` | 不保存档案，直接 `createRiskAssessment()`；面板关闭 |
-| `取消` | 关闭面板，不创建评估，**零 toast**（Phase 11 D-12：取消不是失败） |
+| `放弃创建` | 关闭面板，不创建评估，**零 toast**（Phase 11 D-12：用户主动放弃不是失败）；`cancel()` 复位 `panelOpen = false` 与补填草稿 |
 | 面板打开时 | 表格上方的估算徽标**隐藏**（`v-if="!panelOpen"`），避免「提示 + 提示」叠两层 |
 | 保存失败 | 校验错误走 `FormErrorSummary` + 内联（零 toast）；网络/服务错误走 `showError` 单条 toast；**输入不清空**（D-12） |
 
@@ -905,8 +939,8 @@ mql.addEventListener('change', (e) => { isNarrow.value = e.matches })
 | 档案不存在（404） | 完整度按前端静态目录合成 `0% / 基础档案 / 全部未填`；档案页进入既有创建模式；横幅按 `< 60%` 规则触发 |
 | 档案完整度 100% | 不渲染横幅、不渲染任何估算徽标；完整度头部保留（分段全填），影响句替换为「档案信息完整…」 |
 | 风险评估列表加载失败 | `ElMessage.error` → 本阶段不改（Phase 14 迁移台账）；面板与表格各自独立 |
-| 补填保存进行中 | `保存档案并创建` 按钮 `:loading`；`直接创建` 与 `取消` **不禁用**（用户可以放弃补填） |
-| 假设列表为空（`pendingAssumptions.length === 0`） | 面板**不展开**，直接创建 —— 没有假设就没有要披露的内容 |
+| 补填保存进行中 | `保存档案并创建` 按钮 `:loading`；`直接创建` 与 `放弃创建` **不禁用**（用户可以放弃补填） |
+| 假设列表为空（`pendingAssumptions.length === 0`） | 面板**不展开**，直接创建 —— 没有假设就没有要披露的内容。**与 Contract 5 的判定顺序表第 1 序是同一条规则**：假设判空先于完整度判分。 |
 
 ---
 
@@ -940,7 +974,7 @@ mql.addEventListener('change', (e) => { isNarrow.value = e.matches })
 | 字段说明 · 血型 | `记录在健康报告与 AI 建议中，供就医与用血场景参考` |
 | 字段说明 · 过敏史 | `让 AI 建议避开与过敏史冲突的饮食与用药提醒` |
 | 字段说明 · 家族病史 | `家族糖尿病史直接影响糖尿病风险评估得分` |
-| 字段说明 · 生活习惯 | `用于生活习惯维度评分与 AI 建议的针对性` |
+| 字段说明 · 生活习惯 | `用于档案完整度与 AI 建议的针对性` |
 | 横幅标题 | `档案完整度 {score}%，还缺 {N} 项` |
 | 横幅正文 | `缺少{字段列表}，健康评分与风险结果会按参考值估算。` |
 | 横幅主 CTA | `完善档案` |
@@ -951,7 +985,7 @@ mql.addEventListener('change', (e) => { isNarrow.value = e.matches })
 | 补填面板 alert 标题 | `系统将按以下假设估算本次风险评估` |
 | 补填面板主 CTA | `保存档案并创建` |
 | 补填面板次 CTA | `直接创建（按估算）` |
-| 补填面板取消 | `取消` |
+| 补填面板放弃 | `放弃创建`（动词 + 宾语；底部 text 按钮，与 Phase 12 `12-UI-SPEC.md` 的 `放弃设置` 同构；**禁止退化为单字通用词** —— 这是 Dimension 1 的硬性回归点） |
 | 补填字段标签 | `性别` / `出生日期` |
 | 假设条目 · 缺出生日期 | `缺少出生日期，年龄按 35 岁估算` |
 | 假设条目 · 缺 BMI | `缺少 BMI，按 22.0 估算` |
@@ -961,7 +995,7 @@ mql.addEventListener('change', (e) => { isNarrow.value = e.matches })
 | 保存档案成功 | `档案已保存`（沿用既有 `ElMessage.success` 措辞习惯） |
 | 错误态 · 加载失败 | `无法加载健康档案，请稍后重试`（字典键 `profile.loadFailed`，已存在，**不新增**） |
 
-**文案纪律（沿用 Phase 11/12）：** 每条失败说明「什么失败了 + 下一步怎么做」；不出现「操作失败」「请求失败」；不出现英文原始字段名（`heightCm` 之类一律走 `FIELD_LABELS`）。
+**文案纪律（沿用 Phase 11/12）：** 每条失败说明「什么失败了 + 下一步怎么做」；不出现「操作失败」「请求失败」；不出现英文原始字段名（`heightCm` 之类一律走 `FIELD_LABELS`）。**每个交互标签必须是「动词 + 宾语」**——本阶段全部可见动作标签清单：`完善档案` / `稍后提醒` / `保存档案并创建` / `直接创建（按估算）` / `放弃创建`。通用单字词（`取消` / `确定` / `关闭`）**一律不得作为可见标签出现**；横幅的 `×` 关闭控件通过 `aria-label="关闭提醒，7 天内不再显示"` 获得完整的动词+宾语可访问名。
 
 **假设句的格式规则（后端必须遵守）：** `缺少{字段中文名}，{替代方式}估算` 或当替代方式是一个具体数值时 `缺少{字段中文名}，{参数}按 {数值} 估算`。一句话说清「缺什么 + 用什么替代」，前端**逐条原样渲染**，不做二次解释（D-03）。
 
