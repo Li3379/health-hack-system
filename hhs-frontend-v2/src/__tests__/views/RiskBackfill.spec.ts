@@ -784,4 +784,184 @@ describe('RiskBackfill.spec.ts — 风险页就地补填（PRF-06 / PRF-08）', 
       wrapper.unmount()
     })
   })
+
+  describe('Task 3 · 估算徽标与详情对话框的假设列表', () => {
+    function badge(wrapper: ReturnType<typeof mountRisk>) {
+      return wrapper.find('.hhs-estimate-badge')
+    }
+
+    it('renders the badge on a first-visit mount with no interaction at all', async () => {
+      getCompleteness.mockResolvedValue(ok(makeCompleteness({ score: 40, assumptions: TWO_ASSUMPTIONS })))
+      const wrapper = mountRisk()
+      await flushPromises()
+
+      // 这条断言证明的是挂载拉取喂给了徽标：没有任何点击，也没有任何列表行。
+      expect(badge(wrapper).exists()).toBe(true)
+      expect(badge(wrapper).text()).toContain('基于不完整档案估算')
+
+      wrapper.unmount()
+    })
+
+    it('renders the badge at score 40 with no completed assessments', async () => {
+      getRiskAssessments.mockResolvedValue(ok([]))
+      getCompleteness.mockResolvedValue(ok(makeCompleteness({ score: 40, assumptions: TWO_ASSUMPTIONS })))
+      const wrapper = mountRisk()
+      await flushPromises()
+
+      expect(badge(wrapper).exists()).toBe(true)
+
+      wrapper.unmount()
+    })
+
+    it('hides the badge while the panel is open — one prompt at a time', async () => {
+      getCompleteness.mockResolvedValue(ok(makeCompleteness({ score: 40, assumptions: TWO_ASSUMPTIONS })))
+      const wrapper = mountRisk()
+      await flushPromises()
+      expect(badge(wrapper).exists()).toBe(true)
+
+      await createButton(wrapper).trigger('click')
+      await flushPromises()
+
+      expect(wrapper.find('.risk-estimate').exists()).toBe(true)
+      expect(badge(wrapper).exists()).toBe(false)
+
+      wrapper.unmount()
+    })
+
+    it('renders no badge when the completeness load failed (never a fabricated 0%)', async () => {
+      getCompleteness.mockRejectedValue({
+        response: { status: 500, data: { code: 500, message: '服务异常' } }
+      })
+      const wrapper = mountRisk()
+      await flushPromises()
+
+      expect(badge(wrapper).exists()).toBe(false)
+      expect(wrapper.text()).not.toContain('基于不完整档案估算')
+
+      wrapper.unmount()
+    })
+
+    it('renders no badge at score 100', async () => {
+      getCompleteness.mockResolvedValue(
+        ok(makeCompleteness({ score: 100, assumptions: [], filledKeys: PROFILE_FIELDS.map(f => f.key) }))
+      )
+      const wrapper = mountRisk()
+      await flushPromises()
+
+      expect(badge(wrapper).exists()).toBe(false)
+
+      wrapper.unmount()
+    })
+
+    it('pushes to the profile page with query.focus set to the first missing key', async () => {
+      getCompleteness.mockResolvedValue(ok(makeCompleteness({ score: 40, assumptions: TWO_ASSUMPTIONS })))
+      const wrapper = mountRisk()
+      await flushPromises()
+
+      await badge(wrapper).trigger('click')
+
+      expect(routerPush).toHaveBeenCalledTimes(1)
+      expect(routerPush).toHaveBeenCalledWith({
+        path: '/prevention/profile',
+        query: { focus: 'gender' }
+      })
+
+      wrapper.unmount()
+    })
+
+    it('never renders the badge inside the table — the risk-level tag keeps its own region', async () => {
+      getCompleteness.mockResolvedValue(ok(makeCompleteness({ score: 40, assumptions: TWO_ASSUMPTIONS })))
+      const wrapper = mountRisk()
+      await flushPromises()
+
+      expect(badge(wrapper).exists()).toBe(true)
+      expect(wrapper.find('.el-table .hhs-estimate-badge').exists()).toBe(false)
+      // 徽标落在表格之前的披露块里
+      expect(wrapper.find('.risk-disclosure .hhs-estimate-badge').exists()).toBe(true)
+
+      wrapper.unmount()
+    })
+
+    it('lists the read-time assumptions in the detail dialog, one li per sentence', async () => {
+      getCompleteness.mockResolvedValue(ok(makeCompleteness({ score: 40, assumptions: TWO_ASSUMPTIONS })))
+      const wrapper = mountRisk()
+      await flushPromises()
+
+      ;(wrapper.vm as any).viewDetail({
+        id: 1,
+        userId: 1,
+        diseaseName: '高血压',
+        riskLevel: 'MEDIUM',
+        riskScore: 55,
+        suggestion: '规律作息',
+        profileCompleteness: 40,
+        assumptions: TWO_ASSUMPTIONS,
+        createTime: '2026-11-09 10:00:00'
+      })
+      await flushPromises()
+
+      const block = wrapper.find('.risk-dialog-assumptions')
+      expect(block.exists()).toBe(true)
+      expect(block.find('.risk-dialog-assumptions__title').text()).toBe('本次评估采用的假设')
+      expect(block.findAll('li').map(node => node.text())).toEqual(TWO_ASSUMPTIONS)
+      // 读时重算：标题不得声称是创建时冻结的记录
+      expect(block.text()).not.toContain('创建时')
+
+      wrapper.unmount()
+    })
+
+    it('renders no dialog assumption list for an empty assumptions array', async () => {
+      const wrapper = mountRisk()
+      await flushPromises()
+
+      ;(wrapper.vm as any).viewDetail({
+        id: 2,
+        userId: 1,
+        diseaseName: '糖尿病',
+        riskLevel: 'LOW',
+        riskScore: 20,
+        suggestion: '保持',
+        profileCompleteness: 100,
+        assumptions: [],
+        createTime: '2026-11-09 10:00:00'
+      })
+      await flushPromises()
+
+      expect(wrapper.find('.risk-dialog-assumptions').exists()).toBe(false)
+
+      wrapper.unmount()
+    })
+
+    it('renders identical text in the dialog and the panel for the same payload', async () => {
+      getCompleteness.mockResolvedValue(ok(NO_PROFILE_PAYLOAD))
+      const wrapper = mountRisk()
+      await flushPromises()
+
+      // 无档案：两边都必须只有那一条通用句，逐字相同。
+      await createButton(wrapper).trigger('click')
+      await flushPromises()
+      const panelText = wrapper.findAll('.risk-estimate__list li').map(node => node.text())
+
+      ;(wrapper.vm as any).viewDetail({
+        id: 3,
+        userId: 1,
+        diseaseName: '冠心病',
+        riskLevel: 'HIGH',
+        riskScore: 70,
+        suggestion: '就医',
+        profileCompleteness: 0,
+        assumptions: NO_PROFILE_PAYLOAD.assumptions,
+        createTime: '2026-11-09 10:00:00'
+      })
+      await flushPromises()
+
+      const dialogText = wrapper
+        .findAll('.risk-dialog-assumptions li')
+        .map(node => node.text())
+      expect(dialogText).toEqual(panelText)
+      expect(dialogText).toEqual(['未填写健康档案，风险得分按通用参考值估算'])
+
+      wrapper.unmount()
+    })
+  })
 })
