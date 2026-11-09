@@ -122,16 +122,17 @@ blocked: 0
 
 - truth: "保存成功后向导自动关闭并回到列表"
   status: failed
-  reason: "保存成功（toast「添加成功」+ 列表新增/更新行）但向导停留在确认页未自动关闭——新增/更新/干净重跑三条路径均复现"
+  reason: "12-09 的 v-model 绑定修复未生效——浏览器复验（2026-11-09）三次保存呈现三种非确定签名：状态翻转但 EP 遮罩不动 / 状态压根不翻转（emit('saved') 已达父级）/ 数分钟后自愈；无 JS 错误、单实例、HMR 与 theme.css 均已排除，根因未定位"
   severity: major
   test: 1
-  root_cause: "运行时取证：保存成功后父组件 wizardVisible=false、向导 props.modelValue=false 均已翻转，但 Element Plus el-dialog 的 .el-overlay 仍 display:block——单向 :model-value + @update:model-value 绑定在 destroy-on-close 场景下与 EP 内部可见性脱同步；本仓库其他弹窗（QuickInputDialog 等）一律用 v-model + 可写 computed 模式且工作正常，向导偏离了该模式"
+  root_cause: "未定位——全部运行时证据与待查假设队列已固化至 .planning/debug/wizard-not-auto-close.md（含 EP before-close 管线、保存按钮重复触发、wizardVisible 被回写、leave 过渡挂起、HMR 污染五个方向）"
   artifacts:
     - path: "hhs-frontend-v2/src/views/health/components/ThresholdWizard.vue"
-      issue: "el-dialog 使用 :model-value 单向绑定 + 显式 @update:model-value 处理器，EP 弹窗关闭失灵"
+      issue: "保存成功后 el-dialog 不关闭（非确定性，v-model 修复无效）"
   missing:
-    - "改为仓库标准 v-model + 可写 computed（visible get props.modelValue / set emit('update:modelValue')）绑定 el-dialog，保存成功/取消/守卫路径复验关闭行为"
-  debug_session: ""
+    - "按 debug 会话假设队列排障定位真根因后修复，并在 ThresholdWizard.spec 补一条保存后 overlay 实际不可见的真断言（现有 13 用例只钉 emit 不钉 DOM 关闭，存在验证盲区）"
+  debug_session: ".planning/debug/wizard-not-auto-close.md"
+  fix_attempt: "12-09 Task 1（v-model 绑定替换）已于 2026-11-09 浏览器复验无效，代码保留（绑定形式与仓库标准一致，无害）"
 - truth: "SQL 修复脚本执行成功后 BEFORE/AFTER 计数必须全部为 0"
   status: failed
   reason: "CI 排序规则下别名清单中的小写拼接变体（bloodglucose/bodytemperature/bloodoxygen）与规范 key 相等，规范行被误计入非标准计数，AFTER 恒为 3/2/7 而非 0"
