@@ -7,6 +7,9 @@ import com.hhs.mapper.HealthMetricMapper;
 import com.hhs.mapper.HealthProfileMapper;
 import com.hhs.mapper.RiskAssessmentMapper;
 import com.hhs.service.RiskAssessmentService;
+import com.hhs.service.domain.AssumptionCollector;
+import com.hhs.service.domain.ProfileCompletenessCalculator;
+import com.hhs.service.domain.ProfileFieldCatalog;
 import com.hhs.vo.RiskAssessmentVO;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,13 +25,24 @@ public class RiskAssessmentServiceImpl implements RiskAssessmentService {
     private final RiskAssessmentMapper riskAssessmentMapper;
     private final HealthProfileMapper healthProfileMapper;
     private final HealthMetricMapper healthMetricMapper;
+    private final ProfileCompletenessCalculator profileCompletenessCalculator;
 
+    /**
+     * Construct the service with its mappers and the completeness calculator.
+     *
+     * @param riskAssessmentMapper          risk-assessment persistence
+     * @param healthProfileMapper           health-profile lookup
+     * @param healthMetricMapper            recent-metric lookup
+     * @param profileCompletenessCalculator authoritative completeness source
+     */
     public RiskAssessmentServiceImpl(RiskAssessmentMapper riskAssessmentMapper,
                                      HealthProfileMapper healthProfileMapper,
-                                     HealthMetricMapper healthMetricMapper) {
+                                     HealthMetricMapper healthMetricMapper,
+                                     ProfileCompletenessCalculator profileCompletenessCalculator) {
         this.riskAssessmentMapper = riskAssessmentMapper;
         this.healthProfileMapper = healthProfileMapper;
         this.healthMetricMapper = healthMetricMapper;
+        this.profileCompletenessCalculator = profileCompletenessCalculator;
     }
 
     /**
@@ -48,11 +62,15 @@ public class RiskAssessmentServiceImpl implements RiskAssessmentService {
                         .eq(RiskAssessment::getUserId, userId));
 
         HealthProfile profile = getProfileByUserId(userId);
-        List<RiskAssessment> items = RiskRuleEngine.evaluate(userId, profile, getRecentMetrics(userId));
+        AssumptionCollector collector = new AssumptionCollector();
+        List<RiskAssessment> items = RiskRuleEngine.evaluate(userId, profile, getRecentMetrics(userId),
+                collector);
         for (RiskAssessment r : items) {
             riskAssessmentMapper.insert(r);
         }
-        return items.stream().map(this::toVO).toList();
+        int completeness = profileCompletenessCalculator.calculate(profile).score();
+        List<String> assumptions = collector.toList();
+        return items.stream().map(r -> toVO(r, completeness, assumptions)).toList();
     }
 
     /**
@@ -101,9 +119,30 @@ public class RiskAssessmentServiceImpl implements RiskAssessmentService {
                         .orderByDesc(HealthMetric::getRecordDate));
     }
 
+    /**
+     * Disclose the substitution sentences for a profile on the read path.
+     *
+     * <p>This is deliberately a delegation and not a second derivation: the create path records
+     * sentences at each substitution site and this read path recomputes them from the current
+     * profile, and both must resolve to the identical expression
+     * ({@link ProfileFieldCatalog#assumptionsFor}). Re-forking it here would reintroduce the
+     * drift between the backfill panel's pre-create promise and this response.</p>
+     *
+     * @param profile the stored profile, or {@code null} when the user has none
+     * @return the disclosed sentences; never {@code null}
+     */
+    static List<String> disclosedAssumptions(HealthProfile profile) {
+        return ProfileFieldCatalog.assumptionsFor(profile);
+    }
+
     private RiskAssessmentVO toVO(RiskAssessment r) {
+        return toVO(r, null, List.of());
+    }
+
+    private RiskAssessmentVO toVO(RiskAssessment r, Integer profileCompleteness, List<String> assumptions) {
         return new RiskAssessmentVO(r.getId(), r.getUserId(), r.getProfileId(), r.getDiseaseName(),
-                r.getRiskLevel(), r.getRiskScore(), r.getSuggestion(), r.getCreateTime());
+                r.getRiskLevel(), r.getRiskScore(), r.getSuggestion(), profileCompleteness,
+                r.getCreateTime(), assumptions);
     }
 
     /**
@@ -111,6 +150,11 @@ public class RiskAssessmentServiceImpl implements RiskAssessmentService {
      */
     private static final class RiskRuleEngine {
         static List<RiskAssessment> evaluate(Long userId, HealthProfile profile, List<HealthMetric> recentMetrics) {
+            return evaluate(userId, profile, recentMetrics, AssumptionCollector.noop());
+        }
+
+        static List<RiskAssessment> evaluate(Long userId, HealthProfile profile, List<HealthMetric> recentMetrics,
+                                             AssumptionCollector collector) {
             List<RiskAssessment> result = new ArrayList<>();
             Long profileId = profile != null ? profile.getId() : null;
 
@@ -118,7 +162,7 @@ public class RiskAssessmentServiceImpl implements RiskAssessmentService {
                 int age = profile.getBirthDate() != null
                         ? LocalDate.now().getYear() - profile.getBirthDate().getYear() : 35;
                 BigDecimal bmi = profile.getBmi() != null ? profile.getBmi() : BigDecimal.valueOf(22);
-                boolean familyDiabetes = hasFamilyHistory(profile.getFamilyHistory(), "糖尿病");
+                boolean familyDiabetes = ProfileFieldCatalog.mentionsDiabetes(profile.getFamilyHistory());
                 BigDecimal latestBloodSugar = getLatestMetric(recentMetrics, "血糖");
                 int diabetesScore = (age > 45 ? 20 : 10) + (bmi.compareTo(BigDecimal.valueOf(24)) > 0 ? 25 : 10)
                         + (familyDiabetes ? 25 : 0) + (latestBloodSugar != null && latestBloodSugar.compareTo(BigDecimal.valueOf(6.1)) > 0 ? 30 : 0);
@@ -133,15 +177,12 @@ public class RiskAssessmentServiceImpl implements RiskAssessmentService {
                 int cardioScore = Math.min(100, diabetesScore / 2 + bpScore / 2 + (bmi.compareTo(BigDecimal.valueOf(28)) > 0 ? 20 : 0));
                 result.add(create(userId, profileId, "心血管疾病", cardioScore));
             } else {
+                collector.add(ProfileFieldCatalog.NO_PROFILE_ASSUMPTION);
                 result.add(create(userId, null, "糖尿病", 30));
                 result.add(create(userId, null, "高血压", 25));
                 result.add(create(userId, null, "心血管疾病", 25));
             }
             return result;
-        }
-
-        private static boolean hasFamilyHistory(String familyHistory, String keyword) {
-            return familyHistory != null && familyHistory.contains(keyword);
         }
 
         private static BigDecimal getLatestMetric(List<HealthMetric> metrics, String type) {
