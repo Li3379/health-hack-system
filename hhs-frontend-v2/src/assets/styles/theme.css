@@ -1277,3 +1277,109 @@ body .el-form-item__error {
   outline: 2px solid var(--hhs-color-error-text);
   outline-offset: 2px;
 }
+
+/* ---------- Phase 13: 档案完整度共享视觉族 ---------- */
+/*
+  四个表面（prevention/Profile.vue、dashboard/Index.vue、prevention/Risk.vue、
+  health/Score.vue）各自拥有 scoped 作用域，徽标与分段条必须在全局声明一次，
+  逐页复制会立刻漂移（UI-SPEC Contract 6 / T-13-22）。
+  本块只使用既存 token，不新增颜色值。
+*/
+.hhs-completeness-meter {
+  display: flex;
+  gap: 4px;
+  width: 100%;
+}
+.hhs-completeness-meter__seg {
+  flex: 1;
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--surface-3);
+  transition: background var(--dur-fast) var(--ease);
+}
+.hhs-completeness-meter--compact .hhs-completeness-meter__seg {
+  height: 4px;
+}
+/* 填充 vs 底纹：Light 3.02:1 / Dark 10.71:1（非文字图形 3:1 达标） */
+.hhs-completeness-meter__seg.is-filled {
+  background: var(--accent-cool);
+}
+@media (prefers-reduced-motion: reduce) {
+  .hhs-completeness-meter__seg {
+    transition: none;
+  }
+}
+
+.hhs-tier-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: var(--radius-sm);
+  font: 400 12px/1.4 var(--font-ui);
+  color: var(--text-1);
+  background: var(--surface-3);
+  white-space: nowrap;
+}
+/* 三档 pill 形状尺寸完全一致，差异只在底纹；语义由 pill 内文字承担（WCAG 1.4.1） */
+.hhs-tier-pill--basic {
+  background: var(--accent-warm-soft);
+}
+.hhs-tier-pill--full {
+  background: var(--accent-cool-soft);
+}
+
+/* 重要度三档徽标：文字标签是唯一语义载体，形状/颜色仅作辅助 */
+.hhs-imp-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 4px;
+  border-radius: var(--radius-sm);
+  font: 400 12px/1.4 var(--font-ui);
+  white-space: nowrap;
+  flex: none;
+}
+.hhs-imp-badge--required {
+  color: var(--text-1);
+  background: var(--accent-warm-soft);
+}
+.hhs-imp-badge--recommended {
+  color: var(--text-2);
+  background: transparent;
+  border: 1px solid var(--border-strong);
+}
+.hhs-imp-badge--optional {
+  color: var(--text-2);
+  background: transparent;
+  border: 1px dashed var(--border-strong);
+}
+
+/* 估算徽标：可点击控件，1px accent-warm 边框保证边界 3:1
+   （--accent-warm-soft 浅色与白卡面仅 1.07:1，无边框不可见）。 */
+.hhs-estimate-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 32px;
+  padding: 4px 12px;
+  border: 1px solid var(--accent-warm);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font: 400 12px/1.4 var(--font-ui);
+  color: var(--text-2);
+  text-align: left;
+  cursor: pointer;
+}
+.hhs-estimate-badge__action {
+  color: var(--text-1);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.hhs-estimate-badge:hover {
+  background: var(--accent-warm-soft);
+}
+.hhs-estimate-badge:focus-visible {
+  outline: 2px solid var(--accent-warm);
+  outline-offset: 2px;
+}
