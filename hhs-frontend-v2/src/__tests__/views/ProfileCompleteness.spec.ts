@@ -335,8 +335,7 @@ describe('ProfileCompleteness.spec.ts — 档案页完整度引导', () => {
     })
   })
 
-  describe('保存后重新推导完整度', () => {
-    it('refetches completeness after a successful save so the header moves 40 → 70', async () => {
+  describe('保存后重新推导完整度', () => {    it('refetches completeness after a successful save so the header moves 40 → 70', async () => {
       getCompleteness.mockResolvedValueOnce(ok(makeCompleteness({ score: 40 })))
       getCompleteness.mockResolvedValueOnce(
         ok(
@@ -412,6 +411,84 @@ describe('ProfileCompleteness.spec.ts — 档案页完整度引导', () => {
       // 一次挂载 + 零次保存后重取：失败保存不得发第二个 getCompleteness
       expect(getCompleteness).toHaveBeenCalledTimes(1)
       expect(wrapper.find('.stub-completeness').text()).toBe('40%')
+      wrapper.unmount()
+    })
+  })
+
+  describe('?focus= 交接', () => {
+    it('applies is-focus-target to the queried field when it is still unfilled', async () => {
+      routeQuery = { focus: 'heightCm' }
+      getCompleteness.mockResolvedValue(ok(makeCompleteness({})))
+      const wrapper = mountProfile()
+      await flushPromises()
+
+      expect(wrapper.find('[data-field="heightCm"]').classes()).toContain('is-focus-target')
+      // 只有一个字段被标记，不能顺带点亮别的
+      expect(wrapper.findAll('.is-focus-target')).toHaveLength(1)
+      wrapper.unmount()
+    })
+
+    it('cleans the query exactly once after a successful focus', async () => {
+      routeQuery = { focus: 'heightCm' }
+      getCompleteness.mockResolvedValue(ok(makeCompleteness({})))
+      const wrapper = mountProfile()
+      await flushPromises()
+
+      expect(routerReplace).toHaveBeenCalledTimes(1)
+      expect(routerReplace).toHaveBeenCalledWith({ query: {} })
+      expect(routerPush).not.toHaveBeenCalled()
+      wrapper.unmount()
+    })
+
+    it('ignores a queried key that is already filled', async () => {
+      routeQuery = { focus: 'birthDate' }
+      getCompleteness.mockResolvedValue(
+        ok(makeCompleteness({ filledKeys: ['gender', 'birthDate'] }))
+      )
+      const wrapper = mountProfile()
+      await flushPromises()
+
+      expect(wrapper.find('[data-field="birthDate"]').classes()).not.toContain(
+        'is-focus-target'
+      )
+      expect(wrapper.findAll('.is-focus-target')).toHaveLength(0)
+      expect(routerReplace).not.toHaveBeenCalled()
+      wrapper.unmount()
+    })
+
+    it('ignores an unknown key without throwing', async () => {
+      routeQuery = { focus: 'nonexistentKey' }
+      getCompleteness.mockResolvedValue(ok(makeCompleteness({})))
+      const wrapper = mountProfile()
+      await flushPromises()
+
+      expect(wrapper.findAll('.is-focus-target')).toHaveLength(0)
+      expect(routerReplace).not.toHaveBeenCalled()
+      wrapper.unmount()
+    })
+
+    it('does nothing at all when no focus query is present', async () => {
+      getCompleteness.mockResolvedValue(ok(makeCompleteness({})))
+      const wrapper = mountProfile()
+      await flushPromises()
+
+      expect(wrapper.findAll('.is-focus-target')).toHaveLength(0)
+      expect(routerReplace).not.toHaveBeenCalled()
+      wrapper.unmount()
+    })
+
+    it('applies no class and no replace when the completeness load failed', async () => {
+      routeQuery = { focus: 'heightCm' }
+      getCompleteness.mockRejectedValue({
+        response: { status: 500, data: { code: 500, message: '服务异常' } }
+      })
+      const wrapper = mountProfile()
+      await flushPromises()
+
+      // 加载失败 → data 保持 null → 没有可匹配的 fields[]
+      expect(wrapper.find('.stub-completeness').exists()).toBe(false)
+      expect(wrapper.findAll('.is-focus-target')).toHaveLength(0)
+      expect(routerReplace).not.toHaveBeenCalled()
       wrapper.unmount()
     })
   })
