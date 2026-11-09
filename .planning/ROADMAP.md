@@ -300,7 +300,38 @@ Plans:
   4. 仪表盘在完整度低于阈值时展示可关闭提示，提供"完善档案"与"稍后提醒"，且频率上限生效——刷新多个页面最多出现一条提示，关闭后 7 天内不再打扰
   5. 仅有性别与出生日期的既有用户仍可正常使用健康评分、风险评估、AI 建议与指标录入等全部既有功能（无路由门禁、无新增必填字段）；创建风险评估时若档案缺失只就地提示将估算哪些内容并允许补填，不硬性阻断
 
-**Plans**: TBD
+**Plans:** 10 plans
+
+**Wave 1**
+
+- [ ] 13-01-PLAN.md — 权威完整度来源：9 字段目录 + 加权计算器（60/30/10、三等级、bmi 陈旧免疫）
+
+**Wave 2** *(blocked on Wave 1)*
+
+- [ ] 13-02-PLAN.md — 独立完整度端点 `GET /api/prevention/profile/completeness`（无档案也返回 200 / 0%）
+- [ ] 13-03-PLAN.md — 假设收集器 + 健康评分 VO 披露 `profileCompleteness`/`assumptions` + 缓存前缀 v2
+
+**Wave 3** *(blocked on Wave 2)*
+
+- [ ] 13-04-PLAN.md — 风险 VO 披露双字段 + 读时按当前档案重算假设（零 DDL）
+
+**Wave 4** *(blocked on Wave 3)*
+
+- [ ] 13-05-PLAN.md — 前端单源 store（404 合成 0%、失败保持 null、7 天静默、优先聚焦键）
+
+**Wave 5** *(blocked on Wave 4)*
+
+- [ ] 13-06-PLAN.md — 三个自绘组件（完整度头部 / 提醒横幅 / 估算徽标）+ theme.css 共享视觉族
+
+**Wave 6** *(blocked on Wave 5)*
+
+- [ ] 13-07-PLAN.md — 档案页：完整度头部 + 9 条字段说明 + 承诺句 + `?focus=` 自动聚焦 + gutter 16
+- [ ] 13-08-PLAN.md — 仪表盘：单实例提醒横幅 + 紧凑完整度行 + 7 天静默接线
+- [ ] 13-09-PLAN.md — 风险页：估算徽标 + 就地补填面板（三序判定）+ 详情假设列表
+
+**Wave 7** *(blocked on Wave 6)*
+
+- [ ] 13-10-PLAN.md — 健康评分页徽标 + 两端全量回归门禁（≥263 前端用例、18 键字典不动）
 
 **UI hint**: yes
 
