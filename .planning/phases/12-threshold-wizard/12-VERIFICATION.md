@@ -106,5 +106,17 @@ plans:
 
 ## Verification Verdict
 
-**Verdict:** `passed`
-自动化验证全绿；5 项人工 UAT 项已列明并路由至 `/gsd:verify-work 12`。
+**Verdict:** `passed`（UAT 后补验 2026-11-09）
+
+自动化验证全绿；7 项人工 UAT 已全部执行完毕（见 `12-UAT.md`）：6 项通过，1 项经根因分析判定为测试环境假阳性。
+
+### UAT 后续修复（2026-11-09）
+
+- **12-09 gap-closure 计划**（THR-06 + FIX-04）：
+  - SQL 脚本计数块改为 `WHERE BINARY` 大小写精确比较 —— 独立复验四表非标准计数全 0 ✅
+  - 向导 el-dialog 改为 `v-model` + 可写 computed（与仓库标准一致）
+- **UAT gap 1 最终判定**：`document.hidden=true`（IAB 面板不可见）时 Chrome 冻结 CSS 动画时间轴，`dialog-fade-out` 停留在 `currentTime=0`，EP `after-leave` 不派发 → 遮罩滞留。逐帧 class 日志证明**打开动画同样卡住**（enter-from 从未推进到 enter-to），与保存路径无关。**页面代码无缺陷**；点 X 可立即关闭证明关闭链健康。
+- **保留的加固**（有独立价值）：
+  - `handleSubmit` 关闭先行 + `await nextTick()` 后再通知父级刷新，消除真实环境下父级列表刷新与 dialog leave 过渡抢帧的竞态
+  - `ThresholdWizard.spec` case 12 补真实 DOM 关闭断言，填补「只钉 emit 不钉关闭」的验证盲区
+- 完整诊断链见 `.planning/debug/wizard-not-auto-close.md`
