@@ -279,4 +279,45 @@ class HealthScoreServiceTest {
         // Then: Verify old cache was cleared
         verify(redisTemplate, times(1)).delete(anyString());
     }
+
+    @Test
+    @DisplayName("测试1.13：无数据路径 - 完整度保持 null，假设为空列表")
+    void testCalculateScore_NoDataLeavesCompletenessNull() {
+        // Given: User has no data, so the calculation path never runs
+        when(metricValidator.hasAnyData(testUserId)).thenReturn(false);
+
+        // When: Calculate score
+        HealthScoreVO result = healthScoreService.calculateScore(testUserId);
+
+        // Then: "unknown" completeness renders as no badge instead of a fabricated 0%
+        assertEquals("NO_DATA", result.getLevel());
+        assertNull(result.getProfileCompleteness(),
+                "null means unknown; a fabricated 0 would claim the profile is empty");
+        assertNotNull(result.getAssumptions());
+        assertTrue(result.getAssumptions().isEmpty());
+    }
+
+    @Test
+    @DisplayName("测试1.14：缓存命中 - 保留完整度与假设字段")
+    void testCalculateScore_CacheHitRetainsNewFields() {
+        // Given: A cached VO written by the current code shape
+        HealthScoreVO cachedScore = new HealthScoreVO();
+        cachedScore.setScore(80);
+        cachedScore.setIsCached(true);
+        cachedScore.setCalculatedAt(LocalDateTime.now().minusMinutes(2));
+        cachedScore.setProfileCompleteness(40);
+        cachedScore.setAssumptions(java.util.List.of("缺少 BMI 指标，体重维度按参考值估算"));
+
+        when(metricValidator.hasAnyData(testUserId)).thenReturn(true);
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.get(anyString())).thenReturn(cachedScore);
+
+        // When: Calculate score
+        HealthScoreVO result = healthScoreService.calculateScore(testUserId);
+
+        // Then: Both new fields survive the cache round trip
+        assertTrue(result.getIsCached());
+        assertEquals(40, result.getProfileCompleteness());
+        assertEquals(java.util.List.of("缺少 BMI 指标，体重维度按参考值估算"), result.getAssumptions());
+    }
 }
