@@ -8,11 +8,12 @@ const ALL_KEYS = PROFILE_FIELDS.map(field => field.key)
 
 /**
  * el-button 必须渲染插槽，否则「完善档案 / 稍后提醒」的可访问标签无从断言。
- * el-icon 仅包一层 span，InfoFilled 只画一个占位字符。
+ * 末尾刻意**不**再 `$emit('click')` —— 父级的 @click 会作为原生监听器落到这个
+ * button 根节点上，若再 emit 一次会重复触发（两次 dismiss）。
  */
 const globalStubs = {
   'el-button': {
-    template: '<button class="el-button" @click="$emit(\'click\')"><slot /></button>',
+    template: '<button class="el-button"><slot /></button>',
     props: ['type', 'size', 'loading']
   },
   'el-icon': {
@@ -157,16 +158,17 @@ describe('ProfileReminderBanner.vue', () => {
       expect(wrapper.emitted('complete')?.[0]).toEqual(['heightCm'])
     })
 
-    it('prefers a missing required field over an earlier missing optional field', () => {
-      // 只缺 birthDate(required) 与 bloodType(optional)：必须指向 birthDate
+    it('prefers a missing required field over an earlier missing optional field', async () => {
+      // 只缺 birthDate(required) 与 bloodType(optional)：必须指向 birthDate。
+      // score 必须仍低于 60，否则横幅不渲染，这条断言就无从谈起。
       const wrapper = mountBanner(
         makeCompleteness({
           filledKeys: ALL_KEYS.filter(key => key !== 'birthDate' && key !== 'bloodType'),
-          score: 78
+          score: 55
         })
       )
 
-      wrapper.findAll('.profile-banner__actions .el-button')[0].trigger('click')
+      await wrapper.findAll('.profile-banner__actions .el-button')[0].trigger('click')
 
       expect(wrapper.emitted('complete')?.[0]).toEqual(['birthDate'])
     })
@@ -174,7 +176,7 @@ describe('ProfileReminderBanner.vue', () => {
     it('emits dismiss from 稍后提醒 and from the close control alike', async () => {
       const wrapper = mountBanner(makeCompleteness())
 
-      wrapper.findAll('.profile-banner__actions .el-button')[1].trigger('click')
+      await wrapper.findAll('.profile-banner__actions .el-button')[1].trigger('click')
       expect(wrapper.emitted('dismiss')).toHaveLength(1)
 
       await wrapper.find('.profile-banner__close').trigger('click')
