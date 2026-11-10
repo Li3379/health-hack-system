@@ -127,6 +127,8 @@ import { ElMessage } from 'element-plus'
 import { Camera, Upload, Close } from '@element-plus/icons-vue'
 import type { UploadFile } from 'element-plus'
 import { request } from '@/utils/request'
+import { showError } from '@/utils/showError'
+import { resolveMessage } from '@/utils/errorMessages'
 
 // ============================================
 // TypeScript 接口定义
@@ -219,6 +221,19 @@ const clearPreview = () => {
 }
 
 /**
+ * 内容区的失败态对象。面板形状只在这里定义一次，两条失败路径（信封 200-无 data、
+ * 请求异常）共用同一份结构，面板与 toast 的文案也不再有各自计算的机会（T-14-32）。
+ */
+const failedResult = (errorMessage: string): OcrRecognizeResult => ({
+  status: 'failed',
+  ocrType: ocrType.value,
+  metrics: [],
+  rawText: '',
+  summary: '',
+  errorMessage
+})
+
+/**
  * 执行OCR识别
  */
 const handleRecognize = async () => {
@@ -239,26 +254,14 @@ const handleRecognize = async () => {
         m.selected = true
       })
     } else {
-      recognizeResult.value = {
-        status: 'failed',
-        ocrType: ocrType.value,
-        metrics: [],
-        rawText: '',
-        summary: '',
-        errorMessage: res.message || '识别失败'
-      } as OcrRecognizeResult
+      // 可达但少见：HTTP 成功而响应体没有 data。这不是失败 toast 的场景，仍要留面板。
+      recognizeResult.value = failedResult(res.message || '识别失败')
     }
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : '识别失败'
-    recognizeResult.value = {
-      status: 'failed',
-      ocrType: ocrType.value,
-      metrics: [],
-      rawText: '',
-      summary: '',
-      errorMessage
-    } as OcrRecognizeResult
-    ElMessage.error(errorMessage)
+    // 面板与 toast 必须说同一句话：文案先由 showError 归一化（后端中文优先、字典兜底），
+    // 再把同一个结果写进面板的 errorMessage —— 两处各算一遍就会互相打架（T-14-32）。
+    const normalized = showError(error, 'ocr.uploadFailed', { presentStates: true })
+    recognizeResult.value = failedResult(resolveMessage('ocr.uploadFailed', normalized.message))
   } finally {
     recognizing.value = false
   }
@@ -291,12 +294,11 @@ const handleConfirm = async () => {
       recognizeResult.value = null
       clearPreview()
       emit('refresh')
-    } else {
-      ElMessage.error(res.message || '录入失败')
     }
+    // 非 200 的 else 已删除：拦截器在信封 code !== 200 时直接 reject，
+    // 因此该分支不可达（14-RESEARCH §DEAD 桶）。
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : '录入失败'
-    ElMessage.error(errorMessage)
+    showError(error, 'metric.saveFailed', { presentStates: true })
   } finally {
     confirming.value = false
   }

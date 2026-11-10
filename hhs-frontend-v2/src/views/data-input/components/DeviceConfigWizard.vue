@@ -292,6 +292,7 @@ import {
   Refresh
 } from '@element-plus/icons-vue'
 import { deviceApi, type PlatformConfigStatus, type ConfigReadyResponse } from '@/api/device'
+import { showError } from '@/utils/showError'
 
 const emit = defineEmits<{
   (e: 'connect', platform: string): void
@@ -340,7 +341,9 @@ const loadConfigStatus = async () => {
       configReady.value = readyRes.data
     }
   } catch (error) {
-    ElMessage.error('加载配置状态失败')
+    // 状态面板（configReady / platforms）保持上一次的值不动，不因一次失败而清空；
+    // presentStates 必需 —— 本组件没有页面级状态块，403/404 否则会一声不响。
+    showError(error, 'device.loadFailed', { presentStates: true })
   } finally {
     loading.value = false
   }

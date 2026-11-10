@@ -140,6 +140,7 @@ import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Clock, Loading } from '@element-plus/icons-vue'
 import { ocrApi, type OcrHistoryItem, type OcrRecordDetail } from '@/api/ocr'
+import { showError } from '@/utils/showError'
 
 const loading = ref(false)
 const historyRecords = ref<OcrHistoryItem[]>([])
@@ -163,7 +164,8 @@ const loadHistory = async () => {
       total.value = res.data.total || 0
     }
   } catch (error) {
-    ElMessage.error('加载历史记录失败')
+    // 表格保留原有行（UI Considerations · error E7）：失败时不清空 historyRecords。
+    showError(error, 'ai.loadFailed', { presentStates: true })
   } finally {
     loading.value = false
   }
@@ -181,11 +183,12 @@ const viewDetail = async (record: OcrHistoryItem) => {
     const res = await ocrApi.getRecordDetail(record.id)
     if (res.code === 200 && res.data) {
       detailData.value = res.data
-    } else {
-      ElMessage.error(res.message || '获取详情失败')
     }
+    // 非 200 的 else 已删除：拦截器在信封 code !== 200 时直接 reject（不可达分支）。
   } catch (error) {
-    ElMessage.error('获取详情失败')
+    // 一条已被别人删掉的记录（`OcrServiceImpl:691` 抛 RESOURCE_NOT_FOUND）也必须出声：
+    // 本文件没有页面级状态块，缺 presentStates 就是零提示的静默（B1 回归点）。
+    showError(error, 'ai.loadFailed', { presentStates: true })
   } finally {
     detailLoading.value = false
   }
@@ -200,11 +203,12 @@ const handleDelete = async (recordId: number) => {
     if (res.code === 200) {
       ElMessage.success('删除成功')
       loadHistory()
-    } else {
-      ElMessage.error(res.message || '删除失败')
     }
+    // 非 200 的 else 已删除：拦截器在信封 code !== 200 时直接 reject（不可达分支）。
   } catch (error) {
-    ElMessage.error('删除失败')
+    // `OcrServiceImpl:727` 对不存在的记录抛 RESOURCE_NOT_FOUND、对外人记录抛 AUTH_FORBIDDEN；
+    // 本文件无状态块，presentStates 是「不是静默」的唯一保证。
+    showError(error, 'ai.deleteFailed', { presentStates: true })
   }
 }
 
