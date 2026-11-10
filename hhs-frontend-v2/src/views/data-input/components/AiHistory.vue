@@ -129,6 +129,13 @@ import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ChatDotRound, Loading } from '@element-plus/icons-vue'
 import { aiParseApi, type AiParseHistoryItem, type AiParseDetail } from '@/api/ai-parse'
+import { showError } from '@/utils/showError'
+
+// 失败呈现约定（本文件）：`@/utils/request` 的响应拦截器在信封 code !== 200 时
+// 直接 reject，因此 `if (res.code === 200)` 之后不需要「非 200」分支。
+// 本文件不渲染任何状态块，因此每个调用都显式 opt-in 状态类呈现 ——
+// `AiParseServiceImpl:749`（详情）与 `:783`（删除）抛 RESOURCE_NOT_FOUND、
+// `:776` 抛 AUTH_FORBIDDEN；缺第三个参数会让「查看已被删除的记录」彻底静默。
 
 const loading = ref(false)
 const historyRecords = ref<AiParseHistoryItem[]>([])
@@ -152,7 +159,8 @@ const loadHistory = async () => {
       total.value = res.data.total || 0
     }
   } catch (error) {
-    ElMessage.error('加载历史记录失败')
+    // 表格保留原有行（UI Considerations · error E7）：失败不清空 historyRecords。
+    showError(error, 'ai.loadFailed', { presentStates: true })
   } finally {
     loading.value = false
   }
@@ -160,6 +168,10 @@ const loadHistory = async () => {
 
 /**
  * 查看详情
+ *
+ * <p>打开即清空 detailData 是本函数既有的时序（先清、再请求），保留原样：
+ * 失败时不清空刚拿到的东西只对「已有内容」有意义，而这里打开弹窗时本就没有内容。
+ * 失败后弹窗保持打开，列表与分页状态不动（T-14-31：不得因一次详情失败打掉列表）。
  */
 const viewDetail = async (record: AiParseHistoryItem) => {
   detailVisible.value = true
@@ -170,11 +182,12 @@ const viewDetail = async (record: AiParseHistoryItem) => {
     const res = await aiParseApi.getHistoryDetail(record.id)
     if (res.code === 200 && res.data) {
       detailData.value = res.data
-    } else {
-      ElMessage.error(res.message || '获取详情失败')
     }
   } catch (error) {
-    ElMessage.error('获取详情失败')
+    // 键复用：字典无 ai.detailFailed，「无法加载 AI 会话」对一次详情读取贴切。
+    // 这里刻意不实现 404 内容块 —— 480px 的块会占满这个 600px 的小弹窗；
+    // 弹窗内的内容块是刻意推迟的后续项，不是遗漏。
+    showError(error, 'ai.loadFailed', { presentStates: true })
   } finally {
     detailLoading.value = false
   }
@@ -189,11 +202,9 @@ const handleDelete = async (recordId: number) => {
     if (res.code === 200) {
       ElMessage.success('删除成功')
       loadHistory()
-    } else {
-      ElMessage.error(res.message || '删除失败')
     }
   } catch (error) {
-    ElMessage.error('删除失败')
+    showError(error, 'ai.deleteFailed', { presentStates: true })
   }
 }
 
