@@ -67,27 +67,65 @@
     <!-- 上传对话框 -->
     <el-dialog v-model="uploadVisible" title="上传体检报告" width="500px">
       <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
-        <el-form-item label="报告名称" prop="reportName">
-          <el-input v-model="form.reportName" placeholder="请输入报告名称" />
+        <!-- 汇总块必须是 <el-form> 的第一个子节点（Contract 4.3），弹窗与全页表单同一位置。 -->
+        <FormErrorSummary
+          ref="summaryRef"
+          :summary-items="uploadErrors.summaryItems"
+          @focus-field="uploadErrors.focusField"
+        />
+        <el-form-item
+          label="报告名称"
+          prop="reportName"
+          data-field="reportName"
+          :error="uploadErrors.fieldErrors['reportName']"
+        >
+          <el-input
+            v-model="form.reportName"
+            placeholder="请输入报告名称"
+            @update:model-value="uploadErrors.clearField('reportName')"
+          />
         </el-form-item>
-        <el-form-item label="体检机构" prop="institution">
-          <el-input v-model="form.institution" placeholder="请输入体检机构" />
+        <el-form-item
+          label="体检机构"
+          prop="institution"
+          data-field="institution"
+          :error="uploadErrors.fieldErrors['institution']"
+        >
+          <el-input
+            v-model="form.institution"
+            placeholder="请输入体检机构"
+            @update:model-value="uploadErrors.clearField('institution')"
+          />
         </el-form-item>
-        <el-form-item label="体检日期" prop="reportDate">
+        <el-form-item
+          label="体检日期"
+          prop="reportDate"
+          data-field="reportDate"
+          :error="uploadErrors.fieldErrors['reportDate']"
+        >
           <el-date-picker
             v-model="form.reportDate"
             type="date"
             placeholder="选择日期"
             value-format="YYYY-MM-DD"
             style="width: 100%"
+            @change="uploadErrors.clearField('reportDate')"
           />
         </el-form-item>
-        <el-form-item label="报告文件" prop="file">
+        <!-- 上传控件的绑定值是文件列表而非 model-value：清除必须挂在控件自己的
+             on-change / on-remove 上，否则换一个文件后上一轮的「报告文件」错误会留着。 -->
+        <el-form-item
+          label="报告文件"
+          prop="file"
+          data-field="file"
+          :error="uploadErrors.fieldErrors['file']"
+        >
           <el-upload
             ref="uploadRef"
             :auto-upload="false"
             :limit="1"
             :on-change="handleFileChange"
+            :on-remove="handleFileRemove"
             accept="image/*,.pdf"
           >
             <el-button type="primary">选择文件</el-button>
@@ -106,11 +144,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, nextTick } from 'vue'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules, type UploadInstance } from 'element-plus'
 import { useRouter } from 'vue-router'
 import { Upload, Document } from '@element-plus/icons-vue'
 import { screeningApi } from '@/api/screening'
+import { useFormServerErrors, collectInvalidFieldMessages } from '@/composables/useFormServerErrors'
+import FormErrorSummary from '@/components/common/FormErrorSummary.vue'
+import { showError } from '@/utils/showError'
 import { staggerReveal, cleanupScrollTriggers } from '@/composables/useGsap'
 import type { ExaminationReportVO } from '@/types/api'
 
@@ -141,6 +182,19 @@ const rules: FormRules = {
   reportDate: [{ required: true, message: '请选择体检日期', trigger: 'change' }]
 }
 
+/**
+ * 上传表单的字段错误投影。
+ *
+ * 本页不渲染任何错误状态块，因此三个调用点都显式 opt-in 状态类失败的呈现
+ * （14-05 建立的呈现通道规则）：`forbidden` / `notFound` 没有页面块可以落，不 opt-in
+ * 就会把一次可见的失败变成完全静默。
+ */
+const uploadErrors = reactive(useFormServerErrors({
+  fieldOrder: ['reportName', 'institution', 'reportDate', 'file']
+}))
+
+const summaryRef = ref<InstanceType<typeof FormErrorSummary> | null>(null)
+
 const fetchReports = async () => {
   loading.value = true
   try {
@@ -151,7 +205,8 @@ const fetchReports = async () => {
     reports.value = res.data.records || []
     pagination.total = res.data.total || 0
   } catch (error) {
-    ElMessage.error('获取报告列表失败')
+    // 本页无错误状态块 → 显式 opt-in，403 / 404 也至少有一条常驻 toast。
+    showError(error, 'screening.loadFailed', { presentStates: true })
   } finally {
     loading.value = false
   }
@@ -165,21 +220,42 @@ const showUploadDialog = () => {
     file: null
   })
   selectedFile.value = null
+  // 重新打开弹窗时清掉上一轮尝试留下的投影（只清错误文本，不涉及用户输入）。
+  uploadErrors.reset()
   uploadVisible.value = true
 }
 
 const handleFileChange = (file: any) => {
   selectedFile.value = file.raw
   form.file = file.raw
+  // 换了文件就清掉上一轮的「报告文件」错误（:error 的清除不是 model-value 更新驱动的）。
+  uploadErrors.clearField('file')
+}
+
+const handleFileRemove = () => {
+  selectedFile.value = null
+  form.file = null
+  uploadErrors.clearField('file')
 }
 
 const handleUpload = async () => {
   if (!formRef.value) return
 
-  await formRef.value.validate(async valid => {
-    if (!valid) return
+  // 上一轮的投影不进入本次尝试；只清投影，不碰用户输入（ERR-05）。
+  uploadErrors.reset()
+
+  await formRef.value.validate(async (valid, invalidFields) => {
+    if (!valid) {
+      // 客户端校验失败也走同一份汇总通道（GOV.UK 双呈现），零 toast。
+      uploadErrors.setErrors(collectInvalidFieldMessages(invalidFields))
+      await nextTick()
+      summaryRef.value?.focusSummary()
+      return
+    }
 
     if (!selectedFile.value) {
+      // 没有文件不是**服务端**失败：这条提示是本地前置条件，不是一次请求的结果，
+      // 因此保留 warning（不是 error 通道），且不清空任何已填内容。
       ElMessage.warning('请选择文件')
       return
     }
@@ -192,10 +268,17 @@ const handleUpload = async () => {
         reportDate: form.reportDate || undefined
       })
       ElMessage.success('上传成功，正在进行OCR识别...')
+      // 关闭弹窗只在解析成功之后 —— 失败时 dialog 保持打开（Contract 7.1）。
       uploadVisible.value = false
       fetchReports()
     } catch (error) {
-      ElMessage.error('上传失败')
+      // validation → 0 toast，汇总 + 内联承担呈现；其余 kind 由 showError 呈现。
+      const err = showError(error, 'ocr.uploadFailed', { presentStates: true })
+      if (err.kind === 'validation') {
+        uploadErrors.apply(err)
+        await nextTick()
+        summaryRef.value?.focusSummary()
+      }
     } finally {
       uploading.value = false
     }
@@ -206,18 +289,31 @@ const viewDetail = (id: number) => {
   router.push(`/screening/detail/${id}`)
 }
 
+/**
+ * 删除：确认与请求彻底分离。
+ *
+ * 取消路径是一个裸 `return` —— 用户按了「取消」不是失败，零提示（D-12 / ERR-08）。
+ * 原先的手写取消判断（`if (e !== 'cancel')` 那一类）对 `AbortError` 与归一化后的
+ * `ApiError('', 'cancel')` 都会误判成真失败，因此整段删掉。
+ * `ScreeningServiceImpl:197` 对「报告不存在」与「别人的报告」都抛 `RESOURCE_NOT_FOUND`，
+ * 后者是常规竞态；第三个参数让它仍然产生恰好一条提示而不是静默。
+ */
 const handleDelete = async (id: number) => {
   try {
     await ElMessageBox.confirm('确定要删除这份报告吗？', '提示', {
       type: 'warning'
     })
+  } catch {
+    // 取消确认框：刻意静默，不弹任何提示（Contract 7.2）。
+    return
+  }
+
+  try {
     await screeningApi.deleteReport(id)
     ElMessage.success('删除成功')
     fetchReports()
   } catch (error) {
-    if (error !== 'cancel') {
-      ElMessage.error('删除失败')
-    }
+    showError(error, 'screening.deleteFailed', { presentStates: true })
   }
 }
 
