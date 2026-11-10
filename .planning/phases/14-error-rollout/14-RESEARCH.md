@@ -1074,15 +1074,18 @@ Test files that must exist **before** the migration waves start (all new, in `hh
    - What's unclear: whether the spec author intended check ② to be "no `ElMessage.error` in stores" (consistent with §5.1) or "no `ElMessage` at all in stores" (inconsistent).
    - Recommendation: read it as "no `ElMessage.error` in stores" and **correct check ②** accordingly. Moving 3 success toasts is scope creep with real test churn.
 
+   - **RESOLVED (2026-11-10): 不移动，修正 Contract 6.3 检查②。** 检查② 解读为「store 内不得出现 `ElMessage.error`」，与 §5.1 一致；错误仍一律上抛给组件层。
 2. **How should send-message failures be surfaced?** (`ai.ts:105`, `floatingAi.ts:120`)
    - What we know: today the optimistic bubble is removed and `false` is returned; the chat page shows nothing.
    - What's unclear: toast vs inline retry bubble; and there is no `ai.sendFailed` dictionary key.
    - Recommendation: **inline bubble** ("发送未完成，请重试" with a retry affordance), because a transient toast for a chat message the user is watching disappear is worse than a persistent inline marker. If the planner prefers a toast, add `ai.sendFailed` to the dictionary and to `DICTIONARY_KEYS`.
 
+   - **RESOLVED (2026-11-10): 就地 retry 气泡**（「发送未完成，请重试」+ 重试入口）。不新增 `ai.sendFailed` 字典键，避免额外动键数断言。
 3. **Is the route-level 404 catch-all in scope?**
    - What we know: Contract 3 §3.6 defines it and explicitly defers the decision to the planner.
    - Recommendation: **include it.** It is ~10 lines, reuses the page geometry, and closes the only remaining blank-screen failure mode. Requires an explicit PLAN line item because it is a routing change.
 
+   - **RESOLVED (2026-11-10): 纳入本阶段。** 复用 Contract 2 的页面几何，约 10 行。
 4. **Should `collectInvalidFieldMessages` be extracted before or during the migration?**
    - What we know: it is duplicated verbatim in 2 files and needed by ~13 more.
    - Recommendation: extract it into `useFormServerErrors.ts` as an exported helper **in the same task as the first form migration**, so the 13 later forms import it. Doing it first avoids 13 copies; doing it later means a 13-file cleanup.
