@@ -21,6 +21,19 @@ export const usePushStore = defineStore('push', () => {
   const testing = ref<string | null>(null)
   /** 配置加载失败的原因；视图据此渲染错误态而不是空列表（WR-09）。 */
   const loadError = ref<string | null>(null)
+  /**
+   * 最近一次保存失败的归一化错误，**连同它的通道**。
+   *
+   * 为什么需要它：`saveConfig` 自己调用 `showError` 呈现失败（D-02 的单一出口），
+   * 只返回布尔值 —— 调用方因此拿不到 `fieldErrors`，无法做字段级投影。把归一化后的
+   * `ApiError` 留在这里，视图就能在「呈现权仍归 store」的前提下补上内联投影，
+   * 而不必第二次调用 `showError`（那会变成同一次失败的两条提示）。
+   *
+   * 带上 `channelType` 是因为本页每个通道各有一个表单，而 `PushConfigRequest` 的
+   * 字段名恒为 `configValue`：只存 `ApiError` 会让 A 通道的失败标到 B 通道的输入框上。
+   * 与 `loadError` 同形：一个 ref，由 store 写、视图只读。
+   */
+  const saveError = ref<{ channelType: string; error: ApiError } | null>(null)
 
   /**
    * Load all push configurations.
@@ -54,6 +67,8 @@ export const usePushStore = defineStore('push', () => {
     channelType: string,
     data: { configValue?: string; enabled?: boolean }
   ) {
+    // 上一次保存的投影不进入本次尝试；只清记录，不碰任何输入（ERR-05）。
+    saveError.value = null
     try {
       // 拦截器已保证 code !== 200 会 reject，成功路径只可能是 200。
       const res = await updatePushConfig(channelType, data)
@@ -67,7 +82,12 @@ export const usePushStore = defineStore('push', () => {
       return true
     } catch (error) {
       // store 层唯一出口：调用方只读布尔返回值，不重复弹提示（T-11-21）。
-      showError(error, 'push.saveFailed')
+      // `presentStates`：保存是用户主动发起的动作，而本 store 不渲染任何状态块，
+      // 因此 `forbidden` / `notFound` 没有落点 —— 不 opt-in 会把「无权修改」或
+      // 「配置已被删除」变成完全静默（14-05 的相位级规则：无块则每处必传）。
+      const err = showError(error, 'push.saveFailed', { presentStates: true })
+      // 保留归一化错误供视图做字段级投影（不新增第二条提示）。
+      saveError.value = { channelType, error: err }
       return false
     }
   }
@@ -138,6 +158,7 @@ export const usePushStore = defineStore('push', () => {
     loading,
     testing,
     loadError,
+    saveError,
     loadConfigs,
     saveConfig,
     testChannel,
