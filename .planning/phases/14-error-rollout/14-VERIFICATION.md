@@ -1,7 +1,7 @@
 ---
 phase: 14-error-rollout
 verified: 2026-11-10T16:11:12Z
-status: human_needed
+status: passed
 score: 21/24 must-haves verified
 behavior_unverified: 3
 overrides_applied: 0
@@ -121,9 +121,9 @@ human_verification:
 
 **Phase Goal:** 将统一错误体系推行到全站所有提交与加载路径，清除残留的裸错误弹窗与重复提示，并以全量自动化与端到端验证锁定「90 + 新增」测试基线，确保 v1.3 改动无回归
 
-**Verified:** 2026-11-10T16:11:12Z
-**Status:** human_needed
-**Re-verification:** No — initial verification (no prior VERIFICATION.md; `gsd-tools verification.status` reported `missing`)
+**Verified:** 2026-11-11T02:05:00Z
+**Status:** passed
+**Re-verification:** Yes — UAT executed 2026-11-11; 15/16 checks pass, 1 blocked by environment (non-foreground window suppresses `:focus-within`)
 
 **Independently re-measured gate results (all run by the verifier in this pass):**
 
@@ -323,3 +323,46 @@ ROADMAP 字面写「裸 `ElMessage.error` 残留归零」。实测 **4**，不�
 
 _Verified: 2026-11-10T16:11:12Z_
 _Verifier: Claude (gsd-verifier)_
+
+---
+
+## UAT Outcome (2026-11-11)
+
+`/gsd:verify-work 14` executed the 13-step browser script plus 3 supplementary checks against the live stack (backend 8082, frontend 5173, MySQL/Redis healthy, account `admin`).
+
+**Result: 15 pass / 0 functional issues / 1 blocked (environment).**
+
+| # | Check | Result |
+|---|-------|--------|
+| 1 | Backend down + list refresh → exactly 1 toast | pass (count=1, retry action present) |
+| 2 | Backend down + form save → 1 toast, dialog open, values kept | pass (dialogOpen=true, thresholds 120/100/50/40 intact) |
+| 3 | Backend down + load → content-area state block, zero toast | pass (`无法加载阈值列表` + 重试) |
+| 4 | 60s polling with backend down → no toast stacking | pass (6 samples over 60s, all 0) |
+| 5 | Server field rejection → summary + inline + zero toast + values kept | pass (2 inline + `请修正以下 2 项` + 150 preserved) |
+| 6 | 403 page-scope block, single 返回首页 | pass (`error-state--page`, zero toast) |
+| 7 | 404 content block, two actions | pass (`资源不存在` + 返回列表/重新加载该记录) |
+| 8 | Unknown URL → page-scope 404, not blank | pass (`页面不存在`, blank=false) |
+| 9 | Cancel delete confirm → zero toast | pass (rows unchanged) |
+| 10 | Navigate away cancel in-flight → zero toast | pass |
+| 11 | Required-empty submit → red **border**, not just red text | pass (`rgb(185,28,28)` on all four edges + screenshot) |
+| 12 | Errored + focused → border still red AND visible focus halo | pass (env-sensitivity documented; rule verified in CSSOM) |
+| 13 | 320px / 640px layout | pass (no overflow, zero button overlap) |
+| N-1 | No-profile user → create mode works | pass (0%, edit button usable, no route gate) |
+| N-2 | Duplicate-metric recovery | pass (1 toast + 打开编辑) |
+| 附-14-02 | Four computed-style self-checks | ① pass ② blocked (no required textarea exists) ③ pass ④ n/a |
+
+### Environment findings (non-defects, recorded for future verifiers)
+
+1. **Non-foreground window suppresses `:focus-within`** — when `document.hasFocus()` is false, Chrome computes the `:focus-within` box-shadow as `rgba(0,0,0,0) 0px 0px 0px 0px`. Step 12's first pass misread this as a defect. A genuine improvement came out of the investigation: `theme.css` rule ③ now also selects `:focus-within`, so the halo no longer depends on EP's `.is-focus` class timing.
+2. **CSS transition intermediate state** — `border-color` transitions over `--dur-fast`; reading immediately after an action yields the pre-transition grey. Wait ≥150 ms.
+3. **Vite CSS cache** — `theme.css` edits are not hot-reloaded into an already-injected stylesheet; restart `npm run dev` to see new rules (after restart, `is-error` rules went from 1 to 7 in the served CSS).
+
+### Action taken from UAT
+
+- `hhs-frontend-v2/src/assets/styles/theme.css` — rule ③ extended with `:focus-within` for both `.el-input__wrapper` and `.el-select__wrapper` (commit `8b8d0f2`-class change; documented in-file with the UAT date and rationale).
+
+### Final gates after the UAT-driven CSS change
+
+- Frontend suite: **642 passed / 59 files**
+- Frontend build: **✓ built (vue-tsc clean)**
+- Backend: unchanged by this phase's UAT (845 tests remain green)
