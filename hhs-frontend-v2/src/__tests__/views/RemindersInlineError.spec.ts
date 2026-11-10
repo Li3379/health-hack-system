@@ -182,7 +182,10 @@ const globalStubs = {
 }
 
 function mountReminders() {
+  // attachTo 是必需的：focusSummary() 只在真实挂载到 document 的元素上才改变
+  // document.activeElement，游离节点上断言 activeElement 永远读到 <body>。
   return mount(Reminders, {
+    attachTo: document.body,
     global: {
       stubs: globalStubs,
       directives: { loading: () => {} }
@@ -265,7 +268,10 @@ describe('reminders/Index.vue — 表单双呈现、切换去重取、状态类�
       '提醒标题不能为空'
     ])
 
-    // 4. ERR-05：输入保留、弹窗仍开。
+    // 4. 焦点只去汇总块一次（Contract 4.4），绝不去第一个字段。
+    expect(document.activeElement).toBe(summary.element as HTMLElement)
+
+    // 5. ERR-05：输入保留、弹窗仍开。
     expect(vm.form.title).toBe('每天八点喝水')
     expect(vm.form.reminderType).toBe('water')
     expect(vm.form.cronExpression).toBe('0 0 8 * * *')

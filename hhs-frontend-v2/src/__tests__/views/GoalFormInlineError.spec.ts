@@ -120,6 +120,17 @@ function findNodeByClass(node: unknown, className: string): VNodeLike | undefine
   return undefined
 }
 
+/**
+ * 客户端校验的 stub 出口。
+ *
+ * 默认返回 valid=true（绝大多数用例测的是服务端分支）。把 `nextClientInvalid`
+ * 设成一批 `invalidFields` 后，下一次 validate 就按 Element Plus 的真实回调签名
+ * `(valid, invalidFields)` 回放一次客户端失败 —— 这是唯一能把
+ * `collectInvalidFieldMessages → setErrors → 汇总块` 这条链路跑起来的办法，
+ * 否则「客户端失败也要汇总」（Contract 4.3）只能靠读代码相信。
+ */
+let nextClientInvalid: Record<string, Array<{ message?: string }>> | undefined
+
 const globalStubs = {
   'el-card': {
     template: '<div class="el-card"><slot name="header" /><slot /></div>'
@@ -150,8 +161,14 @@ const globalStubs = {
   'el-form': {
     template: '<form class="el-form"><slot /></form>',
     methods: {
-      validate: (cb: (valid: boolean, invalidFields?: unknown) => void) =>
-        Promise.resolve(cb(true, undefined)),
+      validate: (cb: (valid: boolean, invalidFields?: unknown) => void) => {
+        if (nextClientInvalid) {
+          const invalid = nextClientInvalid
+          nextClientInvalid = undefined
+          return Promise.resolve(cb(false, invalid))
+        }
+        return Promise.resolve(cb(true, undefined))
+      },
       validateField: vi.fn(),
       clearValidate: vi.fn()
     }
@@ -195,7 +212,10 @@ const globalStubs = {
 }
 
 function mountGoals() {
+  // attachTo 是必需的：focusSummary() 只在真实挂载到 document 的元素上才改变
+  // document.activeElement，游离节点上断言 activeElement 永远读到 <body>。
   return mount(Goals, {
+    attachTo: document.body,
     global: {
       stubs: globalStubs,
       directives: { loading: () => {} }
@@ -224,6 +244,7 @@ function validationRejection() {
 describe('goals/Index.vue — 400 字段校验的内联 + 汇总双呈现（ERR-03 / ERR-05）', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    nextClientInvalid = undefined
     createMock.mockReset()
     removeMock.mockReset()
     listMock.mockReset()
@@ -278,8 +299,82 @@ describe('goals/Index.vue — 400 字段校验的内联 + 汇总双呈现（ERR-
       '目标值必须大于 0'
     ])
 
-    // 4. data-field 锚点齐备：五个创建字段 + 一个进度字段。
+    // 4. 焦点只去汇总块一次（Contract 4.4），绝不去第一个字段：
+    //    首个无效字段的可见性由 is-error 描边承担，不由焦点承担。
+    const summaryEl = summary.element as HTMLElement
+    expect(document.activeElement).toBe(summaryEl)
+
+    // 5. data-field 锚点齐备：五个创建字段 + 一个进度字段。
     expect(wrapper.findAll('[data-field]').length).toBeGreaterThanOrEqual(5)
+
+    wrapper.unmount()
+  })
+
+  it('客户端校验失败（未发出请求）：同样填充汇总、聚焦汇总、零 toast', async () => {
+    const wrapper = mountGoals()
+    await flushPromises()
+
+    const vm = wrapper.vm as any
+    vm.showCreateDialog()
+    await flushPromises()
+    vm.createForm.title = '降低体重至70kg'
+
+    // 客户端规则失败：EP 只会在字段下方内联提示，没有「一共错了几项」。
+    nextClientInvalid = {
+      metricKey: [{ message: '请选择指标类型' }],
+      unit: [{ message: '请输入单位' }]
+    }
+
+    await vm.handleCreate()
+    await flushPromises()
+
+    // 1. 汇总块按 fieldOrder 排序（metricKey 在 unit 之前）。
+    const items = wrapper.findAll('.form-error-summary li')
+    expect(items).toHaveLength(2)
+    expect(items[0].text()).toBe('指标类型：请选择指标类型')
+    expect(items[1].text()).toBe('单位：请输入单位')
+
+    // 2. 焦点去汇总，零 toast，且请求一次都没发。
+    expect(document.activeElement).toBe(wrapper.find('.form-error-summary').element as HTMLElement)
+    expect(toastCount()).toBe(0)
+    expect(createMock).not.toHaveBeenCalled()
+
+    wrapper.unmount()
+  })
+
+  it('两次提交之间 reset()：上一轮投影不残留（第二次失败走 toast，汇总必须消失）', async () => {
+    const wrapper = mountGoals()
+    await flushPromises()
+
+    const vm = wrapper.vm as any
+    vm.showCreateDialog()
+    await flushPromises()
+    vm.createForm.title = '降低体重至70kg'
+    vm.createForm.metricKey = 'weight'
+    vm.createForm.targetValue = 70
+    vm.createForm.unit = 'kg'
+    vm.createForm.dateRange = ['2026-01-01', '2026-03-01']
+
+    // 第一次：400，留下两行服务端投影。
+    createMock.mockRejectedValueOnce(validationRejection())
+    await vm.handleCreate()
+    await flushPromises()
+    expect(wrapper.findAll('.form-error-summary li')).toHaveLength(2)
+
+    // 第二次：传输层 500 → 一条 toast，`apply` 不动作（kind 不是 validation）。
+    // 若提交前的 reset() 缺失，上一轮的两行汇总会与这条 toast 并存 —— 一次失败的
+    // 两种呈现、且其中一种是陈旧内容。弹窗在两种失败下都保持打开，因此汇总块确实
+    // 还在渲染树里，这条断言才有意义。
+    createMock.mockRejectedValueOnce({ response: { status: 500, data: {} } })
+    await vm.handleCreate()
+    await flushPromises()
+
+    expect(wrapper.find('.form-error-summary').exists()).toBe(false)
+    expect(wrapper.findAll('.el-form-item.is-error')).toHaveLength(0)
+    expect(errorToastCount()).toBe(1)
+    // ERR-05：两次失败都不许碰用户输入。
+    expect(vm.createForm.title).toBe('降低体重至70kg')
+    expect(vm.createVisible).toBe(true)
 
     wrapper.unmount()
   })
