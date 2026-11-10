@@ -5,26 +5,97 @@
         <el-card>
           <template #header><span>记录心情</span></template>
           <div class="mood-input-section">
-            <div class="mood-label">今天心情如何？</div>
-            <div class="mood-score-selector">
-              <button v-for="n in 10" :key="n" class="mood-btn" :class="{ active: form.moodScore === n }" @click="form.moodScore = n">
-                {{ n }}
-              </button>
-            </div>
-            <div class="mood-hint">当前选择: {{ form.moodScore }} / 10 — {{ getMoodText(form.moodScore) }}</div>
-            <el-divider />
-            <el-form label-width="80px">
-              <el-form-item label="精力值">
-                <el-slider v-model="form.energyLevel" :min="1" :max="10" :marks="sliderMarks" show-stops />
+            <!--
+              这个 el-form 原先没有 :model 也没有任何 prop —— 它是「装饰性」的，
+              validate() 无法运行，:error 也无处可落。本次改造补上绑定模型与 prop，
+              让它成为真正可接服务端字段错误的表单（Contract 4.1 的五件套）。
+            -->
+            <el-form ref="formRef" :model="form" :rules="rules" label-width="80px">
+              <!-- 汇总块必须是 <el-form> 的第一个子节点（Contract 4.3）。 -->
+              <FormErrorSummary
+                ref="summaryRef"
+                :summary-items="moodErrors.summaryItems"
+                @focus-field="moodErrors.focusField"
+              />
+              <!--
+                心情评分本身是一个裸按钮组，既没有 input 也没有 select wrapper。
+                focusField('moodScore') 因此找不到可聚焦控件并静默返回 —— 这是刻意的：
+                契约把「首个无效字段的可见性」交给 is-error 描边，汇总条目本身仍是
+                可点击的锚点。不为它写自定义选择器（台账 理由 列已记录）。
+              -->
+              <el-form-item
+                label="心情评分"
+                prop="moodScore"
+                data-field="moodScore"
+                :error="moodErrors.fieldErrors['moodScore']"
+              >
+                <div class="mood-label">今天心情如何？</div>
+                <div class="mood-score-selector">
+                  <button v-for="n in 10" :key="n" class="mood-btn" :class="{ active: form.moodScore === n }" @click="form.moodScore = n; moodErrors.clearField('moodScore')">
+                    {{ n }}
+                  </button>
+                </div>
+                <div class="mood-hint">当前选择: {{ form.moodScore }} / 10 — {{ getMoodText(form.moodScore) }}</div>
               </el-form-item>
-              <el-form-item label="压力值">
-                <el-slider v-model="form.stressLevel" :min="1" :max="10" :marks="sliderMarks" show-stops />
+              <el-divider />
+              <el-form-item
+                label="精力值"
+                prop="energyLevel"
+                data-field="energyLevel"
+                :error="moodErrors.fieldErrors['energyLevel']"
+              >
+                <el-slider
+                  v-model="form.energyLevel"
+                  :min="1"
+                  :max="10"
+                  :marks="sliderMarks"
+                  show-stops
+                  @change="moodErrors.clearField('energyLevel')"
+                />
               </el-form-item>
-              <el-form-item label="睡眠质量">
-                <el-slider v-model="form.sleepQuality" :min="1" :max="10" :marks="sliderMarks" show-stops />
+              <el-form-item
+                label="压力值"
+                prop="stressLevel"
+                data-field="stressLevel"
+                :error="moodErrors.fieldErrors['stressLevel']"
+              >
+                <el-slider
+                  v-model="form.stressLevel"
+                  :min="1"
+                  :max="10"
+                  :marks="sliderMarks"
+                  show-stops
+                  @change="moodErrors.clearField('stressLevel')"
+                />
               </el-form-item>
-              <el-form-item label="备注">
-                <el-input v-model="form.notes" type="textarea" :rows="3" placeholder="记录今天的感受..." />
+              <el-form-item
+                label="睡眠质量"
+                prop="sleepQuality"
+                data-field="sleepQuality"
+                :error="moodErrors.fieldErrors['sleepQuality']"
+              >
+                <el-slider
+                  v-model="form.sleepQuality"
+                  :min="1"
+                  :max="10"
+                  :marks="sliderMarks"
+                  show-stops
+                  @change="moodErrors.clearField('sleepQuality')"
+                />
+              </el-form-item>
+              <el-form-item
+                label="备注"
+                prop="notes"
+                data-field="notes"
+                :error="moodErrors.fieldErrors['notes']"
+              >
+                <el-input
+                  v-model="form.notes"
+                  type="textarea"
+                  :rows="3"
+                  placeholder="记录今天的感受..."
+                  @update:model-value="moodErrors.clearField('notes')"
+                />
               </el-form-item>
               <el-form-item>
                 <el-button type="primary" :loading="submitting" @click="handleSubmit">提交记录</el-button>
@@ -90,10 +161,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, onUnmounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ref, reactive, onMounted, onUnmounted, nextTick } from 'vue'
+import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { moodApi, type MoodEntry, type MoodInsights } from '@/api/mood'
 import { formatDate } from '@/utils/format'
+import { useFormServerErrors, collectInvalidFieldMessages } from '@/composables/useFormServerErrors'
+import FormErrorSummary from '@/components/common/FormErrorSummary.vue'
+import { showError } from '@/utils/showError'
 import {
   springPop, staggerReveal, countUp, cleanupScrollTriggers,
   tilt3D, magneticHover, buttonPress, hoverLift, rippleClick, DUR, EASE,
@@ -103,9 +177,34 @@ const submitting = ref(false)
 const insightsLoading = ref(false)
 const entries = ref<MoodEntry[]>([])
 const insights = ref<MoodInsights | null>(null)
+const formRef = ref<FormInstance>()
+const summaryRef = ref<InstanceType<typeof FormErrorSummary> | null>(null)
 
 const form = reactive({ moodScore: 5, energyLevel: 5, stressLevel: 5, sleepQuality: 5, notes: '' })
 const sliderMarks: Record<number, string> = { 1: '1', 5: '5', 10: '10' }
+
+/**
+ * 一个投影实例，字段顺序与页面的视觉顺序一致（GOV.UK：汇总顺序必须匹配页面）。
+ *
+ * 五个 prop 名与 `FIELD_LABELS` 的键逐一对应（`moodScore` / `energyLevel` /
+ * `stressLevel` / `sleepQuality` / `notes` 均由 14-03 保证），因此不需要 `labels`
+ * 覆盖 —— 汇总与内联直接读出中文标签，绝不回退成驼峰键（Contract 4.5 规则 2）。
+ * `reactive()` 让模板里 `moodErrors.fieldErrors['moodScore']` 读到字符串而非 Ref。
+ */
+const moodErrors = reactive(useFormServerErrors({
+  fieldOrder: ['moodScore', 'energyLevel', 'stressLevel', 'sleepQuality', 'notes']
+}))
+
+/**
+ * 客户端规则镜像后端 `RecordMoodRequest` 的约束（`moodScore` @NotNull、四个评分
+ * 字段 @Min(1)/@Max(10)）。`notes` 后端只限 @Size(500)，这里不加必填。
+ */
+const rules: FormRules = {
+  moodScore: [{ required: true, message: '请选择心情评分', trigger: 'change' }],
+  energyLevel: [{ required: true, message: '请设置精力值', trigger: 'change' }],
+  stressLevel: [{ required: true, message: '请设置压力值', trigger: 'change' }],
+  sleepQuality: [{ required: true, message: '请设置睡眠质量', trigger: 'change' }]
+}
 
 const moodTexts: string[] = ['', '很差', '很差', '较差', '较差', '一般', '一般', '较好', '较好', '很好', '很好']
 const getMoodText = (score: number): string => moodTexts[score] || ''
@@ -117,6 +216,12 @@ const getMoodColor = (score: number): string => {
   return '#f56c6c'
 }
 
+/**
+ * 列表 + 洞察是 `Promise.all` 的一对：任一失败只呈现一次。
+ * 本页不渲染任何错误状态块，`forbidden` / `notFound` 没有落点，
+ * 因此显式 opt-in 一条常驻 toast —— 静默是唯一不可接受的结果（Contract 1.3）。
+ * 刻意**不**把这一对拆成两条独立错误路径：那会让一次失败弹出两条提示。
+ */
 const fetchData = async () => {
   insightsLoading.value = true
   try {
@@ -124,35 +229,83 @@ const fetchData = async () => {
     entries.value = entriesRes.data || []
     insights.value = insightsRes.data || null
   } catch (error) {
-    ElMessage.error('获取数据失败')
+    showError(error, 'mood.loadFailed', { presentStates: true })
   } finally {
     insightsLoading.value = false
   }
 }
 
 const handleSubmit = async () => {
-  submitting.value = true
-  try {
-    const today = new Date().toISOString().split('T')[0]
-    await moodApi.create({
-      moodScore: form.moodScore,
-      energyLevel: form.energyLevel,
-      stressLevel: form.stressLevel,
-      sleepQuality: form.sleepQuality,
-      notes: form.notes || undefined,
-      entryDate: today
-    })
-    ElMessage.success('记录成功')
-    form.notes = ''
-    fetchData()
-  } catch (error) {
-    ElMessage.error('记录失败')
-  } finally {
-    submitting.value = false
-  }
+  if (!formRef.value) return
+
+  // 上一轮的残留投影不进入本次尝试；只清投影，绝不碰用户输入（ERR-05）。
+  moodErrors.reset()
+
+  await formRef.value.validate(async (valid, invalidFields) => {
+    if (!valid) {
+      // 客户端校验失败也走同一份汇总通道（GOV.UK 双呈现），零 toast。
+      moodErrors.setErrors(collectInvalidFieldMessages(invalidFields))
+      await nextTick()
+      summaryRef.value?.focusSummary()
+      return
+    }
+
+    submitting.value = true
+    try {
+      const today = new Date().toISOString().split('T')[0]
+      await moodApi.create({
+        moodScore: form.moodScore,
+        energyLevel: form.energyLevel,
+        stressLevel: form.stressLevel,
+        sleepQuality: form.sleepQuality,
+        notes: form.notes || undefined,
+        entryDate: today
+      })
+      // 成功路径保持原样：只清 `notes`，四个评分字段刻意不清 —— 用户可能想连着
+      // 记两条，改掉这个行为属于另一个改动。
+      ElMessage.success('记录成功')
+      form.notes = ''
+      fetchData()
+    } catch (error) {
+      // validation → 0 toast，汇总 + 内联承担呈现；其余 kind 由 showError 呈现。
+      // `WellnessServiceImpl:118` 在同类写路径上抛 AUTH_FORBIDDEN：本页无状态块，
+      // 缺 `presentStates` 会把一次真实的权限拒绝变成静默。
+      const err = showError(error, 'mood.saveFailed', { presentStates: true })
+      if (err.kind === 'validation') {
+        moodErrors.apply(err)
+        await nextTick()
+        summaryRef.value?.focusSummary()
+      }
+    } finally {
+      submitting.value = false
+    }
+  })
 }
 
-const handleDelete = async (id: number) => { try { await ElMessageBox.confirm('确定删除？', '提示', { type: 'warning' }); await moodApi.remove(id); ElMessage.success('删除成功'); fetchData() } catch (e) { if (e !== 'cancel') ElMessage.error('删除失败') } }
+/**
+ * 删除：确认与请求彻底分离。
+ *
+ * 取消路径是一个裸 `return` —— 用户按了「取消」不是失败，零提示（D-04 / ERR-08）。
+ * 旧实现把确认框与请求塞进同一个 try、再用「拒绝值是否等于字符串 cancel」来判断
+ * 是否提示；那个手写比较对 `AbortError`（`e.name === 'AbortError'`）与归一化后的
+ * `ApiError('', 'cancel')` 都会判成真失败并弹红灯，因此整段判断删除。
+ */
+const handleDelete = async (id: number) => {
+  try {
+    await ElMessageBox.confirm('确定删除？', '提示', { type: 'warning' })
+  } catch {
+    // 取消确认框：刻意静默，不弹任何提示。
+    return
+  }
+
+  try {
+    await moodApi.remove(id)
+    ElMessage.success('删除成功')
+    fetchData()
+  } catch (error) {
+    showError(error, 'mood.deleteFailed', { presentStates: true })
+  }
+}
 
 onMounted(() => {
   fetchData()
