@@ -85,6 +85,11 @@
 
       <!-- Input -->
       <div class="panel-input">
+        <!-- 发送未完成：就地提示（零 toast）。文本已回填，发送按钮就在同一行。 -->
+        <p v-if="sendFailed" class="panel-send-failed" role="status" aria-live="polite">
+          <el-icon :size="12"><Warning /></el-icon>
+          发送未完成，请重试
+        </p>
         <div class="input-row">
           <el-input
             ref="inputRef"
@@ -92,6 +97,7 @@
             placeholder="输入健康问题..."
             :maxlength="500"
             clearable
+            @input="handleInputChange"
             @keydown.enter.exact="handleSend"
           />
           <el-button
@@ -118,7 +124,8 @@ import {
   Close,
   Delete,
   FullScreen,
-  Promotion
+  Promotion,
+  Warning
 } from '@element-plus/icons-vue'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
@@ -165,6 +172,14 @@ const panelStyle = computed<CSSProperties>(() => {
 })
 
 const inputText = ref('')
+/**
+ * 发送未完成的就地提示（14-RESEARCH 开放问题 2 / 6 的 RESOLVED 结论）。
+ *
+ * <p>核实结果：本面板此前**没有**任何内联失败面 —— 消息区只渲染气泡与 typing dots，
+ * 输入区只有 input + 发送按钮。因此这里新建一行说明，而不是接进既有元素。
+ * 机制是本地 ref + 模板一行，不是 toast（store 已不再呈现错误）。
+ */
+const sendFailed = ref(false)
 const messagesRef = ref<HTMLElement>()
 const inputRef = ref()
 
@@ -212,11 +227,19 @@ async function handleSend() {
   if (!text || store.loading) return
 
   inputText.value = ''
+  sendFailed.value = false
   const success = await store.sendMessage(text)
   if (!success) {
+    // 文本原样回填 + 就地提示；发送按钮就在同一行，重试成本为零。
     inputText.value = text
+    sendFailed.value = true
   }
   scrollToBottom()
+}
+
+/** 用户重新编辑输入时撤掉失败提示。 */
+function handleInputChange() {
+  if (sendFailed.value) sendFailed.value = false
 }
 
 function handleQuickQuestion(text: string) {
@@ -554,6 +577,17 @@ watch(
   display: flex;
   gap: 8px;
   align-items: center;
+}
+
+/* 发送未完成提示：一行、面板内边距对齐、不挤压输入行。 */
+.panel-send-failed {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 0 8px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--hhs-color-error-text);
 }
 
 .input-row :deep(.el-input__wrapper) {

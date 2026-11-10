@@ -276,6 +276,7 @@
               :maxlength="2000"
               resize="none"
               placeholder="输入您的健康问题，Ctrl + Enter 发送..."
+              @input="handleInputChange"
               @keydown.enter.exact="handleEnterKey"
             />
             <div class="input-glow"></div>
@@ -290,6 +291,11 @@
             <el-icon v-if="!aiStore.loading"><Promotion /></el-icon>
           </el-button>
         </div>
+        <!-- 发送未完成：就地提示（零 toast）。输入文本已回填，发送按钮就在右侧。 -->
+        <p v-if="sendFailed" class="send-failed" role="status" aria-live="polite">
+          <el-icon><Warning /></el-icon>
+          发送未完成，请重试
+        </p>
         <!-- Attachment preview area (placeholder) -->
         <Transition name="slide-up">
           <div v-if="attachmentPreview" class="attachment-preview">
@@ -366,6 +372,7 @@ import DOMPurify from 'dompurify'
 import { useAuthStore } from '@/stores/auth'
 import { useAiStore } from '@/stores/ai'
 import { healthApi } from '@/api/health'
+import { showError } from '@/utils/showError'
 import { formatDateTime, formatRelativeTime } from '@/utils/format'
 import type { ConversationVO } from '@/types/api'
 
@@ -387,6 +394,17 @@ const historyConversations = ref<ConversationVO[]>([])
 const sidebarCollapsed = ref(false)
 const isRecording = ref(false)
 const attachmentPreview = ref<string | null>(null)
+/**
+ * 发送未完成的就地提示（D-02 / 14-RESEARCH 开放问题 2 的 RESOLVED 结论）。
+ *
+ * <p>为什么不用 toast：一次发送失败会让用户正在看着的那条气泡消失，弹一条
+ * 转瞬即逝的横幅比「什么都不说」更糟 —— 用户读完提示时输入已经丢了。
+ * 正确的面是就地：文本回填输入框 + 一行常驻说明，发送按钮就在旁边，重试成本为零。
+ *
+ * <p>刻意不新增发送失败专用的字典键：它不存在也不得新增，否则要同步改
+ * `DICTIONARY_KEYS` 的键数断言。这里是模板里的字面量中文（T-14-38：不插值后端文本）。
+ */
+const sendFailed = ref(false)
 const particleCanvasRef = ref<HTMLCanvasElement>()
 let particleAnimId = 0
 
@@ -451,20 +469,37 @@ const handleNewSession = () => {
 }
 
 const handleSwitchSession = async (sessionId: string) => {
-  await aiStore.switchSession(sessionId)
-  scrollToBottom()
+  try {
+    await aiStore.switchSession(sessionId)
+    scrollToBottom()
+  } catch (error) {
+    // Chat.vue 不渲染 ErrorState（见下方「呈现通道规则」），所以必须显式
+    // presentStates —— 否则 forbidden / notFound 会在 resolveMessage 之前早退成零 toast。
+    showError(error, 'ai.loadFailed', { presentStates: true })
+  }
 }
 
 const handleDeleteSession = async (sessionId: string) => {
+  // confirm 与 api 调用分成两段：取消是**控制流**上的静默（裸 return），
+  // 不再靠比较拒绝值 —— 旧代码用一个裸 catch（注释写着「用户取消」）同时包住了
+  // 接口调用，把「删除失败」也报告成「用户取消」。
   try {
     await ElMessageBox.confirm('确定要删除这个会话吗？删除后无法恢复。', '删除会话', {
       confirmButtonText: '确定删除',
       cancelButtonText: '取消',
       type: 'warning'
     })
-    await aiStore.deleteSession(sessionId)
   } catch {
-    // User cancelled
+    // 用户取消：刻意静默，且没有发出任何请求（D-12）。
+    return
+  }
+
+  try {
+    await aiStore.deleteSession(sessionId)
+  } catch (error) {
+    // 失败时会话仍在列表里（store 只在成功后才 filter），用户看到的就是
+    // 「列表没变 + 一条说明」，与实际状态一致。
+    showError(error, 'ai.deleteFailed', { presentStates: true })
   }
 }
 
@@ -485,16 +520,33 @@ const handleSendMessage = async () => {
   const question = inputMessage.value.trim()
   inputMessage.value = ''
   attachmentPreview.value = null
+  sendFailed.value = false
 
   const success = await aiStore.sendMessage(question)
   if (success) {
+    sendFailed.value = false
     scrollToBottom()
+  } else {
+    // 就地恢复：用户输入原样回到输入框，发送按钮已在原位，重试成本为零。
+    // 零 toast 是刻意的 —— 见 sendFailed 的注释。
+    inputMessage.value = question
+    sendFailed.value = true
   }
 }
 
+/** 用户重新编辑输入时撤掉失败提示：那是「上一次没发出去」的状态，不是当前输入的注解。 */
+const handleInputChange = () => {
+  if (sendFailed.value) sendFailed.value = false
+}
+
 const showHistory = async () => {
-  historyConversations.value = await aiStore.getHistory()
-  historyVisible.value = true
+  try {
+    historyConversations.value = await aiStore.getHistory()
+    // 只在成功后打开：失败时打开一个空对话框等于把「请求失败」呈现成「没有历史」。
+    historyVisible.value = true
+  } catch (error) {
+    showError(error, 'ai.loadFailed', { presentStates: true })
+  }
 }
 
 const scrollToBottom = async () => {
@@ -621,7 +673,13 @@ const initParticles = () => {
 }
 
 onMounted(async () => {
-  await aiStore.loadSessions()
+  // 会话列表加载失败不该阻止页面初始化：catch 掉并呈现，随后两步照常执行
+  // （放在 try 之外，失败不会跳过它们）。
+  try {
+    await aiStore.loadSessions()
+  } catch (error) {
+    showError(error, 'ai.loadFailed', { presentStates: true })
+  }
   aiStore.createNewSession()
   await aiStore.fetchRemainingCount()
   await fetchHealthInsights()
@@ -1787,6 +1845,18 @@ onUnmounted(() => {
   opacity: 0.4;
   background: var(--surface-3);
   box-shadow: none;
+}
+
+/* 发送未完成提示：一行、与输入区同宽、不遮挡任何控件。
+   颜色用错误文本 token 而非背景填充 —— 它是状态说明，不是卡片。 */
+.send-failed {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin: var(--sp-3) 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--hhs-color-error-text);
 }
 
 /* Slide-up transition */

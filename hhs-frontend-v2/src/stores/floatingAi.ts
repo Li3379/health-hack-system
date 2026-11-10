@@ -1,6 +1,5 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { ElMessage } from 'element-plus'
 import { aiApi } from '@/api/ai'
 
 export interface ChatMessage {
@@ -117,7 +116,9 @@ export const useFloatingAiStore = defineStore('floatingAi', () => {
 
       return true
     } catch (error: any) {
-      ElMessage.error(error.message || 'AI 对话失败')
+      // D-02：store 不是 UI 层。与 `ai.ts` 的发送路径同形 —— 保留 `false`、
+      // 保留乐观气泡回滚，由 FloatingChatPanel.vue 就地呈现失败并恢复输入。
+      // 错误文案不再由 store 呈现（旧代码在此直接弹一条错误 toast）。
       messages.value = messages.value.slice(0, -1)
       return false
     } finally {

@@ -2,7 +2,16 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { aiApi } from '@/api/ai'
+import { normalizeApiError } from '@/utils/appError'
 import type { ChatSessionVO, ConversationVO } from '@/types/api'
+
+// D-02：store 不是 UI 层。失败一律**上抛**（void 返回的加载器）或**返回 falsy**
+// （两个调用方都按布尔分支的动作），绝不自己弹错误 toast。呈现权归调用点：
+// - `loadSessions` / `switchSession` / `getHistory` / `deleteSession` → throw
+// - `sendMessage` → 保留 `false`（抛错会在事件处理器里变成未处理的拒绝，
+//   且两个调用方都已正确分支，改写它们换不来任何用户可见收益）
+// 删除成功的那一条 success 确认保留：UI-SPEC §5.1 明确允许动作确认类成功提示，
+// 它不在「store 内不得出现错误 toast」的禁令范围内。
 
 export interface ChatMessage {
   role: 'user' | 'assistant'
@@ -40,7 +49,9 @@ export const useAiStore = defineStore('ai', () => {
       const res = await aiApi.getSessions()
       sessions.value = res.data
     } catch (error) {
-      // session load failed
+      // 上抛而非静默：静默会让「会话列表加载失败」看起来就是「你还没有会话」。
+      // 呈现权归调用点（Chat.vue 的 onMounted 包 try/catch → showError）。
+      throw normalizeApiError(error)
     } finally {
       sessionsLoading.value = false
     }
@@ -67,7 +78,8 @@ export const useAiStore = defineStore('ai', () => {
       })
       remainingCount.value = res.data.remainingCount
     } catch (error) {
-      ElMessage.error('加载会话失败')
+      // 上抛；Chat.vue 的 handleSwitchSession 接住并呈现（本 plan 同步接线）。
+      throw normalizeApiError(error)
     } finally {
       loading.value = false
     }
@@ -102,7 +114,10 @@ export const useAiStore = defineStore('ai', () => {
       await loadSessions()
       return true
     } catch (error: any) {
-      ElMessage.error(error.message || '发送失败')
+      // 不抛：两个调用方（Chat.vue / FloatingChatPanel.vue）都读布尔值并就地恢复
+      // 用户输入。抛错会在事件处理器里变成未处理的拒绝，且换不来任何用户可见收益。
+      // 也不弹 toast —— 气泡消失后弹一条转瞬即逝的横幅比「什么都不说」更糟；
+      // 正确的面是就地 retry（见调用点的 inline marker）。
       // Remove the failed user message
       messages.value.pop()
       return false
@@ -123,8 +138,10 @@ export const useAiStore = defineStore('ai', () => {
       ElMessage.success('会话已删除')
       return true
     } catch (error) {
-      ElMessage.error('删除会话失败')
-      return false
+      // 上抛：旧代码返回 false，而它唯一的调用方用一个裸 catch 把「删除失败」
+      // 和「用户取消」混为一谈，真实失败被报告成取消。调用点已拆成
+      // confirm-then-api 两段，因此这里可以安全上抛。
+      throw normalizeApiError(error)
     }
   }
 
@@ -134,10 +151,11 @@ export const useAiStore = defineStore('ai', () => {
       remainingCount.value = res.data.remainingCount
       return res.data.history
     } catch (error) {
-      ElMessage.error('获取历史记录失败')
-      return []
-    }
-  }
+      // 上抛：旧代码在失败时返回一个空数组，让「历史请求失败」与「这段会话
+      // 没有历史」完全不可区分 —— 对话框两种情况都渲染成空。
+      // 抛出让调用点能说清是哪一种，也让它能把对话框保持关闭。
+      throw normalizeApiError(error)
+    }  }
 
   const fetchRemainingCount = async () => {
     try {
