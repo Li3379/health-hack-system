@@ -9,8 +9,20 @@
       </el-button>
     </div>
 
+    <!-- 摘要加载失败：ErrorState 独占呈现（D-02：一个失败只呈现一次，不叠加 toast）。
+         与骨架屏互斥 —— 加载中显示骨架、加载完失败显示块，两态不同时出现。 -->
+    <ErrorState
+      v-if="summaryFailed"
+      variant="server"
+      title="无法加载保健数据"
+      description="可能是网络波动或服务暂时不可用，请重试。"
+      :retry="loadSummary"
+      retry-label="重新加载保健数据"
+      :retrying="wellnessStore.loading"
+    />
+
     <!-- 摘要卡片 -->
-    <el-skeleton :loading="wellnessStore.loading" animated>
+    <el-skeleton v-else :loading="wellnessStore.loading" animated>
       <template #template>
         <el-row :gutter="20" class="summary-row">
           <el-col v-for="n in 6" :key="n" :xs="12" :sm="8" :md="4" :lg="3">
@@ -107,11 +119,27 @@
               </div>
             </div>
           </template>
-          <div
-            ref="sleepChartRef"
-            v-loading="wellnessStore.chartLoading"
-            class="chart-container"
-          ></div>
+          <div class="chart-area">
+            <!-- 趋势加载失败：状态块只落在图表区内（不包整页），
+                 因此已渲染的摘要卡片保持可见 —— 局部降级，不是整页失效。 -->
+            <ErrorState
+              v-if="sleepTrendFailed"
+              variant="server"
+              title="无法加载睡眠趋势"
+              description="保健数据仍在下方，只有这张图表暂时不可用。"
+              :retry="fetchSleepTrend"
+              retry-label="重新加载睡眠趋势"
+              :retrying="wellnessStore.chartLoading"
+            />
+            <!-- v-show 而非 v-if：容器必须始终挂载，否则 ECharts 实例在重试后
+                 找不到挂载点（useECharts.init 在 ref 为空时直接返回）。 -->
+            <div
+              v-show="!sleepTrendFailed"
+              ref="sleepChartRef"
+              v-loading="wellnessStore.chartLoading"
+              class="chart-container"
+            ></div>
+          </div>
         </el-card>
       </el-col>
       <el-col :xs="24" :lg="12">
@@ -142,11 +170,25 @@
               </div>
             </div>
           </template>
-          <div
-            ref="activityChartRef"
-            v-loading="wellnessStore.chartLoading"
-            class="chart-container"
-          ></div>
+          <div class="chart-area">
+            <!-- 第二张图有自己独立的失败标志：一次趋势请求失败不该在成功的图表上
+                 挂出失败说明。 -->
+            <ErrorState
+              v-if="activityTrendFailed"
+              variant="server"
+              title="无法加载活动趋势"
+              description="保健数据仍在下方，只有这张图表暂时不可用。"
+              :retry="fetchActivityTrend"
+              retry-label="重新加载活动趋势"
+              :retrying="wellnessStore.chartLoading"
+            />
+            <div
+              v-show="!activityTrendFailed"
+              ref="activityChartRef"
+              v-loading="wellnessStore.chartLoading"
+              class="chart-container"
+            ></div>
+          </div>
         </el-card>
       </el-col>
     </el-row>
@@ -185,6 +227,7 @@ import { useMetricMetaStore } from '@/stores/metricMeta'
 import { getWellnessMetricColor, getWellnessMetricIcon } from '@/utils/format'
 import { useECharts } from '@/composables/useECharts'
 import ActivityRings from '@/components/ActivityRings.vue'
+import ErrorState from '@/components/common/ErrorState.vue'
 import UniversalMetricDialog from '@/components/metric/UniversalMetricDialog.vue'
 import type { EChartsCoreOption } from 'echarts/core'
 import dayjs from 'dayjs'
@@ -272,8 +315,30 @@ const dateRange = ref(7)
 const showAddDialog = ref(false)
 const dialogRef = ref<any>()
 
+/**
+ * 三个加载失败标志（D-02 的分工：状态块承担呈现，因此本文件不走 toast 出口）。
+ *
+ * <p>摘要与两条趋势各一个，而不是「摘要 + 趋势」两个：
+ * 两个 `fetchTrend` 调用是**独立**的，一个失败另一个可能成功。共用单一趋势标志
+ * 会让成功的图表上挂出「无法加载活动趋势」——那是把一次成功报告成失败，
+ * 比沉默更糟。分开后每个图表区的状态块只描述自己那一次请求的结果。
+ */
+const summaryFailed = ref(false)
+const sleepTrendFailed = ref(false)
+const activityTrendFailed = ref(false)
+
+/** 摘要加载：失败只置标志，绝不 rethrow（未处理的拒绝会在挂载期炸掉页面）。 */
+const loadSummary = async () => {
+  summaryFailed.value = false
+  try {
+    await wellnessStore.fetchSummary(dateRange.value)
+  } catch {
+    summaryFailed.value = true
+  }
+}
+
 const handleDialogSuccess = async () => {
-  await wellnessStore.fetchSummary(dateRange.value)
+  await loadSummary()
   await wellnessStore.fetchLatest()
   await fetchSleepTrend()
   await fetchActivityTrend()
@@ -330,23 +395,36 @@ const getDateRange = (days: number) => {
 
 const fetchSleepTrend = async () => {
   const { startDate, endDate } = getDateRange(dateRange.value)
-  await wellnessStore.fetchTrend(sleepMetric.value, startDate, endDate)
-  sleepTrendData = wellnessStore.trendData
-  sleepColor = getWellnessMetricColor(sleepMetric.value)
-  updateSleepChart()
+  sleepTrendFailed.value = false
+  try {
+    await wellnessStore.fetchTrend(sleepMetric.value, startDate, endDate)
+    sleepTrendData = wellnessStore.trendData
+    sleepColor = getWellnessMetricColor(sleepMetric.value)
+    updateSleepChart()
+  } catch {
+    // 状态块在图表容器内渲染；已渲染的摘要不受影响（局部降级）。
+    sleepTrendFailed.value = true
+  }
 }
 
 const fetchActivityTrend = async () => {
   const { startDate, endDate } = getDateRange(dateRange.value)
-  await wellnessStore.fetchTrend(activityMetric.value, startDate, endDate)
-  activityTrendData = wellnessStore.trendData
-  activityColor = getWellnessMetricColor(activityMetric.value)
-  updateActivityChart()
+  activityTrendFailed.value = false
+  try {
+    await wellnessStore.fetchTrend(activityMetric.value, startDate, endDate)
+    activityTrendData = wellnessStore.trendData
+    activityColor = getWellnessMetricColor(activityMetric.value)
+    updateActivityChart()
+  } catch {
+    activityTrendFailed.value = true
+  }
 }
 
 onMounted(async () => {
   metricMetaStore.fetchMetadata()
-  await wellnessStore.fetchSummary(dateRange.value)
+  // loadSummary 与 fetchSleep/ActivityTrend 内部各自 catch：摘要失败不得跳过
+  // 图表初始化（否则一个失败的摘要会连带让两张图都不渲染）。
+  await loadSummary()
   await wellnessStore.fetchLatest()
 
   await nextTick()
@@ -560,6 +638,12 @@ defineExpose({
 .chart-container {
   height: 300px;
   width: 100%;
+}
+
+/* 图表区外壳：状态块与画布互斥显示，但容器本身必须始终存在，
+   否则重试后 ECharts 找不到挂载点。 */
+.chart-area {
+  min-height: 300px;
 }
 
 .tier-pill-wrapper {

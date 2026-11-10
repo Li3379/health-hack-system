@@ -38,9 +38,28 @@
 |-----------|--------|-----------|------------|--------------|------|-----------|
 | `floatingAi.ts:120` | `error.message \|\| 'AI 对话失败'` | `business`, `server`, `network`, `forbidden`, `notFound`, `auth`, `validation`, `cancel`, `unknown` | **静默**（保留 `return false` + 乐观气泡回滚，移除 `element-plus` 导入） | —（不走 `showError`，无字典键） | **呈现权转移给 `components/ai-floating-ball/FloatingChatPanel.vue` 的 `handleSend`**，与 `ai.ts` 的发送路径同形（保留布尔值，不抛）。**核实结论（14-RESEARCH 开放问题 6）**：该面板此前**没有**任何内联失败面 —— 消息区只渲染气泡与 typing dots，输入区只有 input + 发送按钮；`handleSend` 已有 `inputText` 回填但无任何可见说明。因此本 plan **新建**一行 `panel-send-failed`（本地 ref + 模板一行，`role="status"`），而不是接进既有元素。`element-plus` 的 `ElMessage` 导入随本次迁移一并移除，文件内 `ElMessage` 计数归零。 | `StoreErrorContract.spec.ts#7. 源码里没有 ElMessage.error，也不再从 element-plus 导入 ElMessage`；`#8. 发送失败：解析为 false、不抛、回滚乐观气泡、零 toast` |
 
-## stores/wellness.ts（3 行：2 迁移 + 1 删除，由 Task 2 落盘）
+## stores/wellness.ts（3 行：2 迁移 + 1 删除）
 
-见下方 Task 2 段落（`fetchSummary` / `fetchTrend` 迁移 + `addMetric` 依证据删除）。
+| file:line | 原文案 | kind 覆盖 | 迁移后形态 | fallback key | 理由 | spec 断言 |
+|-----------|--------|-----------|------------|--------------|------|-----------|
+| `wellness.ts:22` | `获取保健数据摘要失败` | `business`, `server`, `network`, `forbidden`, `notFound`, `auth`, `validation`, `cancel`, `unknown` | **静默**（改为 `throw normalizeApiError(error)`） | —（状态块承担呈现，不走 `showError`，无字典键） | **呈现权转移给 `views/wellness/Dashboard.vue` 的 `loadSummary`**（本 plan 新增 try/catch → 置 `summaryFailed`，模板渲染 `ErrorState`，标题「无法加载保健数据」，重试入口 `重新加载保健数据`）。旧代码在失败后**保留上一次的数据**，仪表盘读起来像一个真实的当前值 —— 这是 T-14-36 的典型形态，也是本 plan 要消除的第二个静默吞错。**不传 `presentStates`**：本文件渲染状态块，状态块拥有呈现权时绝不叠加 toast（UI-SPEC §1.3「一次失败两条提示」禁令）。 | `StoreErrorContract.spec.ts#14. 摘要加载失败：fetchSummary 上抛而不是静默保留旧数据`；`#17. 摘要加载失败：渲染恰好一个 .error-state，零 toast，且不显示零值卡片` |
+| `wellness.ts:43` | `获取趋势数据失败` | 同上 | **静默**（改为 `throw normalizeApiError(error)`） | —（状态块承担呈现） | **呈现权转移给 `views/wellness/Dashboard.vue` 的 `fetchSleepTrend` / `fetchActivityTrend`**（各自 try/catch → 各自的失败标志）。状态块**只落在图表容器内**（`.chart-area`），不包整页 —— 这是「局部降级」的实现方式：趋势失败时已渲染的摘要卡片保持可见（UI Considerations · partial E7）。**两条趋势各有独立标志**而非共用一个：两次请求独立，共用会让成功的图表上挂出失败说明。图表容器用 `v-show` 而非 `v-if` 保留挂载点，否则重试后 ECharts 找不到容器。 | `StoreErrorContract.spec.ts#15. 趋势加载失败：fetchTrend 上抛而不是静默`；`#18. 趋势加载失败：摘要仍然渲染，只有图表区出现状态块`；`#19. 两条趋势独立降级：只有失败的那张图出现状态块` |
+| `wellness.ts:64` | `添加失败` | *（整行随方法退役）* | **删除（死 action 退役）** | — | **依证据删除，不是依假设。** 全树搜索：`grep -rn "addMetric" src/` 只命中三处，无一是本 store action 的调用 —— ① `stores/wellness.ts` 自身（方法定义与返回对象）、② `api/realtime.ts:6` 的 `addMetric`（`realtimeApi` 的同名不同物，由 `views/realtime/Monitor.vue:428` 调用）、③ `__tests__/views/MonitorInlineError.spec.ts` 里对 `realtimeApi.addMetric` 的 mock。因此本 action **零调用方**。一个带 toast 的死 action 既是残留也是负债：它让「store 内不得弹错误 toast」的检查永远需要一条例外，而删除是保行为的。**同一方法内的 `ElMessage.success('添加成功')`（原 `:58`）随方法一并消失**，所以 `wellness.ts` 的 `ElMessage` 计数归零、`ElMessage.success` 计数也为 0 —— 这是 `addMetric` 存活与否的分支取「已删除」那一支的直接后果，plan 的验收条目因此按 0 断言。 | `StoreErrorContract.spec.ts#12. 源码里没有 ElMessage.error，且 element-plus 的 ElMessage 导入已彻底移除`；`#13. 死 action 已被删除：源码与返回对象都不再暴露 addMetric`；`#10. ai 1 条 success、push 1 条 success、wellness 0 条、floatingAi 0 条` |
+
+### `addMetric` 删除的证据留痕
+
+搜索命令与输出（在本 plan 执行时运行，`src/` 全树）：
+
+```
+$ grep -rn "addMetric" src/ --include=*.ts --include=*.vue
+src/api/realtime.ts:6:  addMetric(data: RealtimeMetricRequest) {      ← realtimeApi，不同模块
+src/stores/wellness.ts:49:  const addMetric = async (data: {          ← 本 store 的定义
+src/stores/wellness.ts:80:    addMetric                              ← 本 store 的导出
+src/__tests__/views/MonitorInlineError.spec.ts:24:  addMetricMock …    ← realtimeApi 的 mock
+…（MonitorInlineError.spec.ts 其余 6 处同为 realtimeApi.addMetric 的 mock 与断言）
+```
+
+补充确认：`grep -rn "addMetric" src/views/ src/components/ src/composables/` 只返回 `views/realtime/Monitor.vue:428` 的 `realtimeApi.addMetric(...)`。**没有一处调用 `useWellnessStore().addMetric`。** 删除因此不改变任何用户可见行为，只移除一条无法归零的例外。
 
 ## 本片段的呈现通道规则
 
