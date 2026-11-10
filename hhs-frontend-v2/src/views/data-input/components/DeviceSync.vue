@@ -325,6 +325,8 @@ import { deviceApi } from '@/api/device'
 import type { DeviceConnectionVO, SyncHistoryVO } from '@/types/api'
 import type { PlatformMetadata } from '@/types/platform'
 import { PLATFORM_ICONS, PLATFORM_COLORS } from '@/types/platform'
+import { showError } from '@/utils/showError'
+import { ApiError } from '@/utils/appError'
 import DeviceConfigWizard from './DeviceConfigWizard.vue'
 import PlatformStatusTag from '@/components/device/PlatformStatusTag.vue'
 
@@ -332,9 +334,13 @@ const emit = defineEmits<{
   (e: 'refresh'): void
 }>()
 
-// Network status
+// 失败呈现约定（本文件）：`@/utils/request` 的响应拦截器在信封 code !== 200 时
+// 直接 reject，所以任何 `if (res.code === 200)` 之后都不需要「非 200」分支 ——
+// 那种分支永远不可达。所有失败只从 catch 进入 `showError` 单一出口。
+
+// Network status（`isOnline` 仍驱动离线提示条与 online/offline 监听；
+// 但失败文案的「是否断网」判定已交给 normalizeApiError 的 network 归类）
 const isOnline = ref(navigator.onLine)
-const offlineMessage = '网络连接已断开，请检查网络后重试'
 
 // Device state
 const devices = ref<DeviceConnectionVO[]>([])
@@ -385,15 +391,6 @@ const handleOnline = () => {
 const handleOffline = () => {
   isOnline.value = false
   ElMessage.warning('网络连接已断开')
-}
-
-// Check network before action
-const checkNetwork = (): boolean => {
-  if (!isOnline.value) {
-    ElMessage.warning(offlineMessage)
-    return false
-  }
-  return true
 }
 
 // Load devices
@@ -477,8 +474,6 @@ const getConnectDisabledReason = (platform: string): string => {
 
 // Handle connect - uses in-page navigation instead of popup
 const handleConnect = async (platform: string) => {
-  if (!checkNetwork()) return
-
   connectingPlatform.value = platform
   try {
     const res = await deviceApi.connect(platform)
@@ -492,16 +487,11 @@ const handleConnect = async (platform: string) => {
     } else if (res.code === 400 && res.message?.includes('未配置')) {
       // Platform not configured, show configuration wizard
       showConfigWizard.value = true
-    } else {
-      ElMessage.error(res.message || '连接失败')
     }
-  } catch (error: any) {
-    // Check if it's a network error
-    if (!isOnline.value || error.message?.includes('Network Error')) {
-      ElMessage.error(offlineMessage)
-    } else {
-      ElMessage.error(error.message || '连接失败')
-    }
+  } catch (error) {
+    // 断网由 normalizeApiError 归类为 network（无 response 的 AxiosError），
+    // 页面自己的 isOnline 判断是同一件事的第二个真值源，已删除。
+    showError(error, 'device.loadFailed', { presentStates: true })
   } finally {
     connectingPlatform.value = null
   }
@@ -515,27 +505,30 @@ const handleWizardConnect = (platform: string) => {
 
 // Handle disconnect
 const handleDisconnect = async (platform: string) => {
+  // 确认框与请求拆成两个 try：确认的取消是唯一且刻意的静默。
+  // 旧的单个 catch 把「用户取消」与「接口真实失败」混为一谈，真实失败被静默吞掉。
   try {
     await ElMessageBox.confirm('确定要断开此设备的连接吗？', '提示', {
       type: 'warning'
     })
+  } catch {
+    // 取消确认框：刻意静默，不弹任何提示。
+    return
+  }
 
+  try {
     const res = await deviceApi.disconnect(platform)
     if (res.code === 200) {
       ElMessage.success('已断开连接')
       loadDevices()
-    } else {
-      ElMessage.error(res.message || '断开失败')
     }
-  } catch {
-    // User cancelled
+  } catch (error) {
+    showError(error, 'device.loadFailed', { presentStates: true })
   }
 }
 
 // Handle sync
 const handleSync = async (platform: string) => {
-  if (!checkNetwork()) return
-
   syncingPlatform.value = platform
   lastSyncError.value = null
 
@@ -548,39 +541,29 @@ const handleSync = async (platform: string) => {
         emit('refresh')
         loadDevices() // Refresh to update lastSyncAt
       } else {
+        // 注意：这里是一次**成功**的 HTTP 调用报告同步失败，不是 HTTP 失败。
+        // 直接把原始对象交给 showError 会被归一化成 unknown，因此显式构造业务错误。
         lastSyncError.value = {
           platform,
           title: `${data.platformName} 同步失败`,
           message: data.errorMessage || '同步失败，请重试'
         }
-        ElMessage.error(data.errorMessage || '同步失败')
+        showError(new ApiError(data.errorMessage || '同步失败', 'business'), 'device.syncFailed', {
+          presentStates: true
+        })
       }
-    } else {
-      const device = devices.value.find(d => d.platform === platform)
-      lastSyncError.value = {
-        platform,
-        title: `${device?.platformName || platform} 同步失败`,
-        message: res.message || '同步失败'
-      }
-      ElMessage.error(res.message || '同步失败')
     }
-  } catch (error: any) {
+  } catch (error) {
     const device = devices.value.find(d => d.platform === platform)
-    // Check if it's a network error
-    if (!isOnline.value || error.message?.includes('Network Error')) {
-      lastSyncError.value = {
-        platform,
-        title: `${device?.platformName || platform} 网络错误`,
-        message: offlineMessage
-      }
-      ElMessage.error(offlineMessage)
-    } else {
-      lastSyncError.value = {
-        platform,
-        title: `${device?.platformName || platform} 同步失败`,
-        message: error.message || '同步失败'
-      }
-      ElMessage.error(error.message || '同步失败')
+    // 面板与 toast 并存是刻意的（Contract 3 §3.4）：面板是「这台设备上次同步结果」的
+    // 内容区状态（带按设备重试、关闭前一直留着），toast 确认「这一次动作没完成」。
+    // 断网与其它失败共用同一出口；面板标题仍区分网络类失败，依据是归一化后的 kind，
+    // 不再看 isOnline 与 message 字符串。
+    const apiError = showError(error, 'device.syncFailed', { presentStates: true })
+    lastSyncError.value = {
+      platform,
+      title: `${device?.platformName || platform} ${apiError.kind === 'network' ? '网络错误' : '同步失败'}`,
+      message: apiError.message || '同步失败，请重试'
     }
   } finally {
     syncingPlatform.value = null
@@ -594,8 +577,6 @@ const retrySync = (platform: string) => {
 
 // Handle sync all
 const handleSyncAll = async () => {
-  if (!checkNetwork()) return
-
   syncingAll.value = true
   lastSyncError.value = null
 
@@ -623,13 +604,8 @@ const handleSyncAll = async () => {
       emit('refresh')
       loadDevices()
     }
-  } catch (error: any) {
-    // Check if it's a network error
-    if (!isOnline.value || error.message?.includes('Network Error')) {
-      ElMessage.error(offlineMessage)
-    } else {
-      ElMessage.error(error.message || '同步失败')
-    }
+  } catch (error) {
+    showError(error, 'device.syncFailed', { presentStates: true })
   } finally {
     syncingAll.value = false
   }
@@ -652,7 +628,8 @@ const loadSyncHistory = async (page = 1) => {
       historyTotal.value = res.data.total || 0
     }
   } catch (error) {
-    ElMessage.error('加载同步历史失败')
+    // 表格保留原有行（UI Considerations · error E7）：失败不清空 syncHistory。
+    showError(error, 'device.loadFailed', { presentStates: true })
   } finally {
     loadingHistory.value = false
   }
