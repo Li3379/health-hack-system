@@ -3,7 +3,20 @@
     <el-page-header title="返回" @back="goBack">
       <template #content><span class="page-title">筛查报告对比</span></template>
     </el-page-header>
-    <el-card v-loading="loading" class="compare-card">
+
+    <!-- 非法路由参数：这是「路由状态」，在发出任何请求之前就可判定，
+         因此用页级状态块而不是 toast（UI-SPEC Contract 3 §3.6 的页级几何）。
+         页级作用域的理由：畸形 URL 之后页面上没有值得保留的内容。 -->
+    <ErrorState
+      v-if="routeInvalid"
+      scope="page"
+      variant="notFound"
+      title="页面不存在"
+      description="该对比链接不完整，请从体检报告列表重新选择两份报告。"
+      :actions="[{ label: '返回列表', onClick: goList, variant: 'primary' }]"
+    />
+
+    <el-card v-else v-loading="loading" class="compare-card">
       <div v-if="data" class="compare-content">
         <div class="compare-headers">
           <div class="header-a">
@@ -65,33 +78,43 @@
 
 <script setup lang="ts">
 import { ref, onMounted, nextTick } from 'vue'
-import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
+import ErrorState from '@/components/common/ErrorState.vue'
 import { screeningCompareApi, type ScreeningComparisonVO } from '@/api/screening-compare'
+import { showError } from '@/utils/showError'
 import { staggerReveal, countUp } from '@/composables/useGsap'
 
 const route = useRoute()
 const router = useRouter()
 const loading = ref(false)
 const data = ref<ScreeningComparisonVO | null>(null)
+// 参数非法是路由状态（请求之前即可判定），不是一次失败的动作。
+const routeInvalid = ref(false)
 
 const idA = Number(route.params.idA)
 const idB = Number(route.params.idB)
 
 const fetchComparison = async () => {
-  if (!idA || !idB) { ElMessage.error('参数错误'); return }
+  // 先判定、再请求：状态从路由本身可读，不涉及任何分类，也不该发一次注定失败的调用。
+  if (!Number.isFinite(idA) || !Number.isFinite(idB) || idA <= 0 || idB <= 0) {
+    routeInvalid.value = true
+    return
+  }
   loading.value = true
   try {
     const res = await screeningCompareApi.compare(idA, idB)
     data.value = res.data
   } catch (error) {
-    ElMessage.error('获取对比数据失败')
+    // 动作失败（不是路由状态）：本页没有 403 的页级处理，故显式 presentStates。
+    showError(error, 'screening.loadFailed', { presentStates: true })
   } finally {
     loading.value = false
   }
 }
 
 const goBack = () => { router.back() }
+
+const goList = () => { router.push('/screening/list') }
 
 onMounted(async () => {
   await fetchComparison()
