@@ -70,6 +70,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { wellnessApi } from '@/api/wellness'
 import { formatDateTime, getMetricLabel, getMoodDescription } from '@/utils/format'
+import { showError } from '@/utils/showError'
 import { useMetricMetaStore } from '@/stores/metricMeta'
 import UniversalMetricDialog from '@/components/metric/UniversalMetricDialog.vue'
 import type { WellnessMetricVO } from '@/types/api'
@@ -97,7 +98,8 @@ const fetchMetrics = async () => {
     metrics.value = res.data.records
     pagination.total = res.data.total
   } catch (error) {
-    ElMessage.error('获取数据失败')
+    // 表格保留原有行（UI Considerations · error E7）：失败时不清空 metrics。
+    showError(error, 'metric.loadFailed', { presentStates: true })
   } finally {
     loading.value = false
   }
@@ -124,13 +126,20 @@ const handleDelete = async (row: WellnessMetricVO) => {
     await ElMessageBox.confirm('确定要删除这条记录吗？', '提示', {
       type: 'warning'
     })
+  } catch {
+    // 取消确认框：刻意静默，零提示（Contract 7 §7.2 的第二种合法形态）。
+    // 旧写法比较两个哨兵值（第二个来自 before-close / 关闭按钮）—— 而
+    // `ElMessageBox.confirm` 只以字符串形式的取消值拒绝，那一半永远不成立。
+    // 整条手写比较随这次迁移消失（ERR-08 的第九处，也是最后一处）。
+    return
+  }
+
+  try {
     await wellnessApi.deleteMetric(row.id)
     ElMessage.success('删除成功')
     fetchMetrics()
   } catch (error) {
-    if (error !== 'cancel' && error !== 'close') {
-      ElMessage.error('删除失败')
-    }
+    showError(error, 'metric.deleteFailed', { presentStates: true })
   }
 }
 

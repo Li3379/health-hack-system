@@ -369,8 +369,8 @@ const handleAddProgress = async () => {
  * 删除：确认与请求彻底分离。
  *
  * 取消路径是一个裸 `return` —— 用户按了「取消」不是失败，零提示（D-12 / ERR-08）。
- * 原先的 `if (e !== 'cancel')` 手写判断对 `AbortError` 与归一化后的
- * `ApiError('', 'cancel')` 都会误判成真失败，因此整段删掉。
+ * 原先的手写取消判断（把拒绝值与字符串形式的取消哨兵逐字比较）对 `AbortError`
+ * 与归一化后的 `ApiError('', 'cancel')` 都会误判成真失败，因此整段删掉。
  * 删除一个「已经不存在的行」返回 RESOURCE_NOT_FOUND，第三个参数
  * 让它仍然产生恰好一条提示。
  */

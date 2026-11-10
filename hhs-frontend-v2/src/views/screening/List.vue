@@ -293,8 +293,8 @@ const viewDetail = (id: number) => {
  * 删除：确认与请求彻底分离。
  *
  * 取消路径是一个裸 `return` —— 用户按了「取消」不是失败，零提示（D-12 / ERR-08）。
- * 原先的手写取消判断（`if (e !== 'cancel')` 那一类）对 `AbortError` 与归一化后的
- * `ApiError('', 'cancel')` 都会误判成真失败，因此整段删掉。
+ * 原先的手写取消判断（把拒绝值与字符串形式的取消哨兵逐字比较）对 `AbortError`
+ * 与归一化后的 `ApiError('', 'cancel')` 都会误判成真失败，因此整段删掉。
  * `ScreeningServiceImpl:197` 对「报告不存在」与「别人的报告」都抛 `RESOURCE_NOT_FOUND`，
  * 后者是常规竞态；第三个参数让它仍然产生恰好一条提示而不是静默。
  */
