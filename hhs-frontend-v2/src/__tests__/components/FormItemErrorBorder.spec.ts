@@ -14,11 +14,22 @@ import { ElForm, ElFormItem, ElInput } from 'element-plus'
 //                 （input/select 的 border-color、textarea 的 inset shadow、
 //                 三个聚焦标记），并且每条 wrapper 选择器都用 `body` 前缀抬高特异性。
 //
-// 刻意不做的事：本文件**没有**任何 `getComputedStyle` 断言。happy-dom 对
-// `border-color` / `box-shadow` 的解析会返回空串，写这种断言只会得到一个
-// 「永远通过但什么都没验证」的假绿灯 —— 那比显式交给 UAT 更糟。
-// 计算样式的四条自检（描边色解析值、textarea shadow 含 inset、halo 存在且
-// 描边仍为错误色、失焦后 halo 消失）在 14-14 的人工 UAT 中于真实浏览器内完成。
+// ===== 交给 UAT 的四条浏览器检查（本文件刻意不测） =====
+// UI-SPEC 4.2「执行者的四条自检」需要在真实浏览器里读计算样式，happy-dom 给不出
+// 可信结果（`getComputedStyle` 对 border-color / box-shadow 返回空串）。因此以下
+// 四项在 14-14 的人工 UAT 中逐条完成，本 spec 只覆盖「类锚点 + 选择器清单」：
+//
+//   1. 出错字段的 `.el-input__wrapper` 计算 border-color 解析为 rgb(185,28,28)（亮色）
+//      / rgb(245,108,108)（暗色）。
+//   2. 出错字段的 `.el-textarea__inner` 计算 box-shadow 含 `inset` 且颜色为同一 token。
+//   3. 出错字段聚焦后 box-shadow 含 3px tint 光晕、border-color 仍为错误色 ——
+//      三类控件各验一次：el-input（.is-focus）、el-select（.is-focused）、
+//      el-date-picker type="daterange"（.is-active；这一类是唯一会在规则 ①
+//      的 `box-shadow: none !important` 下丢失焦点指示的控件）。
+//   4. 失焦后 box-shadow 回到 none（光晕消失），border-color 仍是错误色。
+//
+// 本文件**没有**任何 `getComputedStyle` 断言：写一个在 happy-dom 里永远通过的空断言，
+// 比显式把这项交出去更糟。
 // ---------------------------------------------------------------------------
 
 const THEME_CSS_PATH = resolve(process.cwd(), 'src/assets/styles/theme.css')
@@ -48,6 +59,49 @@ function readErrorBlock(): string {
 function readThemeCss(): string {
   return readFileSync(THEME_CSS_PATH, 'utf8')
 }
+
+interface CssRule {
+  selectors: string[]
+  body: string
+}
+
+/** 把剥过注释的块拆成 { selectors, body } 列表，供选择器级断言使用。 */
+function rulesIn(block: string): CssRule[] {
+  const rules: CssRule[] = []
+  const pattern = /([^{}]+)\{([^{}]*)\}/g
+  let match: RegExpExecArray | null
+
+  while ((match = pattern.exec(block)) !== null) {
+    rules.push({
+      selectors: match[1]
+        .split(',')
+        .map(selector => selector.trim())
+        .filter(Boolean),
+      body: match[2].trim()
+    })
+  }
+
+  return rules
+}
+
+/**
+ * 三个控件族 → 各自的聚焦标记。
+ * 用表驱动而不是三条独立的 expect：将来若出现第四个控件族，漏写标记时
+ * 失败信息会直接点名缺哪一族，而不是让读者自己比对两处清单。
+ *
+ * daterange 一族的 wrapper 是 `.el-input__wrapper`（范围选择器的根节点自身就是它，
+ * 见 picker.vue 的 rangeInputKls），但它不经过 ElInput，所以标记是 `.is-active`，
+ * 永远拿不到 `.is-focus`。
+ */
+const FOCUS_FAMILIES: Array<{ family: string; wrapper: string; marker: string }> = [
+  { family: 'el-input', wrapper: '.el-input__wrapper', marker: '.is-focus' },
+  { family: 'el-select', wrapper: '.el-select__wrapper', marker: '.is-focused' },
+  {
+    family: 'el-date-picker type="daterange"',
+    wrapper: '.el-input__wrapper',
+    marker: '.is-active'
+  }
+]
 
 describe('el-form-item 错误锚点（半 A：真实 element-plus）', () => {
   // `.is-error` 类来自 validateState（immediate），但错误消息节点由
@@ -93,12 +147,40 @@ describe('el-form-item 错误锚点（半 A：真实 element-plus）', () => {
 })
 
 describe('theme.css 字段错误描边块（半 B：源码形状）', () => {
-  it('三个聚焦标记都在新增块里出现', () => {
-    const block = readErrorBlock()
+  it('三个控件族各自都有匹配的聚焦标记选择器', () => {
+    const rules = rulesIn(readErrorBlock())
 
-    expect(block).toContain('.is-focus')
-    expect(block).toContain('.is-focused')
-    expect(block).toContain('.is-active')
+    for (const { family, wrapper, marker } of FOCUS_FAMILIES) {
+      const matched = rules.some(rule =>
+        rule.selectors.some(
+          selector => selector.includes(wrapper) && selector.includes(marker)
+        )
+      )
+
+      expect(
+        matched,
+        `控件族「${family}」缺少带 ${marker} 的 ${wrapper} 选择器 —— 出错且聚焦时该控件将没有焦点指示`
+      ).toBe(true)
+    }
+  })
+
+  it('规则 ③ 在同一条规则里同时声明错误描边色和 tint 光晕', () => {
+    const rules = rulesIn(readErrorBlock())
+    const focusMarkers = FOCUS_FAMILIES.map(entry => entry.marker)
+
+    // UI-SPEC 的 WCAG 2.4.7 论证依赖两者同时存在：只声明光晕时，
+    // border-color 会回落到非错误样式，聚焦中的出错字段看起来反而像健康字段。
+    const pairedRule = rules.find(
+      rule =>
+        rule.selectors.some(selector => focusMarkers.some(marker => selector.includes(marker))) &&
+        rule.body.includes('border-color: var(--hhs-color-error-text) !important') &&
+        rule.body.includes('box-shadow: 0 0 0 3px var(--hhs-color-error-tint) !important')
+    )
+
+    expect(
+      pairedRule,
+      '焦点规则必须同时声明 border-color 错误色与 3px tint 光晕，否则聚焦态会掩盖错误态'
+    ).toBeDefined()
   })
 
   it('textarea 两条规则都在（inset 描边 + 聚焦组合）', () => {
@@ -132,5 +214,10 @@ describe('theme.css 字段错误描边块（半 B：源码形状）', () => {
 
     expect(block).toContain('--hhs-color-error-text')
     expect(block).not.toContain('--el-color-danger')
+  })
+
+  it('整份 theme.css 都不引用 --el-color-danger（错误色必须是项目 token）', () => {
+    // EP 的 #f56c6c 在纯白上只有 2.90:1，低于非文字对比度 3:1 的底线。
+    expect(readThemeCss()).not.toContain('el-color-danger')
   })
 })
