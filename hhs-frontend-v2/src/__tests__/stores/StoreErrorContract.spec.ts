@@ -47,15 +47,68 @@ vi.mock('@/api/ai', () => ({
   }
 }))
 
+vi.mock('@/api/wellness', () => ({
+  wellnessApi: {
+    getSummary: vi.fn(),
+    getLatest: vi.fn(),
+    getTrend: vi.fn(),
+    getMetrics: vi.fn(),
+    createMetric: vi.fn(),
+    updateMetric: vi.fn(),
+    deleteMetric: vi.fn()
+  }
+}))
+
+vi.mock('@/api/metric-meta', () => ({
+  metricMetaApi: {
+    getMetadata: vi.fn().mockResolvedValue({ code: 200, message: 'success', data: {} })
+  }
+}))
+
+// Dashboard.vue 的 onMounted 消费 gsap 形状；照抄 PreventionAndWellness.spec.ts:73。
+vi.mock('@/composables/useGsap', () => ({
+  gsap: { timeline: () => ({ fromTo: vi.fn().mockReturnThis() }) },
+  cleanupScrollTriggers: vi.fn(),
+  staggerReveal: vi.fn(),
+  countUp: vi.fn(),
+  tilt3D: vi.fn(),
+  parallax: vi.fn(),
+  scrollScale: vi.fn(),
+  magneticHover: vi.fn(),
+  buttonPress: vi.fn(),
+  hoverLift: vi.fn(),
+  hoverShine: vi.fn(),
+  rippleClick: vi.fn(),
+  DUR: { mid: 0.5, slow: 0.8, dramatic: 1.2 },
+  EASE: { out: 'power2.out', back: 'back.out', expo: 'expo.out' }
+}))
+
+// ECharts 在 happy-dom 里没有 canvas 上下文；composable 只需返回空壳。
+vi.mock('@/composables/useECharts', () => ({
+  useECharts: () => ({
+    init: vi.fn(),
+    updateOption: vi.fn(),
+    resize: vi.fn(),
+    dispose: vi.fn()
+  })
+}))
+
 import { useAiStore } from '@/stores/ai'
 import { useFloatingAiStore } from '@/stores/floatingAi'
+import { useWellnessStore } from '@/stores/wellness'
 import { aiApi } from '@/api/ai'
+import { wellnessApi } from '@/api/wellness'
 import { ElMessage } from 'element-plus'
+import { mount, flushPromises } from '@vue/test-utils'
+import WellnessDashboard from '@/views/wellness/Dashboard.vue'
 
 const getSessionsMock = aiApi.getSessions as unknown as Mock
 const getHistoryMock = aiApi.getHistory as unknown as Mock
 const clearHistoryMock = aiApi.clearHistory as unknown as Mock
 const chatMock = aiApi.chat as unknown as Mock
+const getSummaryMock = wellnessApi.getSummary as unknown as Mock
+const getTrendMock = wellnessApi.getTrend as unknown as Mock
+const getLatestMock = wellnessApi.getLatest as unknown as Mock
 
 type MessageSpy = Mock & Record<'error' | 'success' | 'warning' | 'info', Mock>
 const ElMessageMock = ElMessage as unknown as MessageSpy
@@ -208,14 +261,234 @@ describe('D-02 — 参照形态：push store 保持「分类而不呈现」', ()
   })
 })
 
+describe('D-02 — wellness store 不再呈现错误', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+  })
+
+  it('12. 源码里没有 ElMessage.error，且 element-plus 的 ElMessage 导入已彻底移除', () => {
+    const code = codeOnly('src/stores/wellness.ts')
+    expect(code).not.toContain('ElMessage.error')
+    // `addMetric` 依证据删除（无调用方），因此它的 success 提示也随方法一并消失。
+    // 这里断言 0 而不是 1：断言必须描述磁盘上的事实，不能描述「如果它还在」。
+    expect(code.match(/ElMessage/g)).toBeNull()
+    expect(importsElMessage('src/stores/wellness.ts')).toBe(false)
+  })
+
+  it('13. 死 action 已被删除：源码与返回对象都不再暴露 addMetric', () => {
+    const code = codeOnly('src/stores/wellness.ts')
+    // 搜索证据：全树 `grep -rn "addMetric" src/` 只命中本文件、api/realtime.ts 的
+    // 同名不同物、以及 MonitorInlineError.spec.ts 对 realtimeApi.addMetric 的 mock。
+    expect(code).not.toMatch(/const addMetric\s*=/)
+    expect(code).not.toMatch(/^\s*addMetric,?\s*$/m)
+
+    const store = useWellnessStore()
+    expect('addMetric' in store).toBe(false)
+  })
+
+  it('14. 摘要加载失败：fetchSummary 上抛而不是静默保留旧数据', async () => {
+    getSummaryMock.mockRejectedValueOnce({ response: { status: 500, data: {} } })
+
+    const store = useWellnessStore()
+    await expect(store.fetchSummary(7)).rejects.toBeTruthy()
+    expect(store.loading).toBe(false)
+    expect(toastCount()).toBe(0)
+  })
+
+  it('15. 趋势加载失败：fetchTrend 上抛而不是静默', async () => {
+    getTrendMock.mockRejectedValueOnce({ response: { status: 500, data: {} } })
+
+    const store = useWellnessStore()
+    await expect(store.fetchTrend('sleepDuration', '2026-11-01', '2026-11-07')).rejects.toBeTruthy()
+    expect(store.chartLoading).toBe(false)
+    expect(toastCount()).toBe(0)
+  })
+
+  it('16. 成功路径：两个加载器都正常写入状态，零 toast', async () => {
+    getSummaryMock.mockResolvedValueOnce({
+      code: 200,
+      message: 'success',
+      data: { summaryDate: '2026-11-10', totalSteps: 8000, avgSleepDuration: 7.5, metrics: [] }
+    })
+    getTrendMock.mockResolvedValueOnce({
+      code: 200,
+      message: 'success',
+      data: { dates: ['2026-11-09'], values: [7], unit: '小时' }
+    })
+
+    const store = useWellnessStore()
+    await store.fetchSummary(7)
+    await store.fetchTrend('sleepDuration', '2026-11-01', '2026-11-07')
+
+    expect(store.summary?.totalSteps).toBe(8000)
+    expect(store.trendData?.values).toEqual([7])
+    expect(toastCount()).toBe(0)
+  })
+})
+
+describe('D-02 — wellness dashboard 用状态块而非 toast', () => {
+  /**
+   * Dashboard 的 el-* 桩：ErrorState 是真实组件（不桩），因为本组断言的对象
+   * 正是它渲染出的 `.error-state`。
+   */
+  const globalStubs = {
+    'el-card': { template: '<div class="el-card"><slot name="header" /><slot /></div>' },
+    'el-row': { template: '<div class="el-row"><slot /></div>', props: ['gutter'] },
+    'el-col': { template: '<div class="el-col"><slot /></div>', props: ['span', 'xs', 'sm', 'md', 'lg'] },
+    'el-skeleton': {
+      template: '<div class="el-skeleton"><slot name="default" /></div>',
+      props: ['loading', 'animated']
+    },
+    'el-skeleton-item': { template: '<div class="el-skeleton-item" />', props: ['variant'] },
+    'el-button': {
+      emits: ['click'],
+      template: '<button class="el-button" @click="$emit(\'click\', $event)"><slot /></button>',
+      props: ['type', 'loading', 'disabled', 'size', 'plain', 'icon', 'link']
+    },
+    'el-icon': { template: '<span class="el-icon"><slot /></span>' },
+    'el-select': { template: '<select class="el-select"><slot /></select>', props: ['modelValue', 'size', 'style'] },
+    'el-option': { template: '<option class="el-option" />', props: ['label', 'value'] },
+    ActivityRings: { template: '<div class="activity-rings-stub" />', props: ['exercisePercent', 'sleepPercent', 'habitsPercent'] },
+    UniversalMetricDialog: { template: '<div class="dialog-stub" />', props: ['modelValue', 'category', 'title'] }
+  }
+
+  function mountDashboard() {
+    return mount(WellnessDashboard, {
+      global: { stubs: globalStubs, directives: { loading: () => {} } }
+    })
+  }
+
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+    getLatestMock.mockResolvedValue({ code: 200, message: 'success', data: {} })
+  })
+
+  afterEach(() => {
+    document.body.innerHTML = ''
+  })
+
+  it('17. 摘要加载失败：渲染恰好一个 .error-state，零 toast，且不显示零值卡片', async () => {
+    getSummaryMock.mockRejectedValueOnce({ response: { status: 500, data: {} } })
+    getTrendMock.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: { dates: [], values: [], unit: '小时' }
+    })
+
+    const wrapper = mountDashboard()
+    await flushPromises()
+
+    // 状态块存在 —— 这是「加载失败不是空数据」的唯一证据。
+    expect(wrapper.findAll('.error-state')).toHaveLength(1)
+    expect(wrapper.text()).toContain('无法加载保健数据')
+    // 零 toast：状态块拥有呈现权时绝不叠加 toast（一个失败只呈现一次）。
+    expect(toastCount()).toBe(0)
+    // 失败的摘要不渲染成一组零值卡片 —— 那读起来像真实的「今天都是 0」。
+    expect(wrapper.findAll('.metric-card')).toHaveLength(0)
+
+    wrapper.unmount()
+  })
+
+  it('18. 趋势加载失败：摘要仍然渲染，只有图表区出现状态块', async () => {
+    getSummaryMock.mockResolvedValueOnce({
+      code: 200,
+      message: 'success',
+      data: {
+        summaryDate: '2026-11-10',
+        totalSteps: 8000,
+        avgSleepDuration: 7.5,
+        metrics: [
+          {
+            metricKey: 'sleepDuration',
+            displayName: '睡眠时长',
+            unit: '小时',
+            latestValue: 7.5,
+            trend: 1.2
+          }
+        ]
+      }
+    })
+    getTrendMock.mockRejectedValue({ response: { status: 500, data: {} } })
+
+    const wrapper = mountDashboard()
+    await flushPromises()
+
+    // 局部降级：摘要卡片仍在（这是 UI Considerations · partial E7 的可执行断言）。
+    expect(wrapper.findAll('.metric-card').length).toBeGreaterThan(0)
+    expect(wrapper.text()).toContain('睡眠时长')
+    // 两张图的趋势请求都失败 → 两个图表区各有自己的状态块。
+    expect(wrapper.findAll('.error-state')).toHaveLength(2)
+    expect(wrapper.text()).toContain('无法加载睡眠趋势')
+    expect(wrapper.text()).toContain('无法加载活动趋势')
+    // 零 toast：这是本文件不使用 showError 的直接后果。
+    expect(toastCount()).toBe(0)
+
+    wrapper.unmount()
+  })
+
+  it('19. 两条趋势独立降级：只有失败的那张图出现状态块', async () => {
+    getSummaryMock.mockResolvedValueOnce({
+      code: 200,
+      message: 'success',
+      data: { summaryDate: '2026-11-10', totalSteps: 8000, avgSleepDuration: 7.5, metrics: [] }
+    })
+    // 第一次 fetchTrend（睡眠）失败，第二次（活动）成功。
+    getTrendMock
+      .mockRejectedValueOnce({ response: { status: 500, data: {} } })
+      .mockResolvedValueOnce({
+        code: 200,
+        message: 'success',
+        data: { dates: ['2026-11-09'], values: [9000], unit: '步' }
+      })
+
+    const wrapper = mountDashboard()
+    await flushPromises()
+
+    // 一个成功一个失败 → 恰好一个状态块，且它描述的是失败的那一张。
+    expect(wrapper.findAll('.error-state')).toHaveLength(1)
+    expect(wrapper.text()).toContain('无法加载睡眠趋势')
+    expect(wrapper.text()).not.toContain('无法加载活动趋势')
+    expect(toastCount()).toBe(0)
+
+    wrapper.unmount()
+  })
+
+  it('20. 两条都成功：零状态块、零 toast（空数据也不等于错误）', async () => {
+    getSummaryMock.mockResolvedValueOnce({
+      code: 200,
+      message: 'success',
+      data: { summaryDate: '2026-11-10', totalSteps: 0, avgSleepDuration: 0, metrics: [] }
+    })
+    getTrendMock.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: { dates: [], values: [], unit: '小时' }
+    })
+
+    const wrapper = mountDashboard()
+    await flushPromises()
+
+    // UI Considerations · empty E7：成功但无数据渲染空态，绝不渲染错误态。
+    expect(wrapper.findAll('.error-state')).toHaveLength(0)
+    expect(toastCount()).toBe(0)
+
+    wrapper.unmount()
+  })
+})
+
 describe('D-02 — 允许存活的 success 提示与 auth 的既有提示（逐文件断言）', () => {
-  it('10. ai 1 条 success、push 1 条 success、floatingAi 0 条 —— 三者各自断言，不求和', () => {
+  it('10. ai 1 条 success、push 1 条 success、wellness 0 条、floatingAi 0 条 —— 逐文件断言，不求和', () => {
     const aiSuccess = codeOnly('src/stores/ai.ts').match(/ElMessage\.success/g)?.length ?? 0
     const pushSuccess = codeOnly('src/stores/push.ts').match(/ElMessage\.success/g)?.length ?? 0
+    const wellnessAny = codeOnly('src/stores/wellness.ts').match(/ElMessage/g)?.length ?? 0
     const floatingAny = codeOnly('src/stores/floatingAi.ts').match(/ElMessage/g)?.length ?? 0
 
     expect(aiSuccess).toBe(1)
     expect(pushSuccess).toBe(1)
+    // `addMetric` 依证据删除后，wellness 的 success 提示也随之消失（见测试 13）。
+    expect(wellnessAny).toBe(0)
     expect(floatingAny).toBe(0)
   })
 
