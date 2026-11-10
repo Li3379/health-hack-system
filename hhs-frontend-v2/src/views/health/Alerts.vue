@@ -133,6 +133,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { CircleCheck, Warning } from '@element-plus/icons-vue'
 import { useAlertStore } from '@/stores/alert'
 import { alertApi } from '@/api/alert'
+import { showError } from '@/utils/showError'
 import {
   formatDateTime,
   getMetricLabel,
@@ -176,7 +177,7 @@ const fetchAlerts = async () => {
     alerts.value = res.data.records
     pagination.total = res.data.total
   } catch (error) {
-    ElMessage.error('获取预警失败')
+    showError(error, 'alert.loadFailed', { presentStates: true })
   } finally {
     loading.value = false
   }
@@ -197,7 +198,7 @@ const markRead = async (id: number) => {
     fetchAlerts()
     alertStore.fetchUnreadCount()
   } catch (error) {
-    ElMessage.error('操作失败')
+    showError(error, 'alert.updateFailed', { presentStates: true })
   }
 }
 
@@ -207,7 +208,7 @@ const acknowledge = async (id: number) => {
     ElMessage.success('已确认')
     fetchAlerts()
   } catch (error) {
-    ElMessage.error('操作失败')
+    showError(error, 'alert.updateFailed', { presentStates: true })
   }
 }
 
@@ -216,14 +217,18 @@ const markAllRead = async () => {
     await ElMessageBox.confirm('确定要将所有未读预警标记为已读吗？', '提示', {
       type: 'warning'
     })
+  } catch {
+    // 取消确认框：刻意静默，零提示（Contract 7 §7.2 的第二种合法形态）。
+    return
+  }
+
+  try {
     await alertApi.markAllAsRead()
     ElMessage.success('操作成功')
     fetchAlerts()
     alertStore.fetchUnreadCount()
   } catch (error) {
-    if (error !== 'cancel') {
-      ElMessage.error('操作失败')
-    }
+    showError(error, 'alert.updateFailed', { presentStates: true })
   }
 }
 
@@ -232,13 +237,17 @@ const handleDelete = async (id: number) => {
     await ElMessageBox.confirm('确定要删除这条预警吗？', '提示', {
       type: 'warning'
     })
+  } catch {
+    // 取消确认框：刻意静默，零提示（Contract 7 §7.2 的第二种合法形态）。
+    return
+  }
+
+  try {
     await alertApi.deleteAlert(id)
     ElMessage.success('删除成功')
     fetchAlerts()
   } catch (error) {
-    if (error !== 'cancel') {
-      ElMessage.error('删除失败')
-    }
+    showError(error, 'alert.deleteFailed', { presentStates: true })
   }
 }
 
