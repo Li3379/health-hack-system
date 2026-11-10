@@ -1,11 +1,11 @@
 ---
-status: testing
+status: complete
 phase: 14-error-rollout
 source:
   - 14-VERIFICATION.md
   - 14-UAT-SCRIPT.md（13 步可执行脚本原件，保留备查）
 started: 2026-11-11T01:10:00Z
-updated: 2026-11-11T01:40:00Z
+updated: 2026-11-11T02:20:00Z
 ---
 
 ## 采样口径
@@ -20,15 +20,7 @@ updated: 2026-11-11T01:40:00Z
 
 ## Current Test
 
-number: 4
-name: 断网 60 秒、轮询活跃：全程零 toast
-expected: |
-  1. 打开 `/realtime/monitor`（轮询/WS 活跃页）；
-  2. 停后端或 DevTools 切 Offline；
-  3. 停留 60 秒不做任何操作；
-  4. 采样 `document.querySelectorAll('.el-message').length` **全程 ≤ 1**（去重生效，不堆叠）；
-  5. 恢复后状态块消失或提供重试，仍不产生重复 toast。
-awaiting: user response
+[testing complete]
 
 ## Tests
 
@@ -49,55 +41,70 @@ result_note: "`/health/thresholds` 加载失败 → 内容区渲染「无法加�
 
 ### 4. 断网 60 秒、轮询活跃：全程零 toast，恢复后仍零
 expected: 轮询页断网 60 秒 → toast 全程 ≤1（不堆叠），恢复后不重复
-result: pending
+result: pass
+result_note: 轮询页 /realtime/monitor 60 秒，每 10 秒采样一次共 6 次，全程 0 条 toast（比 ≤1 更严格）。去重与静默均生效。
 
 ### 5. 服务端拒绝某字段的表单：汇总 + N 条内联 + 零 toast + 值保留
 expected: 提交一个会被 `@Valid` 拒绝的字段 → 顶部汇总块 + 该字段内联错误 + **零 toast** + 输入保留
-result: pending
+result: pass
+result_note: 阈值向导第 2 步把「警告低值」改成 150（大于警告高值）→ 2 条内联错误 + 汇总块「请修正以下 2 项填写问题」+ 下一步禁用 + 零 toast + 输入值 150 未被清空。
 
 ### 6. 普通账号访问设备平台页：页级 403 块、单个「返回首页」
 expected: 访问 `/settings/device-platform`（无侧边栏入口，需手输）→ **页级** 403 解释块（非 toast）、单个「返回首页」动作
-result: pending
+result: pass
+result_note: 实测 error-state--page（页级后缀）、标题「无权访问此页面」、说明「当前账号没有访问该页面的权限，请返回首页，或联系管理员申请开通。」、单个「返回首页」动作、零 toast。
 
 ### 7. 不存在的筛查记录详情：内容区块、两个动作、零 toast
 expected: `/screening/detail/<不存在id>` → **内容区** 404 块、两个动作（返回列表 / 重新加载该记录）、零 toast
-result: pending
+result: pass
+result_note: 实测内容区块（error-state 无 --page 后缀，与 403 形成对比）、标题「资源不存在」、说明「该资源可能已被删除，请返回列表查看最新数据。」、两个动作「返回列表」+「重新加载该记录」、零 toast。
 
 ### 8. 手输未知 URL：页级 404 块，不是白屏
 expected: 手输 `/no-such-page` → **页级** 404 块（route-level catch-all），不是白屏也非跳首页
-result: pending
+result: pass
+result_note: 实测页级块「页面不存在」+「返回首页」，blank=false（非白屏），零 toast。route-level catch-all 生效。
 
 ### 9. 取消删除确认：零 toast
 expected: 点删除 → 确认框 → 点「取消」→ **零 toast**（取消不是失败）
-result: pending
+result: pass
+result_note: 阈值页删除 → 确认框出现 → 点「取消」→ 零 toast、行数仍 6（未删除）。取消不再被误判为失败。
 
 ### 10. 导航离开取消在途请求：零 toast
 expected: 发起加载后立刻切换路由 → **零 toast**（AbortError 被识别为 cancel）
-result: pending
+result: pass
+result_note: 从 `/health/metrics` 发起加载后立即切到 `/dashboard` → 落地后 toastCount=0。中途取消未被误判为失败。
 
 ### 11. 必填留空提交：输入框有红**描边**，不只是红字
 expected: 必填字段留空提交 → 该输入框出现**红色描边**（14-02 全局规则），而非仅 12px 红字
-result: pending
+result: pass
+result_note: 出生日期留空提交 → is-error 生效、内联「请选择出生日期」、四方向 borderColor 实测 rgb(185,28,28)（= #b91c1c，14-02 规则①生效）+ 截图目视确认红描边。零 toast。注意：读取需等 transition 结束（约 150ms），过早读会得到过渡起点色 rgba(0,0,0,0.08)。
 
 ### 12. 日期范围控件出错并聚焦：边框仍红，且有可见焦点光晕
 expected: daterange 出错并聚焦 → 边框保持红 **且** 有可见焦点光晕（`.is-active` 通道生效，WCAG 2.4.7）
-result: pending
+result: issue
+reported: 边框保持红（rgb(185,28,28)）通过；但焦点光晕未出现（boxShadow: none）。输入框确已聚焦（document.activeElement 为该 input、el-input:focus-within = true），然而 EP 2.14 未给 .el-input__wrapper 加 is-focus 类，14-02 规则③的 .is-focus 选择器永不匹配 → WCAG 2.4.7 焦点指示缺失
+severity: minor
 
 ### 13. 两个视口兜底：320px 与 640px
 expected: 320px 与 640px 下错误状态块/描边/按钮均不溢出、不重叠
-result: pending
+result: pass
+result_note: 320px 与 640px 两档实测：`overflowX=false`、状态块宽 ≤ 视口、两个动作按钮零重叠（pairwise 检测）。
 
 ### N-1. 无档案用户打开个人档案页：create 模式仍成立
 expected: 无档案账号打开 `/prevention/profile` → create 模式可用，不被引导逻辑挡住
-result: pending
+result: pass
+result_note: 无档案账号实测：完整度显示 0%、「编辑」按钮可用并成功进入编辑态、页面无「无权访问」类门禁文案。与成功标准 5「无路由门禁」一致。
 
 ### N-2. 阈值页重复指标恢复动作仍可用
 expected: 对已有阈值的指标再保存 → 1 条 toast + 「打开编辑」可跳转编辑
-result: pending
+result: pass
+result_note: 对已存在的心率阈值再次走完向导保存 → 恰好 1 条 toast「资源已存在: 该指标已有阈值，是否改为编辑？」且含「打开编辑」动作。零 500、无重复弹窗。
 
 ### 附-14-02. 四条 computed-style 自检（WINDOWS.md #7 结转）
 expected: ① 描边色 resolves 到错误 token；② textarea 用 inset box-shadow；③ 三族控件聚焦光晕 3px 且边框仍红；④ 失焦后光晕消失
-result: pending
+result: issue
+reported: ① 通过（border 实测 rgb(185,28,28) = token #b91c1c）；② 无法验证——全站所有 textarea 均为可选字段（描述类），永不进入 is-error 态，规则无从触发；③ 失败——见步骤 12（EP 2.14 不给 wrapper 加 is-focus，光晕不出现）；④ 随之不可测
+severity: minor
 
 ## 附：403 可达性说明
 
@@ -106,15 +113,27 @@ result: pending
 ## Summary
 
 total: 16
-passed: 3
-issues: 0
-pending: 13
+passed: 14
+issues: 2
+pending: 0
 skipped: 0
 blocked: 0
 
 ## Gaps
 
-<!-- None yet -->
+1. **步骤 12 / 附-14-02③ — 错误态聚焦时焦点光晕不出现**（severity: minor）
+   - truth: 出错控件聚焦时应保留红边 **且** 出现可见焦点光晕（WCAG 2.4.7）
+   - status: failed
+   - reason: 实测 input 已聚焦（`document.activeElement` 为该元素、`el-input:focus-within` = true），但 **EP 2.14 未给 `.el-input__wrapper` 添加 `is-focus` 类**，故 14-02 规则③的 `.is-focus` 选择器永不匹配，`box-shadow` 保持 `none`
+   - 边框本身正确（rgb(185,28,28)），仅光晕缺失
+   - artifacts: `hhs-frontend-v2/src/assets/styles/theme.css:1434-1438`（规则③）
+   - missing: 把焦点选择器从 `.is-focus` 改为 `:focus-within`（或同时保留两者），因为 `:focus-within` 由浏览器原生提供、不依赖 EP 的类名时机
+
+2. **附-14-02② — textarea 的 inset box-shadow 无法验证**（severity: info）
+   - truth: textarea 出错时用 inset box-shadow 描红
+   - status: blocked
+   - reason: 全站所有 textarea 均为可选字段（描述类），永不进入 `is-error` 状态，规则无从触发。不是缺陷，是当前无该场景
+   - missing: 若将来出现必填 textarea，需补验；或加一条临时必填 textarea 的测试页
 ---
 
 ## 🔴 UAT 发现缺陷 #1 — 全局错误描边未生效（步骤 11 失败）
