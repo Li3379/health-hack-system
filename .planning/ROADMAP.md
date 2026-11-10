@@ -347,7 +347,37 @@ Plans:
   3. 停止后端后逐页点击保存/加载，每个动作恰好出现一条中文可行动提示；断网 60 秒内轮询不产生重复 toast
   4. 前端 `npm run test:run` 全绿且用例数不少于既有 90 项基线（新增错误分类、取消/中止、无英文文案、阈值次序、完整度等级测试），后端 `mvn clean verify -DskipITs` 全绿，E2E `quick-input.spec.ts` 成功文案契约仍然通过
 
-**Plans**: TBD
+**Plans:** 14 plans
+
+Plans:
+**Wave 1** *(A-1 foundation — must land before any migration)*
+
+- [ ] 14-01-PLAN.md — 两个新 ErrorKind（forbidden/notFound）+ 分类顺序 + showError presentStates + ErrorState scope/actions + 403 全页块端到端
+- [ ] 14-02-PLAN.md — theme.css 字段级错误描边全局块（input/select 走 border、textarea 走 inset、三族焦点标记）
+- [ ] 14-03-PLAN.md — 字典 18→46 键、字段标签 17→44、useFormServerErrors labels 覆盖、collectInvalidFieldMessages 提取
+
+**Wave 2** *(403/404 surfaces + first inline batch, depends on 14-01/14-02/14-03)*
+
+- [ ] 14-04-PLAN.md — 404 内容区块（screening detail/compare）+ 路由级 404 catch-all 与 NotFound 视图
+- [ ] 14-05-PLAN.md — goals + reminders 表单内联（含 labels 覆盖范式）+ 首个迁移台账片段
+- [ ] 14-14-PLAN.md — 补齐三处后端已校验但未内联的表单：auth 登录/注册 + push 设置（按渠道隔离的字段投影）
+
+**Wave 3** *(ERR-03/ERR-05 并行批次，每批以模块作用域 grep=0 验收)*
+
+- [ ] 14-06-PLAN.md — user/Profile 双表单独立投影 + screening/List 上传对话框内联
+- [ ] 14-07-PLAN.md — UniversalMetricDialog（5 个 spec 修复）+ DevicePlatformConfig 动作型 presentStates
+- [ ] 14-08-PLAN.md — mood 表单结构整改（无 :model 无 prop）+ realtime 内联表单
+- [ ] 14-09-PLAN.md — health 模块 12 处转换：9 处手写 cancel 判断中的 4 处 + 两处 error.response 死代码
+- [ ] 14-12-PLAN.md — stores 8 处按 D-02 上抛/返回 + 发送失败就地 retry 气泡 + wellness 状态块
+- [ ] 14-10-PLAN.md — DeviceSync/AIInput/AiHistory：7 处不可达 else 删除 + 私有 handleApiError 退役
+
+**Wave 4** *(data-input 收尾 + prevention，depends on 14-10 以保持模块内顺序)*
+
+- [ ] 14-11-PLAN.md — OcrInput/OcrHistory/Wizard + prevention：完成 12 处删除与最后的手写 cancel 判断
+
+**Wave 5** *(phase gate，depends on all)*
+
+- [ ] 14-13-PLAN.md — 九段台账合并为 87 行 + 四条结构性检查转为可执行 spec + 全量双端回归 + 13 步 UAT 脚本
 
 **UI hint**: yes
 
