@@ -234,6 +234,87 @@ describe('appError.normalizeApiError', () => {
     })
   })
 
+  describe('403 / 404 状态通道（A-2 四条反回归锚点）', () => {
+    // 为什么需要这四条：修好之前，真实 403 会漏过第 7 步 5xx 判定、落到兜底成为
+    // `server`（retryable=true → 常驻可重试 toast，邀请用户重试一个永远不会成功的动作）；
+    // 信封形态的 403/404 会被第 8 步信封业务码吞成 `business`（普通 4s toast）。
+    // 两者都会摧毁 ERR-07 要求的通道分离。
+
+    it('① 真实 HTTP 403 判为 forbidden 且不可重试（不是 server）', () => {
+      const err = normalizeApiError(axiosError(403, { message: '没有访问权限' }))
+
+      expect(err.kind).toBe('forbidden')
+      expect(err.kind).not.toBe('server')
+      // retryable=false 是权限语义的核心：showError 的 hasRetry 依赖它，
+      // 否则即使调用点传了 retry 回调也会渲染「重试」按钮（UI-SPEC §5.3）。
+      expect(err.retryable).toBe(false)
+      expect(err.status).toBe(403)
+      expect(err.message).toBe('没有访问权限')
+    })
+
+    it('② 信封 403（数值 code 500 + errorCode auth.forbidden）判为 forbidden，不是 business', () => {
+      // 线上真实形态：Result.failure(String code, …) 的 parseCodeToInt 把非数字码回退成 500。
+      // 数值 code 因此无法判定权限，只有 errorCode 字符串可以。
+      const err = normalizeApiError(
+        axiosError(200, {
+          code: 500,
+          errorCode: 'auth.forbidden',
+          message: '没有访问权限'
+        })
+      )
+
+      expect(err.kind).toBe('forbidden')
+      expect(err.kind).not.toBe('business')
+      expect(err.code).toBe('auth.forbidden')
+      expect(err.retryable).toBe(false)
+    })
+
+    it('③ 信封数值 code 404 判为 notFound', () => {
+      const err = normalizeApiError(
+        axiosError(200, {
+          code: 404,
+          errorCode: 'resource.not_found',
+          message: '请求的资源不存在'
+        })
+      )
+
+      expect(err.kind).toBe('notFound')
+      expect(err.kind).not.toBe('business')
+      expect(err.code).toBe('resource.not_found')
+    })
+
+    it('④ 信封 health.profile_not_found（数值 code 500）判为 notFound 并保留 errorCode', () => {
+      // prevention/Profile.vue 与 stores/profileCompleteness.ts 读 err.code 判定建档模式；
+      // 新增分支若不透传 errorCode，首访建档会退化成真实故障提示（A-2 用例 ④）。
+      const err = normalizeApiError(
+        axiosError(200, {
+          code: 500,
+          errorCode: 'health.profile_not_found',
+          message: '健康档案不存在，请先完成建档'
+        })
+      )
+
+      expect(err.kind).toBe('notFound')
+      expect(err.code).toBe('health.profile_not_found')
+      expect(err.status).toBe(200)
+    })
+
+    it('接受点号与下划线两种分隔符的 not_found 错误码族', () => {
+      const codes = [
+        'goal.not_found',
+        'mood.entry_not_found',
+        'user.not_found',
+        'resource.file_not_found'
+      ]
+
+      for (const errorCode of codes) {
+        const err = normalizeApiError(axiosError(200, { code: 500, errorCode, message: '不存在' }))
+        expect(err.kind, `errorCode=${errorCode}`).toBe('notFound')
+        expect(err.code).toBe(errorCode)
+      }
+    })
+  })
+
   describe('兜底与字符串信封码', () => {
     it('does not treat a string envelope code as business (typeof number guard)', () => {
       const err = normalizeApiError(

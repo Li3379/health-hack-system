@@ -178,4 +178,74 @@ describe('ErrorState.vue', () => {
     expect(wrapper.element.contains(active as Node | null)).toBe(false)
     wrapper.unmount()
   })
+
+  // === Phase 14 Contract 2/3：scope 与 actions（既有 14 条用例保持不变）===
+
+  it('adds the error-state--page class when scope is page', () => {
+    const wrapper = mountErrorState({ scope: 'page' })
+
+    expect(wrapper.find('.error-state').classes()).toContain('error-state--page')
+    wrapper.unmount()
+  })
+
+  it('renders no retry button when actions is non-empty (the two are mutually exclusive)', () => {
+    // actions 与 retry 互斥：需要重试就显式写一条 action，避免出现两个并列的
+    // 「重试」入口（Contract 2 §2.1）。
+    const wrapper = mountErrorState({
+      retry: vi.fn(),
+      actions: [{ label: '返回首页', onClick: vi.fn(), variant: 'primary' }]
+    })
+
+    const buttons = wrapper.findAll('.el-button')
+    expect(buttons).toHaveLength(1)
+    expect(buttons[0].text()).toBe('返回首页')
+    // 按钮集合里没有第二个「重试」入口（说明文本里的「请重试」不算）。
+    expect(buttons.map(button => button.text())).not.toContain('重试')
+    wrapper.unmount()
+  })
+
+  it('renders actions in declaration order', () => {
+    const wrapper = mountErrorState({
+      variant: 'notFound',
+      title: '资源不存在',
+      actions: [
+        { label: '返回列表', onClick: vi.fn(), variant: 'primary' },
+        { label: '重新加载该记录', onClick: vi.fn(), variant: 'default' }
+      ]
+    })
+
+    const labels = wrapper.findAll('.el-button').map(button => button.text())
+    expect(labels).toEqual(['返回列表', '重新加载该记录'])
+    wrapper.unmount()
+  })
+
+  it('uses each action-label as both the visible text and the aria-label', () => {
+    // Contract 3 §3.2：actions[].label 双重身份 —— 标签必须自带对象，
+    // 不能既写「重试」又把可访问名补成别的句子。
+    const wrapper = mountErrorState({
+      actions: [
+        { label: '返回列表', onClick: vi.fn(), variant: 'primary' },
+        { label: '重新加载该记录', onClick: vi.fn(), variant: 'default' }
+      ]
+    })
+
+    const buttons = wrapper.findAll('.el-button')
+    expect(buttons[0].text()).toBe('返回列表')
+    expect(buttons[0].attributes('aria-label')).toBe('返回列表')
+    expect(buttons[1].text()).toBe('重新加载该记录')
+    expect(buttons[1].attributes('aria-label')).toBe('重新加载该记录')
+    wrapper.unmount()
+  })
+
+  it('keeps the muted icon circle for the forbidden variant in page scope', () => {
+    // 403/404 是中性状态，不能渲染成红色故障；页级块只是去掉了卡片面，不改配色语义。
+    const wrapper = mountErrorState({ scope: 'page', variant: 'forbidden' })
+
+    expect(wrapper.find('.error-state--page').exists()).toBe(true)
+    expect(wrapper.find('.error-state__icon-circle').classes()).toContain(
+      'error-state__icon-circle--muted'
+    )
+    expect(wrapper.find('.icon-lock').exists()).toBe(true)
+    wrapper.unmount()
+  })
 });

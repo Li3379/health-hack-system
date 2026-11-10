@@ -1,5 +1,17 @@
 <template>
   <div class="device-platform-config">
+    <!-- D-03：页面首个主查询返回 forbidden 时，整页内容降级为页级解释块，零 toast。
+         页头标题保持可用（用户知道自己在哪），侧边栏与导航不受影响。 -->
+    <ErrorState
+      v-if="forbidden"
+      scope="page"
+      variant="forbidden"
+      title="无权访问此页面"
+      :description="deniedDescription"
+      :actions="[{ label: '返回首页', onClick: goHome, variant: 'primary' }]"
+    />
+
+    <template v-else>
     <el-card shadow="hover">
       <template #header>
         <div class="card-header">
@@ -225,15 +237,20 @@
         <el-button type="primary" :loading="saving" @click="handleSaveConfig">保存</el-button>
       </template>
     </el-dialog>
+    </template>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, reactive, onUnmounted, nextTick } from 'vue'
+import { useRouter } from 'vue-router'
 import { gsap, cleanupScrollTriggers, DUR, EASE } from '@/composables/useGsap'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
 import { deviceApi, type PlatformConfigStatus, type AdminConfigRequest } from '@/api/device'
+import ErrorState from '@/components/common/ErrorState.vue'
+import { normalizeApiError } from '@/utils/appError'
+import { showError } from '@/utils/showError'
 
 // State
 const loading = ref(false)
@@ -245,6 +262,16 @@ const encryptionKeyConfigured = ref(true)
 const showConfigDialog = ref(false)
 const editingPlatform = ref<PlatformConfigStatus | null>(null)
 const configFormRef = ref<FormInstance>()
+
+// 403 全页解释态（D-03）：只由服务端响应驱动，不做任何前端角色判断。
+const router = useRouter()
+const forbidden = ref(false)
+const deniedDescription = ref(
+  '当前账号没有访问该页面的权限，请返回首页，或联系管理员申请开通。'
+)
+const goHome = () => {
+  router.push('/dashboard')
+}
 
 const configForm = reactive<AdminConfigRequest & { scopes: string[] }>({
   platform: '',
@@ -284,7 +311,11 @@ const unconfiguredPlatforms = computed(() => {
 // Methods
 const loadConfigs = async () => {
   loading.value = true
+  // 重试（刷新按钮）后若权限已真的被开通，必须撤掉上一轮的页级块。
+  forbidden.value = false
   try {
+    // 两个请求必须保持串行：checkConfigReady 依赖 adminGetAllStatus 的成功语义
+    // （Pitfall 12）。首个请求被 403 拒绝时直接进入 catch，第二个不会发出。
     const res = await deviceApi.adminGetAllStatus()
     if (res.code === 200) {
       platforms.value = res.data
@@ -296,7 +327,19 @@ const loadConfigs = async () => {
       encryptionKeyConfigured.value = readyRes.data.encryptionReady
     }
   } catch (error) {
-    ElMessage.error('加载配置失败')
+    const err = normalizeApiError(error)
+    // D-03：403 是「整页不可用」状态 —— 渲染页级块、零 toast，且不再发后续请求。
+    // 只认服务端返回的 kind，不在前端判断角色（前端没有角色信息）。
+    if (err.kind === 'forbidden') {
+      forbidden.value = true
+      // 后端消息点名了被拒动作时用它；通用「没有访问权限」不覆盖兜底句（Contract 2 §2.6）。
+      const backendMessage = err.message?.trim() ?? ''
+      if (backendMessage && backendMessage !== '没有访问权限') {
+        deniedDescription.value = backendMessage
+      }
+      return
+    }
+    showError(err, 'device.loadFailed')
   } finally {
     loading.value = false
   }
@@ -489,6 +532,9 @@ onUnmounted(() => { cleanupScrollTriggers() })
 <style scoped>
 .device-platform-config {
   padding: 20px;
+  /* 页级状态块的高度由宿主内边距决定：padding 20px → 上下合计 40px。
+     未声明时变量回退 0px（padding:0 的宿主无需改动）。不是设计 token。 */
+  --hhs-page-pad-y: 40px;
 }
 
 .card-header {

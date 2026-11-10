@@ -36,6 +36,15 @@ export interface ShowErrorOptions {
    * 后端 400 会完全不可见。这些调用点显式 opt-in，让校验失败也走同一个 toast 出口。
    */
   presentValidation?: boolean
+  /**
+   * 呈现状态类失败（默认 false → 零 toast）。
+   *
+   * <p>403 / 404 的语义是「状态」，默认由页面上的状态块（`ErrorState`）承担呈现，
+   * 因此默认**不弹任何 toast** —— 状态块与 toast 同时出现就是同一次失败的两次呈现。
+   * 只有用户主动触发的动作没有对应状态块可落（例如「删除他人记录」被拒），
+   * 调用点才显式 opt-in 一条常驻 toast。
+   */
+  presentStates?: boolean
 }
 
 /** 字典条文长度上限；后端下发的文案不受此限制，绝不截断。 */
@@ -113,6 +122,7 @@ function isDuplicateVNodeToast(key: string, now: number): boolean {
  * - business（无动作）→ 1 条字符串 toast，grouping 合并重复
  * - business（带恢复动作）/ network / server / 带 retry → 1 条 VNode 常驻 toast
  * - auth(401) → 0 条（可见提示统一由 authStore.logout() 的 ElMessage.info 承担）
+ * - forbidden / notFound → 0 条（状态块承担呈现）；显式 presentStates 时 1 条 duration:0 常驻 toast，无动作按钮
  *
  * 安全：showError 只把文案作为文本子节点交给 `h`，不使用 dangerouslyUseHTMLString，
  * 也不拼接 HTML —— 后端 message 不会被当作标记解释（T-11-10）。
@@ -129,6 +139,11 @@ export function showError(
   if (err.kind === 'cancel') return err
   if (err.kind === 'validation' && opts?.presentValidation !== true) return err
   if (opts?.silent === true) return err
+  // 403 / 404 是「状态」：默认零 toast，由页面状态块承担呈现（D-03）。
+  // 必须放在 resolveMessage 之前 —— 不产生任何呈现的状态不该做文案解析。
+  if ((err.kind === 'forbidden' || err.kind === 'notFound') && opts?.presentStates !== true) {
+    return err
+  }
 
   // 后端文案优先；只有走到字典回退时才考虑 30 字上限（字典本身已受约束，实际不会截断）。
   // 后端下发的超长中文必须完整换行显示，绝不 slice —— UI-SPEC long-text 兜底要求（backstop）。
@@ -168,7 +183,16 @@ export function showError(
 
   // 字符串分支：business 且没有可用动作。
   // 若调用方给了 action 但标签解析为空串，也退化为这一分支（不引入未审校的兜底文案）。
-  const needsVNode = hasRetry || hasAction || err.kind === 'network' || err.kind === 'server'
+  // forbidden / notFound 必须进 VNode 分支：字符串分支的 duration 恒为 4000，
+  // 而状态类失败要求 duration: 0 常驻（UI-SPEC Contract 5 §5.2）。
+  // 二者都不带动作按钮 —— 权限不会因重试而改变，资源消失也不该由 toast 提供出口。
+  const needsVNode =
+    hasRetry ||
+    hasAction ||
+    err.kind === 'network' ||
+    err.kind === 'server' ||
+    err.kind === 'forbidden' ||
+    err.kind === 'notFound'
   if (!needsVNode) {
     emitToast(
       {
