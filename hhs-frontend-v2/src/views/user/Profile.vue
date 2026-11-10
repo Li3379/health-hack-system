@@ -23,18 +23,54 @@
             label-width="100px"
             :disabled="!editing"
           >
+            <!-- 汇总块必须是 <el-form> 的第一个子节点（Contract 4.3）。本页有两个表单，
+                 因此有两个汇总块、两个实例 —— 一个共享实例会让密码表单的错误出现在
+                 个人信息卡片里，且汇总条目混着两边的字段（Contract 4.5 规则 4）。 -->
+            <FormErrorSummary
+              ref="profileSummaryRef"
+              :summary-items="profileErrors.summaryItems"
+              @focus-field="profileErrors.focusField"
+            />
             <el-form-item label="用户名">
               <el-input v-model="authStore.user!.username" disabled />
             </el-form-item>
-            <el-form-item label="昵称" prop="nickname">
-              <el-input v-model="form.nickname" placeholder="请输入昵称" />
+            <el-form-item
+              label="昵称"
+              prop="nickname"
+              data-field="nickname"
+              :error="profileErrors.fieldErrors['nickname']"
+            >
+              <el-input
+                v-model="form.nickname"
+                placeholder="请输入昵称"
+                @update:model-value="profileErrors.clearField('nickname')"
+              />
             </el-form-item>
-            <el-form-item label="邮箱" prop="email">
-              <el-input v-model="form.email" placeholder="请输入邮箱" />
+            <el-form-item
+              label="邮箱"
+              prop="email"
+              data-field="email"
+              :error="profileErrors.fieldErrors['email']"
+            >
+              <el-input
+                v-model="form.email"
+                placeholder="请输入邮箱"
+                @update:model-value="profileErrors.clearField('email')"
+              />
             </el-form-item>
-            <el-form-item label="手机号" prop="phone">
-              <el-input v-model="form.phone" placeholder="请输入手机号" />
+            <el-form-item
+              label="手机号"
+              prop="phone"
+              data-field="phone"
+              :error="profileErrors.fieldErrors['phone']"
+            >
+              <el-input
+                v-model="form.phone"
+                placeholder="请输入手机号"
+                @update:model-value="profileErrors.clearField('phone')"
+              />
             </el-form-item>
+            <!-- 只读项不参与服务端校验：没有 prop、没有 :error（它们不可能被后端拒绝）。 -->
             <el-form-item label="注册时间">
               <el-input :value="formatDateTime(authStore.user!.createdAt)" disabled />
             </el-form-item>
@@ -52,28 +88,52 @@
             :rules="passwordRules"
             label-width="100px"
           >
-            <el-form-item label="原密码" prop="oldPassword">
+            <!-- 密码表单自己的汇总：与个人信息卡片的实例完全独立（字段顺序也不同）。 -->
+            <FormErrorSummary
+              ref="passwordSummaryRef"
+              :summary-items="passwordErrors.summaryItems"
+              @focus-field="passwordErrors.focusField"
+            />
+            <el-form-item
+              label="原密码"
+              prop="oldPassword"
+              data-field="oldPassword"
+              :error="passwordErrors.fieldErrors['oldPassword']"
+            >
               <el-input
                 v-model="passwordForm.oldPassword"
                 type="password"
                 placeholder="请输入原密码"
                 show-password
+                @update:model-value="passwordErrors.clearField('oldPassword')"
               />
             </el-form-item>
-            <el-form-item label="新密码" prop="newPassword">
+            <el-form-item
+              label="新密码"
+              prop="newPassword"
+              data-field="newPassword"
+              :error="passwordErrors.fieldErrors['newPassword']"
+            >
               <el-input
                 v-model="passwordForm.newPassword"
                 type="password"
                 placeholder="请输入新密码"
                 show-password
+                @update:model-value="passwordErrors.clearField('newPassword')"
               />
             </el-form-item>
-            <el-form-item label="确认密码" prop="confirmPassword">
+            <el-form-item
+              label="确认密码"
+              prop="confirmPassword"
+              data-field="confirmPassword"
+              :error="passwordErrors.fieldErrors['confirmPassword']"
+            >
               <el-input
                 v-model="passwordForm.confirmPassword"
                 type="password"
                 placeholder="请再次输入新密码"
                 show-password
+                @update:model-value="passwordErrors.clearField('confirmPassword')"
               />
             </el-form-item>
             <el-form-item>
@@ -153,6 +213,9 @@ import { userApi } from '@/api/user'
 import { healthApi } from '@/api/health'
 import { alertApi } from '@/api/alert'
 import { screeningApi } from '@/api/screening'
+import { useFormServerErrors, collectInvalidFieldMessages } from '@/composables/useFormServerErrors'
+import FormErrorSummary from '@/components/common/FormErrorSummary.vue'
+import { showError } from '@/utils/showError'
 import { formatDateTime } from '@/utils/format'
 import type { UpdateProfileRequest, ChangePasswordRequest } from '@/types/api'
 
@@ -181,6 +244,41 @@ const stats = reactive({
   reportCount: 0,
   aiChatCount: 0
 })
+
+/**
+ * 两个表单各一个投影实例。
+ *
+ * 本页是「同一页两个表单」的唯一案例：一个共享实例会让密码表单的错误落进个人信息卡片，
+ * 且两个汇总块都列出同一批字段 —— 每份汇总必须各自回答「这里错了几项」。
+ * 字段名在两处都无歧义（全局 `FIELD_LABELS` 已含 nickname/email/phone/oldPassword/
+ * newPassword/confirmPassword），因此不需要 `labels` 覆盖。
+ *
+ * 用 `reactive()` 持有返回值，让模板里 `profileErrors.fieldErrors['email']` 读到字符串而不是 Ref。
+ */
+const profileErrors = reactive(useFormServerErrors({
+  fieldOrder: ['nickname', 'email', 'phone']
+}))
+
+const passwordErrors = reactive(useFormServerErrors({
+  fieldOrder: ['oldPassword', 'newPassword', 'confirmPassword']
+}))
+
+const profileSummaryRef = ref<InstanceType<typeof FormErrorSummary> | null>(null)
+const passwordSummaryRef = ref<InstanceType<typeof FormErrorSummary> | null>(null)
+
+/**
+ * 客户端校验失败 → 与服务端校验共用同一份汇总通道（GOV.UK 双呈现，D-01），零 toast。
+ * 两个表单各调一次，收集器本身是 14-03 交付的无状态纯函数，不是本地重新实现。
+ */
+const projectClientErrors = async (
+  target: typeof profileErrors,
+  invalidFields: Record<string, Array<{ message?: string }>> | undefined,
+  summary: InstanceType<typeof FormErrorSummary> | null | undefined
+): Promise<void> => {
+  target.setErrors(collectInvalidFieldMessages(invalidFields))
+  await nextTick()
+  summary?.focusSummary()
+}
 
 const rules: FormRules = {
   nickname: [{ required: true, message: '请输入昵称', trigger: 'blur' }],
@@ -220,7 +318,9 @@ const fetchProfile = async () => {
       phone: user.phone || ''
     })
   } catch (error) {
-    ElMessage.error('获取个人信息失败')
+    // 本页不渲染任何错误状态块，`forbidden` / `notFound` 没有落点，
+    // 因此显式 opt-in 一条常驻 toast —— 静默是唯一不可接受的结果（Contract 1.3）。
+    showError(error, 'user.loadFailed', { presentStates: true })
   } finally {
     loading.value = false
   }
@@ -229,17 +329,31 @@ const fetchProfile = async () => {
 const handleSubmit = async () => {
   if (!formRef.value) return
 
-  await formRef.value.validate(async valid => {
-    if (!valid) return
+  // 上一轮的残留投影不进入本次尝试；只清投影，不碰用户输入（ERR-05）。
+  profileErrors.reset()
+
+  await formRef.value.validate(async (valid, invalidFields) => {
+    if (!valid) {
+      // 客户端校验失败也走同一份汇总通道（GOV.UK 双呈现），零 toast。
+      await projectClientErrors(profileErrors, invalidFields, profileSummaryRef.value)
+      return
+    }
 
     loading.value = true
     try {
       await userApi.updateProfile(form)
       ElMessage.success('更新成功')
+      // 成功路径顺序不变：退回只读态只在保存解析成功之后。
       editing.value = false
       await authStore.fetchUserInfo()
     } catch (error) {
-      ElMessage.error('更新失败')
+      // validation → 0 toast，汇总 + 内联承担呈现；其余 kind 由 showError 呈现。
+      const err = showError(error, 'user.saveFailed', { presentStates: true })
+      if (err.kind === 'validation') {
+        profileErrors.apply(err)
+        await nextTick()
+        profileSummaryRef.value?.focusSummary()
+      }
     } finally {
       loading.value = false
     }
@@ -260,8 +374,15 @@ const cancelEdit = () => {
 const handleChangePassword = async () => {
   if (!passwordFormRef.value) return
 
-  await passwordFormRef.value.validate(async valid => {
-    if (!valid) return
+  // 只清投影，绝不碰三个输入框的值（ERR-05 —— 本页最严重的回归形态就是
+  // 一次「原密码不正确」把用户被迫重打的密码清空）。
+  passwordErrors.reset()
+
+  await passwordFormRef.value.validate(async (valid, invalidFields) => {
+    if (!valid) {
+      await projectClientErrors(passwordErrors, invalidFields, passwordSummaryRef.value)
+      return
+    }
 
     passwordLoading.value = true
     try {
@@ -269,23 +390,38 @@ const handleChangePassword = async () => {
         oldPassword: passwordForm.oldPassword,
         newPassword: passwordForm.newPassword
       })
-      ElMessage.success('密码修改成功，请重新登录')
+      // ↓ 清空只发生在 await 解析成功之后、且位于 try 块内。失败路径完全不触达这三行，
+      //   因此被服务端拒绝的那三个值会原样留在输入框里（Contract 7.1）。
       Object.assign(passwordForm, {
         oldPassword: '',
         newPassword: '',
         confirmPassword: ''
       })
+      ElMessage.success('密码修改成功，请重新登录')
       setTimeout(() => {
         authStore.logout()
       }, 1500)
     } catch (error) {
-      ElMessage.error('密码修改失败')
+      // validation → 0 toast，密码表单自己的汇总 + 内联承担呈现。
+      const err = showError(error, 'user.saveFailed', { presentStates: true })
+      if (err.kind === 'validation') {
+        passwordErrors.apply(err)
+        await nextTick()
+        passwordSummaryRef.value?.focusSummary()
+      }
     } finally {
       passwordLoading.value = false
     }
   })
 }
 
+/**
+ * 客户端预检查，下面两条函数式 toast 是**刻意保留**的（本阶段的 2 行残留允许清单之一）。
+ *
+ * 它们校验的是用户刚选中、尚未发出任何请求的文件：没有 ApiError 可传、没有 kind 可分类。
+ * 走 `showError` 需要凭空造一个 ApiError 才能满足签名，还会声称一次并未发生的服务端失败。
+ * 台账记 `保持` 并附此理由（14-LEDGER-06.md）。
+ */
 const beforeAvatarUpload = (file: File) => {
   const isImage = file.type.startsWith('image/')
   const isLt2M = file.size / 1024 / 1024 < 2
@@ -314,7 +450,9 @@ const handleAvatarUpload = async (options: UploadRequestOptions) => {
       // refresh user info failed silently
     }
   } catch (error) {
-    ElMessage.error('头像上传失败')
+    // 保持「吞掉并呈现」的既有契约：Element Plus 的 uploader 通过 before-upload 的
+    // 布尔返回与 http-request 的 promise 结算分别管理自身状态，此处不改变结算状态。
+    showError(error, 'user.saveFailed', { presentStates: true })
   }
 }
 
