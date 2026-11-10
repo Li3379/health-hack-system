@@ -1383,3 +1383,62 @@ body .el-form-item__error {
   outline: 2px solid var(--accent-warm);
   outline-offset: 2px;
 }
+
+/* ============================================
+   Phase 14: 字段级错误描边 — 全局唯一实现
+
+   前提事实（已在 element-plus@2.14.0 的 theme-chalk 与源码中核对）：
+
+   1) EP 自带的字段错误视觉是「1px inset box-shadow，颜色取 EP 的 danger 变量」，
+      由 el-form-item.css 统一施加在 input / textarea / select 三类控件上，且**无 !important**。
+   2) 本文件 :504-506 给 .el-input__wrapper 写了真实 border 加 `box-shadow: none !important`，
+      这两条 !important 把上面那条错误描边压掉了；控件既然已有真实 border，
+      错误态就必须改走 border-color，否则出错时的外观与健康态完全一致。
+   3) 本文件 :672-677 对 .el-select__wrapper 做了同样的事（真实 border + box-shadow: none）。
+   4) .el-textarea__inner **没有** 被本文件覆盖：EP 给它的是 `border: none` + inset box-shadow。
+      因此 border-color 方案对 textarea 无效，必须继续用 inset box-shadow 换色。
+   5) el-date-picker type="daterange" 的根节点自身就是 .el-input__wrapper
+      （picker.vue 的 rangeInputKls 含 nsInput.e("wrapper")），但它不经过 ElInput，
+      因此永远拿不到 .is-focus；它的聚焦标记是 .is-active。
+      EP 唯一的聚焦视觉是 `.el-range-editor.is-active:hover` 的 inset 光晕（无 !important），
+      会被规则 ① 的 `box-shadow: none !important` 压掉 —— 规则 ③ 必须显式包含 .is-active，
+      否则范围选择器出错且聚焦时没有任何焦点指示。
+
+   取胜方式：`body` 前缀 + !important，靠特异性而不是加载顺序。
+   :1208-1216 已记录：unplugin-vue-components 会按路由 chunk 在 theme.css **之后**
+   再次注入 EP 组件样式，因此「本文件后加载、后写者胜」在本项目中不成立。
+   ============================================ */
+
+/* ① input / select：本文件已给出真实 border，改 border-color 即可 */
+body .el-form-item.is-error .el-form-item__content .el-input__wrapper,
+body .el-form-item.is-error .el-form-item__content .el-select__wrapper {
+  border-color: var(--hhs-color-error-text) !important;
+  box-shadow: none !important;
+}
+
+/* ② textarea：EP 的描边是 inset box-shadow（无 border），只能改 box-shadow。
+      颜色从 EP 默认的 danger 色（#f56c6c，纯白 2.90:1）换成 AA 通过的 token。 */
+body .el-form-item.is-error .el-form-item__content .el-textarea__inner {
+  box-shadow: 0 0 0 1px var(--hhs-color-error-text) inset !important;
+}
+
+/* ③ 出错且聚焦：错误描边保持，光晕换成错误 tint。
+      WCAG 2.4.7 由「光晕的有无」满足，不依赖红色与青色的色相差异。
+
+      三种聚焦类名，一个都不能漏 —— 它们是三个不同控件族的标记：
+        .is-focus    → el-input / el-input-number（ElInput 内部给 wrapper 加）
+        .is-focused  → el-select
+        .is-active   → el-date-picker type="daterange"（范围选择器的根 div 自身
+                       就是 .el-input__wrapper，不经过 ElInput，因此永远不会
+                       拿到 .is-focus） */
+body .el-form-item.is-error .el-form-item__content .el-input__wrapper.is-focus,
+body .el-form-item.is-error .el-form-item__content .el-input__wrapper.is-active,
+body .el-form-item.is-error .el-form-item__content .el-select__wrapper.is-focused {
+  border-color: var(--hhs-color-error-text) !important;
+  box-shadow: 0 0 0 3px var(--hhs-color-error-tint) !important;
+}
+body .el-form-item.is-error .el-form-item__content .el-textarea__inner:focus {
+  box-shadow:
+    0 0 0 1px var(--hhs-color-error-text) inset,
+    0 0 0 3px var(--hhs-color-error-tint) !important;
+}
