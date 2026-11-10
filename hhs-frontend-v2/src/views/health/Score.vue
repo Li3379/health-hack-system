@@ -285,6 +285,7 @@ import { CanvasRenderer } from 'echarts/renderers'
 
 echarts.use([LineChart, RadarChart, GaugeChart, TooltipComponent, GridComponent, RadarComponent, CanvasRenderer])
 import { scoreApi } from '@/api/score'
+import { showError } from '@/utils/showError'
 import { formatDateTime, getScoreLevelLabel } from '@/utils/format'
 import { useECharts } from '@/composables/useECharts'
 import HealthScoreCircle from '@/components/HealthScoreCircle.vue'
@@ -422,7 +423,13 @@ function getCSSColor(name: string): string {
 
 const { init: initGaugeChart } = useECharts(gaugeChartRef, buildGaugeOption)
 
-// AbortController for cancelling report generation
+// 报告生成的「放弃」控制器。
+//
+// ⚠️ 它当前是惰性的：`scoreApi.generateReport()` 不接受 signal 参数（见 api/score.ts），
+// 因此下面的 `.abort()` 从未真正中断任何在途请求 —— 它只翻转一个无人订阅的 flag。
+// 请不要据此认为「取消报告生成」已被验证；也不要以为这个变量已经接好了 signal 而
+// 在别处依赖它。接线是一次行为变更（会开始真的取消在途生成），需要自己的验证，
+// 不在 14-09 的范围内。
 let reportAbortController: AbortController | null = null
 
 const goToAddMetric = () => {
@@ -441,7 +448,7 @@ const fetchScore = async () => {
     const res = await scoreApi.getScore()
     scoreData.value = res.data
   } catch (error) {
-    ElMessage.error('获取评分失败')
+    showError(error, 'score.loadFailed', { presentStates: true })
   } finally {
     loading.value = false
   }
@@ -454,7 +461,9 @@ const recalculate = async () => {
     ElMessage.success('重新计算成功')
     await fetchScore()
   } catch (error) {
-    ElMessage.error('计算失败')
+    // 复用 score.loadFailed：字典里没有 score.calcFailed，而「无法加载健康评分」
+    // 对一次重算失败同样贴切（重算的目的就是拿到新评分）。台账记录了这次复用。
+    showError(error, 'score.loadFailed', { presentStates: true })
   } finally {
     recalculating.value = false
   }
@@ -477,10 +486,13 @@ const generateReport = async () => {
   try {
     const res = await scoreApi.getReport()
     reportData.value = res.data
-  } catch (error: any) {
-    // No cached report, close dialog and show error
+  } catch (error) {
+    // No cached report, close dialog and show error.
+    // 旧代码在错误对象上读响应体的 message 字段：ApiError 没有该属性，
+    // 因此那条表达式**一直**取到 undefined、永远走兜底文案。showError 让后端
+    // 下发的 message 优先，这里的文案因此变好了而不是变差了。
     reportVisible.value = false
-    ElMessage.error(error.response?.data?.message || '获取报告失败，请点击重新生成')
+    showError(error, 'report.generateFailed', { presentStates: true })
   } finally {
     reportLoading.value = false
   }
@@ -501,12 +513,13 @@ const regenerateReport = async () => {
     const res = await scoreApi.generateReport()
     reportData.value = res.data
     ElMessage.success('报告生成成功')
-  } catch (error: any) {
-    if (error.name === 'CanceledError' || error.name === 'AbortError') {
-      // report generation cancelled
-    } else {
-      ElMessage.error(error.response?.data?.message || '生成报告失败')
-    }
+  } catch (error) {
+    // 旧代码按 name 手写比较两个「已取消请求」的名字。Phase 11 之后每个到达此处的
+    // 失败都是 ApiError，其 name 是 'ApiError' —— 两个比较**恒为假**，于是真实的
+    // 取消也会弹红灯。showError 用 isCancel 识别全部五种取消形态并早退，手写判断
+    // 既冗余又错误。旧代码还在错误对象上读响应体 message，那同样是死代码
+    // （ApiError 无该属性），删除它让后端 message 首次真正生效。
+    showError(error, 'report.generateFailed', { presentStates: true })
   } finally {
     reportLoading.value = false
     reportAbortController = null
@@ -541,7 +554,8 @@ const fetchHistory = async () => {
     historyData.value = res.data
     updateOption()
   } catch (error) {
-    ElMessage.error('获取历史数据失败')
+    // 复用 score.loadFailed（同上：字典无 score.historyFailed）。
+    showError(error, 'score.loadFailed', { presentStates: true })
   } finally {
     historyLoading.value = false
   }

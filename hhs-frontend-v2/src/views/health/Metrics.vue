@@ -104,6 +104,7 @@ import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { healthApi } from '@/api/health'
+import { showError } from '@/utils/showError'
 import { formatDateTime, getMetricLabel } from '@/utils/format'
 import { useMetricMetaStore } from '@/stores/metricMeta'
 import UniversalMetricDialog from '@/components/metric/UniversalMetricDialog.vue'
@@ -154,7 +155,7 @@ const fetchMetrics = async () => {
     metrics.value = res.data.records
     pagination.total = res.data.total
   } catch (error) {
-    ElMessage.error('获取数据失败')
+    showError(error, 'metric.loadFailed', { presentStates: true })
   } finally {
     loading.value = false
   }
@@ -193,13 +194,19 @@ const handleDelete = async (row: HealthMetricVO) => {
       confirmButtonText: '确定删除',
       cancelButtonText: '取消'
     })
+  } catch {
+    // 取消确认框：刻意静默，零提示（Contract 7 §7.2 的第二种合法形态）。
+    // 旧判断里的第二个哨兵值（关闭）半边是死代码 —— ElMessageBox.confirm 只以
+    // 字符串 'cancel' 拒绝；'close' 来自 before-close / 关闭按钮，本调用点不使用。
+    return
+  }
+
+  try {
     await healthApi.deleteMetric(row.id)
     ElMessage.success('删除成功')
     fetchMetrics()
   } catch (error) {
-    if (error !== 'cancel' && error !== 'close') {
-      ElMessage.error('删除失败')
-    }
+    showError(error, 'metric.deleteFailed', { presentStates: true })
   }
 }
 
