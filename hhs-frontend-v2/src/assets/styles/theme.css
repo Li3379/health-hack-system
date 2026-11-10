@@ -1430,10 +1430,18 @@ body .el-form-item.is-error .el-form-item__content .el-textarea__inner {
         .is-focused  → el-select
         .is-active   → el-date-picker type="daterange"（范围选择器的根 div 自身
                        就是 .el-input__wrapper，不经过 ElInput，因此永远不会
-                       拿到 .is-focus） */
+                       拿到 .is-focus）
+
+      兜底：`:focus-within` 由浏览器原生提供，不依赖 EP 的类名时机。
+      UAT 2026-11-11 实测 EP 2.14 在普通 el-input 聚焦时**并未**给 wrapper 加
+      .is-focus（只在 .el-input 父级与内部实现里），若只靠 .is-focus，
+      出错且聚焦时没有任何焦点指示 —— 违反 WCAG 2.4.7。
+      故此处并列 `:focus-within`，无论类名是否到位都能出光晕。 */
 body .el-form-item.is-error .el-form-item__content .el-input__wrapper.is-focus,
+body .el-form-item.is-error .el-form-item__content .el-input__wrapper:focus-within,
 body .el-form-item.is-error .el-form-item__content .el-input__wrapper.is-active,
-body .el-form-item.is-error .el-form-item__content .el-select__wrapper.is-focused {
+body .el-form-item.is-error .el-form-item__content .el-select__wrapper.is-focused,
+body .el-form-item.is-error .el-form-item__content .el-select__wrapper:focus-within {
   border-color: var(--hhs-color-error-text) !important;
   box-shadow: 0 0 0 3px var(--hhs-color-error-tint) !important;
 }
