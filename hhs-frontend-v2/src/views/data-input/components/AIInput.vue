@@ -97,6 +97,12 @@ import { cleanupScrollTriggers } from '@/composables/useGsap'
 import { ElMessage } from 'element-plus'
 import { MagicStick } from '@element-plus/icons-vue'
 import { request } from '@/utils/request'
+import { showError } from '@/utils/showError'
+
+// 失败呈现约定（本文件）：`@/utils/request` 的响应拦截器在信封 code !== 200 时
+// 直接 reject，因此 `if (res.code === 200)` 之后不需要「非 200」分支 —— 那种分支
+// 永远不可达。所有失败只从 catch 进入 `showError` 单一出口。
+// 本文件不渲染任何状态块，因此每个调用都显式 opt-in 状态类呈现。
 
 // ============================================
 // TypeScript 接口定义
@@ -190,11 +196,9 @@ const handleParse = async () => {
       res.data.metrics?.forEach((m: ParsedMetric) => {
         m.selected = true
       })
-    } else {
-      ElMessage.error(res.message || '解析失败')
     }
-  } catch (error: unknown) {
-    handleApiError(error, '解析失败')
+  } catch (error) {
+    showError(error, 'ai.parseFailed', { presentStates: true })
   } finally {
     parsing.value = false
   }
@@ -227,35 +231,11 @@ const handleConfirm = async () => {
       parseResult.value = null
       inputText.value = ''
       emit('refresh')
-    } else {
-      ElMessage.error(res.message || '录入失败')
     }
-  } catch (error: unknown) {
-    handleApiError(error, '录入失败')
+  } catch (error) {
+    showError(error, 'metric.saveFailed', { presentStates: true })
   } finally {
     confirming.value = false
-  }
-}
-
-/**
- * 统一错误处理
- */
-const handleApiError = (error: unknown, defaultMessage: string) => {
-  if (error && typeof error === 'object' && 'response' in error) {
-    const axiosError = error as { response?: { data?: { message?: string }; status?: number } }
-    if (axiosError.response?.data?.message) {
-      ElMessage.error(axiosError.response.data.message)
-      return
-    }
-    if (axiosError.response?.status === 429) {
-      ElMessage.error('请求过于频繁，请稍后再试')
-      return
-    }
-  }
-  if (error instanceof Error) {
-    ElMessage.error(error.message || defaultMessage)
-  } else {
-    ElMessage.error(defaultMessage)
   }
 }
 
