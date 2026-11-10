@@ -217,7 +217,7 @@ import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { preventionApi } from '@/api/prevention'
 import { formatDateTime } from '@/utils/format'
-import { useFormServerErrors } from '@/composables/useFormServerErrors'
+import { useFormServerErrors, collectInvalidFieldMessages } from '@/composables/useFormServerErrors'
 import FormErrorSummary from '@/components/common/FormErrorSummary.vue'
 import EstimateBadge from '@/components/common/EstimateBadge.vue'
 import { useProfileCompletenessStore } from '@/stores/profileCompleteness'
@@ -381,21 +381,6 @@ const cancel = () => {
   panelOpen.value = false
   reset()
   Object.assign(backfill, { gender: '', birthDate: '', heightCm: null, weightKg: null })
-}
-
-/**
- * 把 Element Plus 的 `invalidFields` 摊平成 `字段 → 首条中文消息`。
- * 与 prevention/Profile.vue 的同名函数逐行一致（该文件不导出它，本计划不改动它）。
- */
-function collectInvalidFieldMessages(
-  invalidFields: Record<string, Array<{ message?: string }>> | undefined
-): Record<string, string> {
-  const next: Record<string, string> = {}
-  for (const [field, errors] of Object.entries(invalidFields ?? {})) {
-    const message = errors?.[0]?.message
-    if (message) next[field] = message
-  }
-  return next
 }
 
 /**
