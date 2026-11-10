@@ -172,6 +172,12 @@
         label-width="120px"
         label-position="right"
       >
+        <!-- 汇总块必须是 <el-form> 的第一个子节点（Contract 4.3）。 -->
+        <FormErrorSummary
+          ref="configSummaryRef"
+          :summary-items="formErrors.summaryItems"
+          @focus-field="formErrors.focusField"
+        />
         <el-form-item v-if="!editingPlatform" label="平台">
           <el-select v-model="configForm.platform" placeholder="选择平台">
             <el-option
@@ -183,16 +189,27 @@
           </el-select>
         </el-form-item>
 
-        <el-form-item label="Client ID" prop="clientId">
+        <el-form-item
+          label="Client ID"
+          prop="clientId"
+          data-field="clientId"
+          :error="formErrors.fieldErrors['clientId']"
+        >
           <el-input
             v-model="configForm.clientId"
             placeholder="输入 OAuth Client ID"
             show-word-limit
             maxlength="200"
+            @update:model-value="formErrors.clearField('clientId')"
           />
         </el-form-item>
 
-        <el-form-item label="Client Secret" prop="clientSecret">
+        <el-form-item
+          label="Client Secret"
+          prop="clientSecret"
+          data-field="clientSecret"
+          :error="formErrors.fieldErrors['clientSecret']"
+        >
           <el-input
             v-model="configForm.clientSecret"
             type="password"
@@ -200,6 +217,7 @@
             show-password
             show-word-limit
             maxlength="200"
+            @update:model-value="formErrors.clearField('clientSecret')"
           />
         </el-form-item>
 
@@ -249,6 +267,8 @@ import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'elem
 import { Refresh } from '@element-plus/icons-vue'
 import { deviceApi, type PlatformConfigStatus, type AdminConfigRequest } from '@/api/device'
 import ErrorState from '@/components/common/ErrorState.vue'
+import FormErrorSummary from '@/components/common/FormErrorSummary.vue'
+import { useFormServerErrors, collectInvalidFieldMessages } from '@/composables/useFormServerErrors'
 import { normalizeApiError } from '@/utils/appError'
 import { showError } from '@/utils/showError'
 
@@ -262,6 +282,18 @@ const encryptionKeyConfigured = ref(true)
 const showConfigDialog = ref(false)
 const editingPlatform = ref<PlatformConfigStatus | null>(null)
 const configFormRef = ref<FormInstance>()
+const configSummaryRef = ref<InstanceType<typeof FormErrorSummary> | null>(null)
+
+/**
+ * 只有 clientId / clientSecret 带 `prop`，也只有这两个字段可能被服务端拒绝。
+ *
+ * 本页**不携带** `presentStates` 的 showError 只有一处：`loadConfigs`。它拥有页级
+ * ErrorState 块，403 由块呈现；在这里 opt-in 会让同一次 403 呈现两次。其余动作
+ * （save / test / delete / init）都没有状态块可落，必须携带。
+ */
+const formErrors = reactive(
+  useFormServerErrors({ fieldOrder: ['clientId', 'clientSecret'] })
+)
 
 // 403 全页解释态（D-03）：只由服务端响应驱动，不做任何前端角色判断。
 const router = useRouter()
@@ -361,25 +393,41 @@ const openConfigDialog = (platform: PlatformConfigStatus) => {
 const handleSaveConfig = async () => {
   if (!configFormRef.value) return
 
-  await configFormRef.value.validate(async valid => {
-    if (!valid) return
+  // 上一轮的残留投影不进入本次尝试；只清投影，不碰用户输入（ERR-05）。
+  formErrors.reset()
 
-    saving.value = true
-    try {
-      const res = await deviceApi.adminSaveConfig(configForm)
-      if (res.code === 200) {
+  await configFormRef.value.validate(
+    async (valid: boolean, invalidFields?: Record<string, Array<{ message?: string }>>) => {
+      if (!valid) {
+        // 客户端校验失败与服务端 400 共用同一份汇总通道，零 toast。
+        formErrors.setErrors(collectInvalidFieldMessages(invalidFields))
+        await nextTick()
+        configSummaryRef.value?.focusSummary()
+        return
+      }
+
+      saving.value = true
+      try {
+        // 拦截器在 res.code !== 200 时直接 reject（request.ts:45-52），
+        // 因此这里拿到的一定是成功的信封 —— 原先的 else 分支永远不可达，已删除。
+        await deviceApi.adminSaveConfig(configForm)
         ElMessage.success('配置保存成功')
         showConfigDialog.value = false
         loadConfigs()
-      } else {
-        ElMessage.error(res.message || '保存失败')
+      } catch (error) {
+        // 保存是「动作」，而页级块属于 load 路径：403 在这里必须变成一条 toast，
+        // 否则弹窗底下已经渲染好的页面会被一个状态块顶掉（用户的工作全没了）。
+        const err = showError(error, 'device.saveFailed', { presentStates: true })
+        if (err.kind === 'validation') {
+          formErrors.apply(err)
+          await nextTick()
+          configSummaryRef.value?.focusSummary()
+        }
+      } finally {
+        saving.value = false
       }
-    } catch (error: any) {
-      ElMessage.error(error.message || '保存失败')
-    } finally {
-      saving.value = false
     }
-  })
+  )
 }
 
 const handleTestConfig = async (platform: string) => {
@@ -387,6 +435,7 @@ const handleTestConfig = async (platform: string) => {
   try {
     const res = await deviceApi.adminTestConfig(platform)
     if (res.code === 200) {
+      // 结果是「测试没通过」，不是「请求失败」—— 这两条提示属于结果，保留。
       if (res.data.testResult === 'success') {
         ElMessage.success('配置测试成功')
       } else {
@@ -394,28 +443,35 @@ const handleTestConfig = async (platform: string) => {
       }
       loadConfigs()
     }
-  } catch (error: any) {
-    ElMessage.error(error.message || '测试失败')
+  } catch (error) {
+    showError(error, 'device.saveFailed', { presentStates: true })
   } finally {
     testingPlatform.value = null
   }
 }
 
 const handleDeleteConfig = async (platform: string) => {
+  // 确认与请求分两次 try：取消是控制流，不是失败 —— 第一个 catch 是裸 return，
+  // 因此取消零提示，而真正的 API 失败不会像旧实现那样被当成「用户取消」吞掉。
   try {
     await ElMessageBox.confirm(
       '确定要删除此平台的配置吗？删除后用户将无法连接此设备。',
       '确认删除',
       { type: 'warning' }
     )
+  } catch {
+    // 用户取消（或点击关闭）：刻意静默，取消不是失败（ERR-08）。
+    return
+  }
 
+  try {
     const res = await deviceApi.adminDeleteConfig(platform)
     if (res.code === 200) {
       ElMessage.success('配置已删除')
       loadConfigs()
     }
-  } catch {
-    // User cancelled
+  } catch (error) {
+    showError(error, 'device.saveFailed', { presentStates: true })
   }
 }
 
@@ -426,19 +482,25 @@ const handleToggleEnabled = async (row: PlatformConfigStatus) => {
 }
 
 const handleInitDefaults = async () => {
+  // 同 handleDeleteConfig：确认与请求分离，取消静默，真实失败必须可见。
   try {
     await ElMessageBox.confirm('将从 YAML 配置初始化数据库配置，是否继续？', '初始化配置', {
       type: 'info'
     })
+  } catch {
+    // 用户取消（或点击关闭）：刻意静默。
+    return
+  }
 
-    initializing.value = true
+  initializing.value = true
+  try {
     const res = await deviceApi.adminInitDefaults()
     if (res.code === 200) {
       ElMessage.success('默认配置已初始化')
       loadConfigs()
     }
-  } catch {
-    // User cancelled
+  } catch (error) {
+    showError(error, 'device.saveFailed', { presentStates: true })
   } finally {
     initializing.value = false
   }
