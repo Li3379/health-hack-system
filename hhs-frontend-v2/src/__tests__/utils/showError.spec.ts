@@ -62,6 +62,22 @@ function findButton(node: string | VNodeLike | undefined): VNodeLike | undefined
   return undefined
 }
 
+/** 深度遍历 VNode，返回第一个 class 含指定片段的节点（照抄 ErrorLayerSample.spec.ts 的遍历形状）。 */
+function findNodeByClass(node: unknown, className: string): VNodeLike | undefined {
+  if (!node || typeof node === 'string' || !Array.isArray((node as VNodeLike).children)) {
+    return undefined
+  }
+  const target = node as VNodeLike
+  for (const child of target.children as unknown[]) {
+    if (!child || typeof child !== 'object') continue
+    const candidate = child as VNodeLike
+    if (String(candidate.props?.class ?? '').includes(className)) return candidate
+    const nested = findNodeByClass(candidate, className)
+    if (nested) return nested
+  }
+  return undefined
+}
+
 interface ToastOptions {
   message: string | VNodeLike
   grouping: boolean
@@ -287,6 +303,78 @@ describe('showError — VNode sticky toast', () => {
     const opts = firstCallOptions()
     expect(typeof opts.message).toBe('string')
     expect(opts.grouping).toBe(true)
+  })
+})
+
+describe('showError — 状态类失败（forbidden / notFound，D-03）', () => {
+  /** 造一个 forbidden 的 ApiError（真实 403 与信封 403 的归一化结果都是它）。 */
+  function forbiddenError() {
+    return new ApiError('没有访问权限', 'forbidden', 403, 'auth.forbidden')
+  }
+
+  function notFoundError() {
+    return new ApiError('该记录已不存在，请刷新列表', 'notFound', 404, 'resource.not_found')
+  }
+
+  it('默认零 toast：forbidden 不弹任何提示，但仍返回已分类的 ApiError', () => {
+    // 这是 D-03 的核心：403 是「状态」，呈现由页面状态块独占。
+    const err = showError(forbiddenError(), 'device.loadFailed')
+
+    expect(ElMessage).toHaveBeenCalledTimes(0)
+    expect(err.kind).toBe('forbidden')
+    expect(err.retryable).toBe(false)
+  })
+
+  it('默认零 toast：notFound 同样不弹提示', () => {
+    const err = showError(notFoundError(), 'device.loadFailed')
+
+    expect(ElMessage).toHaveBeenCalledTimes(0)
+    expect(err.kind).toBe('notFound')
+  })
+
+  it('presentStates: true 时 forbidden 只弹一条常驻 toast，且绝不渲染重试按钮', () => {
+    // UI-SPEC Contract 5 §5.2：权限 toast = error / duration 0 / 无动作按钮。
+    // 刻意传入 retry 回调 —— hasRetry 依赖 err.retryable，权限错误必须仍然不渲染按钮。
+    showError(forbiddenError(), 'device.loadFailed', {
+      presentStates: true,
+      retry: () => undefined
+    })
+
+    expect(ElMessage).toHaveBeenCalledTimes(1)
+    const opts = firstCallOptions()
+    expect(opts.type).toBe('error')
+    expect(opts.duration).toBe(0)
+    expect(opts.showClose).toBe(true)
+    expect(findNodeByClass(opts.message, 'error-toast__retry')).toBeUndefined()
+    expect(findNodeByClass(opts.message, 'error-toast__action')).toBeUndefined()
+  })
+
+  it('presentStates: true 时 notFound 只弹一条 duration 0 的 toast，无动作按钮', () => {
+    // 这条同时钉住 needsVNode 的扩展：字符串分支硬编码 duration 4000，
+    // 若遗漏 err.kind === 'notFound'，下面的 duration 断言会失败。
+    showError(notFoundError(), 'device.loadFailed', { presentStates: true })
+
+    expect(ElMessage).toHaveBeenCalledTimes(1)
+    const opts = firstCallOptions()
+    expect(opts.type).toBe('error')
+    expect(opts.duration).toBe(0)
+    expect(opts.showClose).toBe(true)
+    expect(findNodeByClass(opts.message, 'error-toast__action')).toBeUndefined()
+    expect(findNodeByClass(opts.message, 'error-toast__retry')).toBeUndefined()
+    // 文案不截断：后端下发的整句原文作为文本子节点。
+    const text = findNodeByClass(opts.message, 'error-toast__text')
+    expect(text?.children).toBe('该记录已不存在，请刷新列表')
+  })
+
+  it('分类层到呈现层的串联：信封 403 经 showError 默认零 toast', () => {
+    // 端到端形状：HTTP 200 + code 500 + errorCode auth.forbidden（parseCodeToInt 回退值）。
+    const err = showError(
+      { response: { status: 200, data: { code: 500, errorCode: 'auth.forbidden', message: '没有访问权限' } } },
+      'device.loadFailed'
+    )
+
+    expect(err.kind).toBe('forbidden')
+    expect(ElMessage).toHaveBeenCalledTimes(0)
   })
 })
 

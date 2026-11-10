@@ -511,6 +511,11 @@ onUnmounted(() => {
 <style scoped>
 .dashboard {
   padding: 32px;
+  /* 页级状态块的高度由宿主内边距决定：padding 32px → 上下合计 64px。
+     与 settings/DevicePlatformConfig.vue 的 40px 成对出现，证明 --hhs-page-pad-y
+     是每个宿主自己声明的局部变量，不是换了名字的常量（UI-SPEC Spacing）。
+     padding:0 的宿主（health/Metrics.vue）用默认回退值 0px，无需声明。 */
+  --hhs-page-pad-y: 64px;
   max-width: var(--content-max-width);
   margin: 0 auto;
 }
