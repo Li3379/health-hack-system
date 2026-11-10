@@ -21,9 +21,9 @@ affects: [14-11, 14-12, 14-13]
 
 # Actuals (#2632) — pairs with the plan's estimate (92000 tokens, 2 tasks), same chars/4 scale
 actuals:
-  tokens: 15977
+  tokens: 22287
   tasks: 2
-  commits: 2
+  commits: 3
   plan_head_before: 99eba6dd31a2921a8da8c07f8ca1e0e74a950df3
 
 tech-stack:
@@ -192,8 +192,9 @@ Each task was committed atomically:
 
 1. **Task 1: DeviceSync deletions and conversion** — `ae979d4` (feat)
 2. **Task 2: AIInput helper retirement and both history components** — `09e8188` (feat)
+3. **Test hardening: total-toast assertion for the offline branch** — `b98b4bd` (test)
 
-**Plan metadata:** committed separately as `docs(14-10): …`
+**Plan metadata:** `0826ac5` (docs: complete plan)
 
 ## Files Created/Modified
 
@@ -276,7 +277,7 @@ None — no external service configuration required.
 
 ## Self-Check
 
-Files verified present: `DeviceSyncMigration.spec.ts`, `AiParseMigration.spec.ts`, `14-LEDGER-10.md`, and the three components. Commits verified: `ae979d4`, `09e8188`.
+Files verified present: `DeviceSyncMigration.spec.ts`, `AiParseMigration.spec.ts`, `14-LEDGER-10.md`, and the three components. Commits verified: `ae979d4`, `09e8188`, `b98b4bd`. Working tree clean for every file this plan touched.
 
 ## Self-Check: PASSED
 
