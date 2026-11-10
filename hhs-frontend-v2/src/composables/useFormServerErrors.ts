@@ -23,6 +23,35 @@ export interface UseFormServerErrorsOptions {
    * 缺省时保持后端下发的键顺序。
    */
   fieldOrder?: string[]
+  /**
+   * 覆盖全局 `FIELD_LABELS` 的字段标签。
+   *
+   * 用于同一字段名在不同页面语义不同的场景（如 goals 的 `title` 是「目标标题」而非「标题」，
+   * `value` 是「当前值」而非「指标数值」）。优先级：本表 → 全局表 → 空串。
+   * 空串时汇总条目只渲染后端消息，绝不回退成字段名（D-15）。
+   */
+  labels?: Record<string, string>
+}
+
+/**
+ * 把 Element Plus 客户端校验的 `invalidFields` 摊平成 `字段 → 首条中文消息`。
+ *
+ * 与服务端 `apply()` 投影出的 `fieldErrors` 同一形状，因此客户端与服务端校验
+ * 共用一份汇总通道（D-01 的 GOV.UK 双呈现），不需要第二套渲染分支。
+ * 纯函数：不读 store、不写回表单 model、不改动入参。
+ *
+ * 放在模块级而不是 composable 返回值里 —— 它是无状态的，且在 `validate` 回调内使用，
+ * 不需要绑到某个表单实例。
+ */
+export function collectInvalidFieldMessages(
+  invalidFields: Record<string, Array<{ message?: string }>> | undefined
+): Record<string, string> {
+  const next: Record<string, string> = {}
+  for (const [field, errors] of Object.entries(invalidFields ?? {})) {
+    const message = errors?.[0]?.message
+    if (message) next[field] = message
+  }
+  return next
 }
 
 /**
@@ -44,11 +73,13 @@ export function useFormServerErrors(options: UseFormServerErrorsOptions = {}): {
   const fieldErrors = ref<Record<string, string>>({})
 
   // 字段顺序：fieldOrder 命中项按声明顺序，未命中项排在末尾且保持相对顺序。
+  // 标签优先级：调用方 labels → 全局 FIELD_LABELS → 空串。
+  // 内联错误（:error="fieldErrors[prop]"）刻意只显示后端消息，不拼标签 —— 标签是汇总块的职责。
   const summaryItems = computed<SummaryItem[]>(() => {
     const items: SummaryItem[] = Object.entries(fieldErrors.value).map(([field, message]) => ({
       field,
       message,
-      label: fieldLabel(field)
+      label: options.labels?.[field] ?? fieldLabel(field)
     }))
 
     const order = options.fieldOrder
