@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 5
+open_count: 6
 waived_count: 0
 fixed_count: 2
-total_count: 7
-last_updated: 2026-11-10T12:24:41.503Z
+total_count: 8
+last_updated: 2026-11-10T15:35:10.599Z
 ---
 
 # Broken Windows Ledger
@@ -22,6 +22,7 @@ last_updated: 2026-11-10T12:24:41.503Z
 | 5 | 13 | unrun-verify | hhs-frontend-v2/src/components/common/ProfileReminderBanner.vue |  | Backstop: verify the banner's two buttons plus close control do not collide at 640px or 768px | open |  | 2026-11-09T13:10:01.346Z |  |
 | 6 | 13 | unrun-verify | hhs-frontend-v2/src/views/prevention/Profile.vue |  | Hint wrapping and the 639px label-position flip cannot be measured in happy-dom; CSS rules implemented, visual review pending at 320-639px | open |  | 2026-11-09T13:27:01.200Z |  |
 | 7 | 14 | unrun-verify | hhs-frontend-v2/src/assets/styles/theme.css |  | UI-SPEC 4.2 four computed-style self-checks (errored input border-color resolves to the token, textarea shadow contains inset, 3px tint halo present with border still red for all three control families, halo gone after blur) are deferred to the phase UAT in 14-14 — happy-dom returns empty strings for getComputedStyle | open |  | 2026-11-10T12:24:41.503Z |  |
+| 8 | 14 | unrun-verify | hhs-frontend-v2/e2e/quick-input.spec.ts | 172 | E2E 'should validate value range for metrics' fails: it asserts the heart-rate input clamps 500 down to <=300, but UniversalMetricDialog.vue has never bound :max on the value el-input-number (only el-rate carries :max=5). Unchanged since the initial commit 13dd26b and never touched by Phase 14 (14-07's ac39437 changed only the form-item/summary wiring, verified with git show). The other 7 quick-input E2E cases pass, including both success-copy assertions (录入成功), so the phase's success-copy contract is intact. Pre-existing bad assertion, not a regression. The suite also requires an 'admin'/'123456' fixture row in sys_user, absent from this DB (only demo_hhs/demo_hhs2/xiaojunhao/uat_v13/uat_phase12 existed); this run created it via POST /api/auth/register | open |  | 2026-11-10T15:35:10.599Z |  |
 
 ````json
 [
@@ -113,6 +114,19 @@ last_updated: 2026-11-10T12:24:41.503Z
     "status": "open",
     "reason": "",
     "recorded_at": "2026-11-10T12:24:41.503Z",
+    "resolved_at": null,
+    "milestone": "v1.3"
+  },
+  {
+    "id": 8,
+    "kind": "unrun-verify",
+    "phase": "14",
+    "file": "hhs-frontend-v2/e2e/quick-input.spec.ts",
+    "line": 172,
+    "description": "E2E 'should validate value range for metrics' fails: it asserts the heart-rate input clamps 500 down to <=300, but UniversalMetricDialog.vue has never bound :max on the value el-input-number (only el-rate carries :max=5). Unchanged since the initial commit 13dd26b and never touched by Phase 14 (14-07's ac39437 changed only the form-item/summary wiring, verified with git show). The other 7 quick-input E2E cases pass, including both success-copy assertions (录入成功), so the phase's success-copy contract is intact. Pre-existing bad assertion, not a regression. The suite also requires an 'admin'/'123456' fixture row in sys_user, absent from this DB (only demo_hhs/demo_hhs2/xiaojunhao/uat_v13/uat_phase12 existed); this run created it via POST /api/auth/register",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-11-10T15:35:10.599Z",
     "resolved_at": null,
     "milestone": "v1.3"
   }
