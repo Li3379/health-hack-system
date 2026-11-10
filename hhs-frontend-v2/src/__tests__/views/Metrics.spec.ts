@@ -81,9 +81,11 @@ const globalStubs = {
       clearValidate: vi.fn()
     }
   },
+  // 与 UniversalMetricDialog.spec.ts 同形：转发 :error，让内联错误可观测。
   'el-form-item': {
-    template: '<div class="el-form-item"><slot /></div>',
-    props: ['label', 'prop']
+    template:
+      '<div class="el-form-item" :data-error="error"><slot /><span v-if="error" class="el-form-item__error">{{ error }}</span></div>',
+    props: ['label', 'prop', 'error']
   },
   'el-row': {
     template: '<div class="el-row"><slot /></div>',

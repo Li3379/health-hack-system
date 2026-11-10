@@ -8,8 +8,20 @@
     class="universal-metric-dialog"
   >
     <el-form ref="formRef" :model="form" :rules="rules" label-position="top" status-icon>
+      <!-- 汇总块必须是 <el-form> 的第一个子节点（Contract 4.3），弹窗与全页表单同一位置。 -->
+      <FormErrorSummary
+        ref="summaryRef"
+        :summary-items="formErrors.summaryItems"
+        @focus-field="formErrors.focusField"
+      />
       <!-- 指标类型选择行 (仅在非限定单一指标且非编辑模式下允许自由选择) -->
-      <el-form-item v-if="!isSingleMetricProp" label="指标类型" prop="metricKey">
+      <el-form-item
+        v-if="!isSingleMetricProp"
+        label="指标类型"
+        prop="metricKey"
+        data-field="metricKey"
+        :error="formErrors.fieldErrors['metricKey']"
+      >
         <el-select
           v-model="form.metricKey"
           placeholder="请选择指标类型"
@@ -31,7 +43,12 @@
       <template v-if="isBloodPressure">
         <el-row :gutter="16">
           <el-col :span="12">
-            <el-form-item label="收缩压 (高压)" prop="value">
+            <el-form-item
+              label="收缩压 (高压)"
+              prop="value"
+              data-field="value"
+              :error="formErrors.fieldErrors['value']"
+            >
               <el-input-number
                 v-model="form.value"
                 :precision="0"
@@ -39,6 +56,7 @@
                 :controls="true"
                 :placeholder="placeholder"
                 style="width: 100%"
+                @update:model-value="handleValueChange"
               />
               <!-- 收缩压状态胶囊 -->
               <div v-if="primaryEval" class="tier-pill-wrapper">
@@ -51,7 +69,12 @@
           </el-col>
 
           <el-col :span="12">
-            <el-form-item label="舒张压 (低压)" prop="diastolicValue">
+            <el-form-item
+              label="舒张压 (低压)"
+              prop="diastolicValue"
+              data-field="diastolicValue"
+              :error="formErrors.fieldErrors['diastolicValue']"
+            >
               <el-input-number
                 v-model="form.diastolicValue"
                 :precision="0"
@@ -59,6 +82,7 @@
                 :controls="true"
                 :placeholder="diastolicPlaceholder"
                 style="width: 100%"
+                @update:model-value="handleDiastolicValueChange"
               />
               <!-- 舒张压状态胶囊 -->
               <div v-if="diastolicEval" class="tier-pill-wrapper">
@@ -100,13 +124,19 @@
 
       <!-- 心情星级打分专用分支 (WELL-02) -->
       <template v-else-if="form.metricKey === 'mood'">
-        <el-form-item label="心情评级" prop="value">
+        <el-form-item
+          label="心情评级"
+          prop="value"
+          data-field="value"
+          :error="formErrors.fieldErrors['value']"
+        >
           <div class="mood-rate-wrapper">
             <el-rate
               v-model="form.value"
               :max="5"
               show-text
               :texts="['很差', '较差', '一般', '较好', '很好']"
+              @update:model-value="handleValueChange"
             />
             <span v-if="form.value" class="mood-desc">{{ getMoodDescription(form.value) }}</span>
           </div>
@@ -115,7 +145,12 @@
 
       <!-- 单一常规健康/保健指标排版 (编辑模式或非协同模式) -->
       <template v-else>
-        <el-form-item :label="fieldLabel" prop="value">
+        <el-form-item
+          :label="fieldLabel"
+          prop="value"
+          data-field="value"
+          :error="formErrors.fieldErrors['value']"
+        >
           <el-input-number
             v-model="form.value"
             :precision="precision"
@@ -123,6 +158,7 @@
             :controls="true"
             :placeholder="placeholder"
             style="width: 100%"
+            @update:model-value="handleValueChange"
           />
           <!-- 单指标四梯度状态胶囊 -->
           <div v-if="primaryEval" class="tier-pill-wrapper">
@@ -143,7 +179,12 @@
           </el-form-item>
         </el-col>
         <el-col :span="isHealthCategory ? 10 : 14">
-          <el-form-item label="记录日期" prop="recordDate">
+          <el-form-item
+            label="记录日期"
+            prop="recordDate"
+            data-field="recordDate"
+            :error="formErrors.fieldErrors['recordDate']"
+          >
             <el-date-picker
               v-model="form.recordDate"
               type="date"
@@ -151,13 +192,25 @@
               format="YYYY-MM-DD"
               value-format="YYYY-MM-DD"
               style="width: 100%"
+              @update:model-value="formErrors.clearField('recordDate')"
             />
           </el-form-item>
         </el-col>
         <!-- 健康指标专属趋势选择器 -->
         <el-col v-if="isHealthCategory" :span="6">
-          <el-form-item label="趋势" prop="trend">
-            <el-select v-model="form.trend" placeholder="请选择" style="width: 100%" clearable>
+          <el-form-item
+            label="趋势"
+            prop="trend"
+            data-field="trend"
+            :error="formErrors.fieldErrors['trend']"
+          >
+            <el-select
+              v-model="form.trend"
+              placeholder="请选择"
+              style="width: 100%"
+              clearable
+              @change="formErrors.clearField('trend')"
+            >
               <el-option label="上升" value="UP" />
               <el-option label="下降" value="DOWN" />
               <el-option label="稳定" value="STABLE" />
@@ -167,7 +220,13 @@
       </el-row>
 
       <!-- 保健指标专属备注说明 -->
-      <el-form-item v-if="isWellnessCategory" label="备注说明" prop="notes">
+      <el-form-item
+        v-if="isWellnessCategory"
+        label="备注说明"
+        prop="notes"
+        data-field="notes"
+        :error="formErrors.fieldErrors['notes']"
+      >
         <el-input
           v-model="form.notes"
           type="textarea"
@@ -175,6 +234,7 @@
           placeholder="填写备忘或相关诱因（可选）"
           maxlength="200"
           show-word-limit
+          @update:model-value="formErrors.clearField('notes')"
         />
       </el-form-item>
 
@@ -218,6 +278,9 @@ import { formatDate, getMoodDescription } from '@/utils/format'
 import { toCanonicalKey } from '@/utils/metricNormalizer'
 import { useMetricMetaStore } from '@/stores/metricMeta'
 import { useMetricValidation } from '@/composables/useMetricValidation'
+import { useFormServerErrors, collectInvalidFieldMessages } from '@/composables/useFormServerErrors'
+import { showError } from '@/utils/showError'
+import FormErrorSummary from '@/components/common/FormErrorSummary.vue'
 import ReferenceGuideCard from '@/views/data-input/components/ReferenceGuideCard.vue'
 import CriticalConfirmDialog from '@/views/data-input/components/CriticalConfirmDialog.vue'
 
@@ -245,7 +308,26 @@ const emit = defineEmits<{
 
 const metricMetaStore = useMetricMetaStore()
 const formRef = ref<FormInstance>()
+const summaryRef = ref<InstanceType<typeof FormErrorSummary> | null>(null)
 const submitting = ref(false)
+
+/**
+ * 一个投影实例服务三种提交模式（血压协同 / 保健 / 标准）。
+ *
+ * 三种模式互斥：一次弹窗只会激活其中一种，而字段名本身重叠（`value` /
+ * `diastolicValue` / `recordDate`），因此开三个实例会让未激活模式的陈旧投影
+ * 留在汇总块里。`notes` 刻意为空 —— 它的全局标签就是「备注说明」
+ * （Copywriting 契约的覆盖表：保持全局）。
+ */
+const formErrors = reactive(
+  useFormServerErrors({
+    fieldOrder: ['metricKey', 'value', 'diastolicValue', 'recordDate', 'trend', 'notes']
+  })
+)
+
+/** 清投影只清错误文本，绝不清用户输入（Contract 7.1）。 */
+const handleValueChange = () => formErrors.clearField('value')
+const handleDiastolicValueChange = () => formErrors.clearField('diastolicValue')
 
 const visible = computed({
   get: () => props.modelValue,
@@ -430,6 +512,9 @@ const getTagIcon = (status: string) => {
 // 血压一键对调事件处理
 const handleSwap = () => {
   swapBloodPressure()
+  // 对调改变了两个被校验的值，上一轮投影随之失效（只清错误，不动输入）。
+  formErrors.clearField('value')
+  formErrors.clearField('diastolicValue')
   ElMessage.success('已对调收缩压与舒张压数值')
   formRef.value?.validateField(['value', 'diastolicValue'])
 }
@@ -448,6 +533,8 @@ const handleMoodChange = (val: number) => {
 
 // 切换指标下拉项处理
 const handleMetricKeyChange = (val: string) => {
+  // 用户主动改选即视为放弃该字段的服务端投影（只清错误文本，不动输入值）。
+  formErrors.clearField('metricKey')
   const canonical = val === 'bloodPressure' ? 'bloodPressure' : toCanonicalKey(val)
   form.metricKey = canonical
   const key = canonical === 'bloodPressure' ? 'systolicBP' : canonical
@@ -648,8 +735,17 @@ const handleSubmit = async () => {
   if (submitting.value) return
   if (!formRef.value) return
 
-  await formRef.value.validate(async valid => {
-    if (!valid) return
+  // 上一轮的残留投影不进入本次尝试；只清投影，不碰用户输入（ERR-05）。
+  formErrors.reset()
+
+  await formRef.value.validate(async (valid: boolean, invalidFields?: Record<string, Array<{ message?: string }>>) => {
+    if (!valid) {
+      // 客户端校验失败与服务端 400 共用同一份汇总通道（GOV.UK 双呈现），零 toast。
+      formErrors.setErrors(collectInvalidFieldMessages(invalidFields))
+      await nextTick()
+      summaryRef.value?.focusSummary()
+      return
+    }
 
     if (hasCritical.value) {
       criticalDialogVisible.value = true
@@ -743,7 +839,16 @@ const executeSave = async () => {
     emit('success')
     visible.value = false
   } catch (error: any) {
-    ElMessage.error(error.message || (isEditMode.value ? '修改失败' : '录入失败'))
+    // 弹窗没有 ErrorState 块可落，因此 forbidden / notFound 必须由一条常驻 toast 承担 ——
+    // 指标写入路径上 `HealthMetricServiceImpl:219` 会抛 AUTH_FORBIDDEN，裸调用等于静默。
+    // 校验失败（validation）由汇总 + 内联呈现，showError 对它零 toast。
+    // 刻意不再读 `error.message`：`showError` 已解析出应展示的文案。
+    const err = showError(error, 'metric.saveFailed', { presentStates: true })
+    if (err.kind === 'validation') {
+      formErrors.apply(err)
+      await nextTick()
+      summaryRef.value?.focusSummary()
+    }
   } finally {
     submitting.value = false
   }
