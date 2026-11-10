@@ -6,6 +6,21 @@
       </template>
     </el-page-header>
 
+    <!-- 资源不存在（S2 内容区解释块）：只替换资源区，页头与导航保持可用。
+         v-if / v-else 保证状态块与报告正文永不共现（UI-SPEC Contract 3 §3.4 四态互斥），
+         且此路径不产生任何 toast（§3.5 零 toast）。 -->
+    <ErrorState
+      v-if="notFound"
+      variant="notFound"
+      title="资源不存在"
+      description="该资源可能已被删除，请返回列表查看最新数据。"
+      :actions="[
+        { label: '返回列表', onClick: goList, variant: 'primary' },
+        { label: '重新加载该记录', onClick: fetchReportDetail, variant: 'default' }
+      ]"
+    />
+
+    <template v-else>
     <el-card v-loading="loading" class="detail-card">
       <template #header>
         <div class="header-info">
@@ -96,16 +111,19 @@
         </div>
       </div>
     </el-card>
+    </template>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted, nextTick } from 'vue'
 import { gsap, DUR, EASE } from '@/composables/useGsap'
-import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { Top, Bottom, Minus, Document } from '@element-plus/icons-vue'
+import ErrorState from '@/components/common/ErrorState.vue'
 import { screeningApi } from '@/api/screening'
+import { showError } from '@/utils/showError'
+import { normalizeApiError } from '@/utils/appError'
 import { formatDateTime } from '@/utils/format'
 import type { ExaminationReportVO, LabResultVO } from '@/types/api'
 
@@ -114,6 +132,8 @@ const router = useRouter()
 const loading = ref(false)
 const report = ref<ExaminationReportVO | null>(null)
 const labResults = ref<LabResultVO[]>([])
+// 404 是内容区状态，不是一次动作失败：由状态块承担呈现，catch 只置标志即返回。
+const notFound = ref(false)
 
 const reportId = parseInt(route.params.id as string)
 
@@ -145,11 +165,20 @@ const isImage = (url: string): boolean => {
 
 const fetchReportDetail = async () => {
   loading.value = true
+  // 重试路径先清掉上一次的状态块：记录若已恢复，块必须消失。
+  notFound.value = false
   try {
     const res = await screeningApi.getReportDetail(reportId)
     report.value = res.data
   } catch (error) {
-    ElMessage.error('获取报告详情失败')
+    // 404 走状态块，且只走状态块 —— 先 return，showError 永远不会在同一次失败上再弹一条。
+    if (normalizeApiError(error).kind === 'notFound') {
+      notFound.value = true
+      return
+    }
+    // 非 404：本页没有 403 的页级处理，故显式 presentStates 让 forbidden 也可见
+    // （否则该 kind 默认零呈现，页面会静默）。notFound 已在上方返回，两分支互斥。
+    showError(error, 'screening.loadFailed', { presentStates: true })
   } finally {
     loading.value = false
   }
@@ -172,6 +201,11 @@ const downloadFile = () => {
 
 const goBack = () => {
   router.back()
+}
+
+// 404 块的主 CTA：唯一有产出的出口（UI-SPEC Contract 3 §3.2）。
+const goList = () => {
+  router.push('/screening/list')
 }
 
 onMounted(() => {
