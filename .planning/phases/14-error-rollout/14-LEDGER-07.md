@@ -12,11 +12,14 @@
 | `views/settings/DevicePlatformConfig.vue:372`（delete 的裸 `catch { /* User cancelled */ }`）+ `:390`（init-defaults 的同类裸 catch） | `catch { // User cancelled }`（两处，无文案） | `server`, `network`, `business`, `forbidden`, `notFound`, `auth`, `validation`, `unknown` | `presentStates-toast`（确认与请求已拆分） | `device.saveFailed` | 旧实现把**真实 API 失败**当成「用户取消」吞掉 —— 一次失败的删除什么都不显示，这比手写 cancel 判断更危险（RESEARCH §「静默 catch」，本 plan 负责 3 处中的这 2 处）。现在确认与请求各一个 `try`：第一个 catch 是裸 `return`（取消是控制流，零提示，ERR-08），第二个 catch 走 `showError(..., { presentStates: true })`。两处共用 `device.saveFailed`：它们都是对同一份平台配置的写操作。 | `#删除确认框取消：零提示且不发 DELETE`；`#删除的 API 真失败：不再被当成「用户取消」吞掉，恰好一条提示`（把 catch 改回 `catch { /* User cancelled */ }` 后该用例失败 —— mutation-verified） |
 | `views/settings/DevicePlatformConfig.vue:299` | `加载配置失败` | `forbidden`, `notFound`, `server`, `network`, `business`, `auth`, `validation`, `cancel`, `unknown` | `状态块` | `device.loadFailed` | **本文件唯一不携带 `presentStates` 的 `showError`，因为它是拥有页级 `ErrorState` 的那个 load 路径**：`forbidden` 时置 `forbidden = true` 渲染整页块并 `return`（零 toast），其余 kind 走 `showError(err, 'device.loadFailed')`。在这里 opt-in 会让同一次 403 呈现两次（块 + toast）；这是 14-01 的交付，本 plan 只核对不改写。 | `src/__tests__/views/DevicePlatformConfigForbidden.spec.ts#首个查询返回 403：渲染页级块、零 toast、且不再发第二个请求`；`#非 403 失败仍走 toast 而不是页级块（页级块只属于权限语义）` |
 
-## 删除记录（不可达 `else`）
+## 删除记录（不可达 `else`）—— 不是台账行，正文说明
 
-| 位置（迁移前） | 原代码形状 | 为什么不可达 | 处置 |
-|----------------|-----------|-------------|------|
-| `views/settings/DevicePlatformConfig.vue:332` | `if (res.code === 200) { …成功… } else { ElMessage.error(res.message \|\| '保存失败') }` | `utils/request.ts:45-52` 的响应拦截器在 `res.code !== 200` 时 `reject(normalizeApiError(...))`，因此 `try` 里只会拿到 `code === 200` 的信封；`else` 永不执行 | 整段删除，只保留成功分支。行为保持：没有任何可达路径失去反馈。可观测证据：本文件 `ElMessage.error` 计数由 4 → 0（`grep -c` 实跑） |
+`views/settings/DevicePlatformConfig.vue:332` 是**删除**而非迁移，它已并入上表第 2 行（与 `:335` 的 save catch 同处一个函数，故合为一行）。
+
+- **原代码形状**：`if (res.code === 200) { …成功… } else { ElMessage.error(res.message || '保存失败') }`
+- **为什么不可达**：`utils/request.ts:45-52` 的响应拦截器在 `res.code !== 200` 时 `reject(normalizeApiError(...))`，因此 `try` 里只会拿到 `code === 200` 的信封；`else` 永不执行。
+- **处置**：整段删除，只保留成功分支。行为保持 —— 没有任何可达路径失去反馈（不可达路径本来就没有反馈可言）。
+- **可观测证据**：本文件 `grep -c 'ElMessage.error'` 由 4 → 0。
 
 ## 对账说明
 
