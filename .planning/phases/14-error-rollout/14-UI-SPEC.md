@@ -1,10 +1,11 @@
 ---
 phase: "14"
 slug: "error-rollout"
-status: draft
+status: approved
 shadcn_initialized: false
 preset: none
 created: "2026-11-10"
+reviewed_at: "2026-11-10"
 ---
 
 # Phase 14 — 全站收尾排查与回归验证 — UI Design Contract
@@ -1118,15 +1119,15 @@ Applicable state considerations resolved: **31 covered (29 explicit, 2 backstop,
 
 ## Checker Sign-Off
 
-- [ ] Dimension 1 Copywriting: PASS
-- [ ] Dimension 2 Visuals: PASS
-- [ ] Dimension 3 Color: PASS
-- [ ] Dimension 4 Typography: PASS
-- [ ] Dimension 5 Spacing: PASS
-- [ ] Dimension 6 Registry Safety: PASS
-- [ ] Dimension 7 Inventory Provenance: PASS
+- [x] Dimension 1 Copywriting: PASS
+- [x] Dimension 2 Visuals: PASS
+- [x] Dimension 3 Color: PASS
+- [x] Dimension 4 Typography: PASS
+- [x] Dimension 5 Spacing: PASS
+- [x] Dimension 6 Registry Safety: PASS
+- [x] Dimension 7 Inventory Provenance: PASS
 
-**Approval:** pending
+**Approval:** approved — 2026-11-10 (7/7 PASS)
 
 ### Revision log (2026-11-10) — checker findings resolved
 
