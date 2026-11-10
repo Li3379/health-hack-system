@@ -70,6 +70,12 @@ const globalStubs = {
   'el-icon': {
     template: '<span class="el-icon"><slot /></span>'
   },
+  // Login.vue 现在把 FormErrorSummary 作为 el-form 的第一个子节点；它内部用 el-alert
+  // 承载汇总标题。不 stub 的话每个用例都会打印一条「Failed to resolve component」。
+  'el-alert': {
+    template: '<div class="el-alert"><slot name="title" /></div>',
+    props: ['type', 'closable', 'showIcon']
+  },
   'router-link': {
     template: '<a class="router-link"><slot /></a>'
   }
