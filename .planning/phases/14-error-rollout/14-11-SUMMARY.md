@@ -27,7 +27,7 @@ affects: [14-12, 14-13]
 actuals:
   tokens: 16539
   tasks: 2
-  commits: 2
+  commits: 3
   plan_head_before: a320a9c7b3be9fe6f3327cdb377ff254677650ee
 
 tech-stack:
@@ -233,7 +233,7 @@ The data-input module closes with exactly two deliberate survivors, and the phas
 - **Started:** 2026-11-10T23:00:00Z (approx, first command)
 - **Completed:** 2026-11-10T23:48:00Z
 - **Tasks:** 2 of 2
-- **Files modified:** 8 (5 source, 2 specs created, 1 new ledger; 3 comment-only rewords elsewhere)
+- **Files modified:** 11 (5 converted views, 3 comment-only rewords, 2 specs created, 1 ledger created)
 
 ## Accomplishments
 
@@ -249,6 +249,7 @@ The two specs assert behaviours a source-level grep cannot: zero requests behind
 
 1. **Task 1: OCR components and the config wizard** — `5a8087a` (feat)
 2. **Task 2: prevention/Metrics split and Risk conversion** — `13c455b` (feat)
+3. **Plan close-out: SUMMARY** — `53fb858` (docs)
 
 ## Files Created/Modified
 
@@ -336,7 +337,7 @@ None. Every converted path is wired to the real API and every retention is delib
 
 ## Self-Check
 
-Files verified present: `14-LEDGER-11.md`, `OcrMigration.spec.ts`, `PreventionModuleMigration.spec.ts`, and all five converted views. Commits verified: `5a8087a`, `13c455b`. Full suite 58 files / 622 tests passing (baseline was 56 / 599). `npm run build` exits 0.
+Files verified present: `14-LEDGER-11.md`, `OcrMigration.spec.ts`, `PreventionModuleMigration.spec.ts`, and all five converted views. Commits verified: `5a8087a`, `13c455b`, `53fb858`. Full suite 58 files / 622 tests passing (baseline was 56 / 599). `npm run build` exits 0.
 
 ## Self-Check: PASSED
 
