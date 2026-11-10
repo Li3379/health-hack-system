@@ -327,6 +327,24 @@ describe('goals/Index.vue — 400 字段校验的内联 + 汇总双呈现（ERR-
     wrapper.unmount()
   })
 
+  it('删除确认框以 AbortError 取消：零提示，且不发 DELETE（ERR-08）', async () => {
+    // 用 AbortError 而不是字符串 'cancel'：旧的手写判断 `e !== 'cancel'` 对字符串
+    // 恰好能用，因此字符串形态**证明不了**任何事 —— 它对 AbortError 判成真失败并弹红灯。
+    confirmMock.mockRejectedValueOnce(Object.assign(new Error('canceled'), { name: 'AbortError' }))
+
+    const wrapper = mountGoals()
+    await flushPromises()
+
+    const vm = wrapper.vm as any
+    await vm.handleDelete(1)
+    await flushPromises()
+
+    expect(toastCount()).toBe(0)
+    expect(goalsApi.remove).not.toHaveBeenCalled()
+
+    wrapper.unmount()
+  })
+
   it('删除已被删除的行（RESOURCE_NOT_FOUND 信封）：恰好一条提示，且文案是后端消息（B1 回归）', async () => {
     // 真实形态：BusinessException(RESOURCE_NOT_FOUND) → HTTP 200 + 信封 code 500 + errorCode。
     // 缺 presentStates 时 showError 在 resolveMessage 之前就返回 → 0 条，这正是 B1 的缺陷。

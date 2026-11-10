@@ -57,14 +57,39 @@
     </el-card>
     <el-dialog v-model="createVisible" title="添加提醒" width="500px">
       <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
-        <el-form-item label="提醒标题" prop="title">
-          <el-input v-model="form.title" placeholder="请输入提醒标题" />
+        <!-- 汇总块必须是 <el-form> 的第一个子节点（Contract 4.3）。 -->
+        <FormErrorSummary
+          ref="summaryRef"
+          :summary-items="summaryItems"
+          @focus-field="focusField"
+        />
+        <el-form-item
+          label="提醒标题"
+          prop="title"
+          data-field="title"
+          :error="fieldErrors['title']"
+        >
+          <el-input
+            v-model="form.title"
+            placeholder="请输入提醒标题"
+            @update:model-value="clearField('title')"
+          />
         </el-form-item>
         <el-form-item label="提醒描述">
           <el-input v-model="form.description" type="textarea" :rows="2" placeholder="可选描述" />
         </el-form-item>
-        <el-form-item label="提醒类型" prop="reminderType">
-          <el-select v-model="form.reminderType" placeholder="请选择类型" style="width: 100%">
+        <el-form-item
+          label="提醒类型"
+          prop="reminderType"
+          data-field="reminderType"
+          :error="fieldErrors['reminderType']"
+        >
+          <el-select
+            v-model="form.reminderType"
+            placeholder="请选择类型"
+            style="width: 100%"
+            @change="clearField('reminderType')"
+          >
             <el-option label="用药提醒" value="medication" />
             <el-option label="运动提醒" value="exercise" />
             <el-option label="饮水提醒" value="water" />
@@ -72,8 +97,17 @@
             <el-option label="自定义" value="custom" />
           </el-select>
         </el-form-item>
-        <el-form-item label="Cron表达式" prop="cronExpression">
-          <el-input v-model="form.cronExpression" placeholder="例: 0 8 * * * (每天8点)" />
+        <el-form-item
+          label="Cron表达式"
+          prop="cronExpression"
+          data-field="cronExpression"
+          :error="fieldErrors['cronExpression']"
+        >
+          <el-input
+            v-model="form.cronExpression"
+            placeholder="例: 0 8 * * * (每天8点)"
+            @update:model-value="clearField('cronExpression')"
+          />
           <div class="form-tip">格式: 秒 分 时 日 月 星期</div>
         </el-form-item>
       </el-form>
@@ -86,17 +120,21 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, nextTick } from 'vue'
 import { staggerReveal, cleanupScrollTriggers } from '@/composables/useGsap'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { Plus, Clock, Delete } from '@element-plus/icons-vue'
 import { remindersApi, type UserReminder } from '@/api/reminders'
+import { useFormServerErrors, collectInvalidFieldMessages } from '@/composables/useFormServerErrors'
+import FormErrorSummary from '@/components/common/FormErrorSummary.vue'
+import { showError } from '@/utils/showError'
 
 const loading = ref(false)
 const submitting = ref(false)
 const createVisible = ref(false)
 const reminders = ref<UserReminder[]>([])
 const formRef = ref<FormInstance>()
+const summaryRef = ref<InstanceType<typeof FormErrorSummary> | null>(null)
 
 const form = reactive({
   title: '',
@@ -104,6 +142,20 @@ const form = reactive({
   reminderType: '',
   cronExpression: ''
 })
+
+/**
+ * `title` 在本页是「提醒标题」而非全局表的「标题」，`description` 同理 —— 按
+ * Contract 4.5 规则 4 用 per-call `labels` 覆盖，绝不改全局表（改全局表会把
+ * 档案页、阈值页、目标页的 title 一起误标）。`fieldOrder` 与页面视觉顺序一致。
+ *
+ * 本页只有一个表单，故直接解构（与 prevention/Profile.vue 同形，模板里靠 ref
+ * 自动解包）；goals 页有两个表单需要用前缀区分，因此那边包了一层 `reactive()`。
+ */
+const { fieldErrors, summaryItems, apply, setErrors, clearField, reset, focusField } =
+  useFormServerErrors({
+    fieldOrder: ['title', 'reminderType', 'cronExpression'],
+    labels: { title: '提醒标题', description: '提醒描述' }
+  })
 
 const rules: FormRules = {
   title: [{ required: true, message: '请输入提醒标题', trigger: 'blur' }],
@@ -130,18 +182,23 @@ const typeTagTypes: Record<string, string> = {
 const getTypeLabel = (type: string): string => typeLabels[type] || type
 const getTypeTagType = (type: string): string => typeTagTypes[type] || 'info'
 
+/**
+ * 列表加载失败：本页不渲染错误状态块，因此 `forbidden` / `notFound` 没有落点，
+ * 一次加载失败必须换一条常驻 toast 而不是静默。
+ */
 const fetchReminders = async () => {
   loading.value = true
   try {
     const res = await remindersApi.list()
     reminders.value = res.data || []
   } catch (error) {
-    ElMessage.error('获取提醒列表失败')
+    showError(error, 'reminder.loadFailed', { presentStates: true })
   } finally {
     loading.value = false
   }
 }
 
+/** 弹窗打开时的初始化：不是失败路径，绝不搬进任何 catch（会破坏 ERR-05）。 */
 const showCreateDialog = () => {
   form.title = ''
   form.description = ''
@@ -152,8 +209,19 @@ const showCreateDialog = () => {
 
 const handleCreate = async () => {
   if (!formRef.value) return
-  await formRef.value.validate(async (valid) => {
-    if (!valid) return
+
+  // 上一轮的残留投影不进入本次尝试；只清投影，不碰用户输入（ERR-05）。
+  reset()
+
+  await formRef.value.validate(async (valid, invalidFields) => {
+    if (!valid) {
+      // 客户端校验失败也走同一份汇总通道（GOV.UK 双呈现），零 toast。
+      setErrors(collectInvalidFieldMessages(invalidFields))
+      await nextTick()
+      summaryRef.value?.focusSummary()
+      return
+    }
+
     submitting.value = true
     try {
       await remindersApi.create({
@@ -162,37 +230,71 @@ const handleCreate = async () => {
         reminderType: form.reminderType,
         cronExpression: form.cronExpression
       })
+      // 成功路径顺序保持不变：提示 → 关闭弹窗 → 重取列表。
       ElMessage.success('提醒创建成功')
       createVisible.value = false
       fetchReminders()
     } catch (error) {
-      ElMessage.error('创建提醒失败')
+      // validation → 0 toast，汇总 + 内联承担呈现；其余 kind 由 showError 呈现。
+      const err = showError(error, 'reminder.saveFailed', { presentStates: true })
+      if (err.kind === 'validation') {
+        apply(err)
+        await nextTick()
+        summaryRef.value?.focusSummary()
+      }
     } finally {
       submitting.value = false
     }
   })
 }
 
+/**
+ * 切换启用/停用。
+ *
+ * 旧实现在 catch 里回退成一条字符串错误提示**再**调一次 `fetchReminders()` ——
+ * 一次失败触发第二个请求，且第二个请求失败会再弹一条。失败分支现在只呈现一次，
+ * 绝不重取。
+ *
+ * `UserReminderServiceImpl:57` 抛 `RESOURCE_NOT_FOUND`、`:60` 抛 `AUTH_FORBIDDEN`：
+ * 切换一条在别的标签页里被删掉的提醒、或一条属于别人的提醒，都是这一动作的常规
+ * 分支，因此第三个参数必带，否则两者都会彻底静默。
+ *
+ * 复用 `alert.updateFailed`（「无法更新预警状态」）而不是新增 `reminder.updateFailed`：
+ * 该 key 已在字典中，措辞对「状态更新失败」通用且贴切；为近似文案再加一个键会
+ * 形成两套词汇表并需要同 commit 同步 `errorMessages.spec.ts` 的计数断言。
+ */
 const handleToggle = async (id: number) => {
   try {
     await remindersApi.toggle(id)
     ElMessage.success('状态已更新')
   } catch (error) {
-    ElMessage.error('更新状态失败')
-    fetchReminders()
+    showError(error, 'alert.updateFailed', { presentStates: true })
   }
 }
 
+/**
+ * 删除：确认与请求彻底分离。
+ *
+ * 取消路径是一个裸 `return` —— 用户按了「取消」不是失败，零提示（D-12 / ERR-08）。
+ * 原先的手写判断「只要不是字符串 cancel 就弹错」对 `AbortError` 与归一化后的
+ * `ApiError('', 'cancel')` 都会误判成真失败，因此整段删掉。
+ * `UserReminderServiceImpl:71-76` 对「行已消失」静默返回，`:78` 则抛 `AUTH_FORBIDDEN`，
+ * 后者必须仍然可见。
+ */
 const handleDelete = async (id: number) => {
   try {
     await ElMessageBox.confirm('确定要删除这条提醒吗？', '提示', { type: 'warning' })
+  } catch {
+    // 取消确认框：刻意静默，不弹任何提示。
+    return
+  }
+
+  try {
     await remindersApi.remove(id)
     ElMessage.success('删除成功')
     fetchReminders()
   } catch (error) {
-    if (error !== 'cancel') {
-      ElMessage.error('删除失败')
-    }
+    showError(error, 'reminder.deleteFailed', { presentStates: true })
   }
 }
 
@@ -207,7 +309,6 @@ onUnmounted(() => { cleanupScrollTriggers() })
 .reminders-page { padding: 20px; }
 .header-actions { display: flex; justify-content: space-between; align-items: center; }
 .reminder-card { margin-bottom: 20px; transition: all 0.3s; }
-.reminder-card:hover { transform: translateY(-2px); }
 .reminder-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 .reminder-title { font-size: 16px; font-weight: 500; color: var(--el-text-color-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; margin-right: 8px; }
 .reminder-desc { font-size: 13px; color: var(--el-text-color-secondary); margin-bottom: 12px; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
