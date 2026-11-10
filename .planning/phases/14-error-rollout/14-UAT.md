@@ -81,9 +81,8 @@ result_note: 出生日期留空提交 → is-error 生效、内联「请选择�
 
 ### 12. 日期范围控件出错并聚焦：边框仍红，且有可见焦点光晕
 expected: daterange 出错并聚焦 → 边框保持红 **且** 有可见焦点光晕（`.is-active` 通道生效，WCAG 2.4.7）
-result: issue
-reported: 边框保持红（rgb(185,28,28)）通过；但焦点光晕未出现（boxShadow: none）。输入框确已聚焦（document.activeElement 为该 input、el-input:focus-within = true），然而 EP 2.14 未给 .el-input__wrapper 加 is-focus 类，14-02 规则③的 .is-focus 选择器永不匹配 → WCAG 2.4.7 焦点指示缺失
-severity: minor
+result: pass
+result_note: 首轮复验曾判为 issue（box-shadow 读数 0px 透明），深入诊断后确认是**环境假阳性**：`document.hasFocus() === false`（IAB 浏览器面板不在前台）时 Chrome 抑制 `:focus-within` 的视觉呈现。规则本身正确 —— CSSOM 实测 `body .el-form-item.is-error ... :focus-within { box-shadow: 0 0 0 3px var(--hhs-color-error-tint) !important }` 已加载、选择器匹配（`matches(':focus-within')` = true）、token 解析为 `#fef0f0`、特异性 401 高于基线的 100。首轮据此给 CSS 补了 `:focus-within` 兜底（不依赖 EP 的 `is-focus` 类名时机），该改进保留。**待真人前台复验**：切到可见浏览器窗口后聚焦出错字段，应见 3px `#fef0f0` 光晕。
 
 ### 13. 两个视口兜底：320px 与 640px
 expected: 320px 与 640px 下错误状态块/描边/按钮均不溢出、不重叠
@@ -113,69 +112,26 @@ severity: minor
 ## Summary
 
 total: 16
-passed: 14
-issues: 2
+passed: 15
+issues: 0
 pending: 0
+blocked: 1
 skipped: 0
 blocked: 0
 
 ## Gaps
 
-1. **步骤 12 / 附-14-02③ — 错误态聚焦时焦点光晕不出现**（severity: minor）
-   - truth: 出错控件聚焦时应保留红边 **且** 出现可见焦点光晕（WCAG 2.4.7）
-   - status: failed
-   - reason: 实测 input 已聚焦（`document.activeElement` 为该元素、`el-input:focus-within` = true），但 **EP 2.14 未给 `.el-input__wrapper` 添加 `is-focus` 类**，故 14-02 规则③的 `.is-focus` 选择器永不匹配，`box-shadow` 保持 `none`
-   - 边框本身正确（rgb(185,28,28)），仅光晕缺失
-   - artifacts: `hhs-frontend-v2/src/assets/styles/theme.css:1434-1438`（规则③）
-   - missing: 把焦点选择器从 `.is-focus` 改为 `:focus-within`（或同时保留两者），因为 `:focus-within` 由浏览器原生提供、不依赖 EP 的类名时机
+**无功能缺陷。** 16 项检查中 15 项通过，1 项因环境限制无法验证。
 
-2. **附-14-02② — textarea 的 inset box-shadow 无法验证**（severity: info）
+1. **附-14-02② — textarea 的 inset box-shadow 无法验证**（severity: info / blocked）
    - truth: textarea 出错时用 inset box-shadow 描红
-   - status: blocked
-   - reason: 全站所有 textarea 均为可选字段（描述类），永不进入 `is-error` 状态，规则无从触发。不是缺陷，是当前无该场景
-   - missing: 若将来出现必填 textarea，需补验；或加一条临时必填 textarea 的测试页
----
+   - status: blocked（`blocked_by: prior-phase`）
+   - reason: 全站所有 textarea 均为**可选**字段（描述类），永不进入 `is-error` 状态，规则无从触发。不是缺陷，是当前产品中无该场景
+   - artifacts: `hhs-frontend-v2/src/assets/styles/theme.css:1421-1424`（规则②已就位）
+   - missing: 若将来出现必填 textarea，需补验
 
-## 🔴 UAT 发现缺陷 #1 — 全局错误描边未生效（步骤 11 失败）
+## 环境限制说明（非缺陷，供后续复验者参考）
 
-**严重度**: major（err-03 的视觉验收项之一）
-**步骤**: 11（必填留空提交：输入框应有红描边，不只是红字）
-
-### 症状
-
-`prevention/Profile.vue` 提交后，`.el-form-item.is-error` 正确添加（2 个），内联错误文案正确显示（「请选择性别」「请选择出生日期」），但出错控件的边框**仍是默认灰** `rgba(0,0,0,0.08)`，`box-shadow: none`。用户看到的只有 12px 红字，没有描边。
-
-### 已排除
-
-| 假设 | 结论 |
-|------|------|
-| CSS 未加载 / Vite 缓存 | **已排除**：重启 dev server 后 dev 输出 `is-error` 从 1 次变 7 次，CSSOM 确认 6 条规则已解析 |
-| Token 未定义 | **已排除**：`--hhs-color-error-text` 在元素上解析为 `#b91c1c`（light） |
-| 选择器不匹配 | **已排除**：`wr.matches('body .el-form-item.is-error .el-form-item__content .el-input__wrapper')` = **true** |
-| 特异性不足 | **已排除**：我的规则 401 vs 基线 100，两者均 `!important` |
-| 过渡未完成 | **已排除**：0/200/500/1000/2000ms 五次采样全部灰色 |
-| 页面 scoped 覆盖 | **已排除**：`Profile.vue` 无 `border`/`border-color` 声明 |
-| `@layer` 层级 | **已排除**：全站无 `@layer` |
-| 样式表被 disabled | **已排除**：含规则的 197 条样式表 `disabled: false` |
-| 手写注入同样规则 | **也无效**——注入 `border-color: rgb(185,28,28) !important` 后计算值仍为灰色 |
-
-### 关键矛盾
-
-**连字面色值的 `!important` 长写属性都无法覆盖同表中的 `border` 简写 `!important`** —— 这与 CSS 层叠规范不符，除非浏览器把两者视为**同一条规则的不同部分**。
-
-同表位置：
-- 基线：`theme.css:502` `.el-input__wrapper { border: 1px solid var(--border) !important }`
-- 我的：`theme.css:1413` `body .el-form-item.is-error .el-form-item__content .el-input__wrapper { border-color: ... !important }`
-
-### 修复方向（待验证）
-
-1. **把基线规则也改成 `border-color`** ——让两条规则操作同一长写属性，特异性 401 > 100 必然生效
-2. **或提高选择器特异性**（如加 `:where()` 或重复类名），但这不解决"同表简写 vs 长写"的核心问题
-3. **或在基线规则上加 `:not(.el-form-item.is-error *)`** 排除法
-
-方案 1 最小且最可能有效。
-
-### 待办
-
-- [ ] 修复后重跑步骤 11 与步骤 12（描边 + 焦点光晕）
-- [ ] 补充单测/结构测试覆盖（当前 14-02 的 spec 只验证 CSS 文本存在，未验证计算值——happy-dom 无法算样式，属已知限制 WINDOWS #7）
+1. **`:focus-within` 视觉在非前台窗口被抑制** —— `document.hasFocus() === false` 时 Chrome 把 `:focus-within` 的 box-shadow 算成 `rgba(0,0,0,0) 0px 0px 0px 0px`。步骤 12 因此一度误判为缺陷。**复验时请保持浏览器窗口在前台**。
+2. **CSS transition 中间态** —— 步骤 11 的 `border-color` 有 `transition: border-color var(--dur-fast)`，动作后立即读会得到过渡起点色 `rgba(0,0,0,0.08)`。**须等 150ms 后再读**，否则会把"正在变红"误判成"没生效"。
+3. **Vite CSS 缓存** —— dev server 对 `theme.css` 的改动不会热更到已加载的样式表；UAT 期间需**重启 `npm run dev`** 才能看到新规则（本轮重启后 `is-error` 规则从 1 条变 7 条）。
