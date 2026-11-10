@@ -54,14 +54,39 @@
     </el-card>
     <el-dialog v-model="createVisible" title="创建健康目标" width="500px">
       <el-form ref="createFormRef" :model="createForm" :rules="createRules" label-width="100px">
-        <el-form-item label="目标标题" prop="title">
-          <el-input v-model="createForm.title" placeholder="例: 降低体重至70kg" />
+        <!-- 汇总块必须是 <el-form> 的第一个子节点（Contract 4.3），弹窗与全页表单同一位置。 -->
+        <FormErrorSummary
+          ref="createSummaryRef"
+          :summary-items="createErrors.summaryItems"
+          @focus-field="createErrors.focusField"
+        />
+        <el-form-item
+          label="目标标题"
+          prop="title"
+          data-field="title"
+          :error="createErrors.fieldErrors['title']"
+        >
+          <el-input
+            v-model="createForm.title"
+            placeholder="例: 降低体重至70kg"
+            @update:model-value="createErrors.clearField('title')"
+          />
         </el-form-item>
         <el-form-item label="目标描述">
           <el-input v-model="createForm.description" type="textarea" :rows="2" placeholder="可选描述" />
         </el-form-item>
-        <el-form-item label="指标类型" prop="metricKey">
-          <el-select v-model="createForm.metricKey" placeholder="请选择指标" style="width: 100%">
+        <el-form-item
+          label="指标类型"
+          prop="metricKey"
+          data-field="metricKey"
+          :error="createErrors.fieldErrors['metricKey']"
+        >
+          <el-select
+            v-model="createForm.metricKey"
+            placeholder="请选择指标"
+            style="width: 100%"
+            @change="createErrors.clearField('metricKey')"
+          >
             <el-option label="体重" value="weight" />
             <el-option label="BMI" value="bmi" />
             <el-option label="心率" value="heartRate" />
@@ -73,15 +98,50 @@
             <el-option label="睡眠时长" value="sleepDuration" />
           </el-select>
         </el-form-item>
-        <el-form-item label="目标值" prop="targetValue">
-          <el-input-number v-model="createForm.targetValue" :precision="1" :min="0" style="width: 100%" />
+        <el-form-item
+          label="目标值"
+          prop="targetValue"
+          data-field="targetValue"
+          :error="createErrors.fieldErrors['targetValue']"
+        >
+          <el-input-number
+            v-model="createForm.targetValue"
+            :precision="1"
+            :min="0"
+            style="width: 100%"
+            @update:model-value="createErrors.clearField('targetValue')"
+          />
         </el-form-item>
-        <el-form-item label="单位" prop="unit">
-          <el-input v-model="createForm.unit" placeholder="例: kg, 次/分, 步" />
+        <el-form-item
+          label="单位"
+          prop="unit"
+          data-field="unit"
+          :error="createErrors.fieldErrors['unit']"
+        >
+          <el-input
+            v-model="createForm.unit"
+            placeholder="例: kg, 次/分, 步"
+            @update:model-value="createErrors.clearField('unit')"
+          />
         </el-form-item>
-        <el-form-item label="起止日期" prop="dateRange">
-          <el-date-picker v-model="createForm.dateRange" type="daterange" range-separator="至"
-            start-placeholder="开始日期" end-placeholder="结束日期" value-format="YYYY-MM-DD" style="width: 100%" />
+        <!-- 范围选择器的根节点自身就是 .el-input__wrapper，:error 绑在 el-form-item 上，
+             不给内部两个 input 各绑一次（Contract 4.1）。 -->
+        <el-form-item
+          label="起止日期"
+          prop="dateRange"
+          data-field="dateRange"
+          :error="createErrors.fieldErrors['dateRange']"
+        >
+          <el-date-picker
+            v-model="createForm.dateRange"
+            type="daterange"
+            range-separator="至"
+            start-placeholder="开始日期"
+            end-placeholder="结束日期"
+            value-format="YYYY-MM-DD"
+            style="width: 100%"
+            @change="createErrors.clearField('dateRange')"
+          />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -91,8 +151,24 @@
     </el-dialog>
     <el-dialog v-model="progressVisible" title="记录进度" width="400px">
       <el-form ref="progressFormRef" :model="progressForm" :rules="progressRules" label-width="80px">
-        <el-form-item label="当前值" prop="value">
-          <el-input-number v-model="progressForm.value" :precision="1" :min="0" style="width: 100%" />
+        <FormErrorSummary
+          ref="progressSummaryRef"
+          :summary-items="progressErrors.summaryItems"
+          @focus-field="progressErrors.focusField"
+        />
+        <el-form-item
+          label="当前值"
+          prop="value"
+          data-field="value"
+          :error="progressErrors.fieldErrors['value']"
+        >
+          <el-input-number
+            v-model="progressForm.value"
+            :precision="1"
+            :min="0"
+            style="width: 100%"
+            @update:model-value="progressErrors.clearField('value')"
+          />
         </el-form-item>
         <el-form-item label="备注">
           <el-input v-model="progressForm.note" type="textarea" :rows="2" placeholder="可选备注" />
@@ -111,6 +187,9 @@ import { ref, reactive, onMounted, onUnmounted, nextTick } from 'vue'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { goalsApi, type HealthGoal } from '@/api/goals'
+import { useFormServerErrors, collectInvalidFieldMessages } from '@/composables/useFormServerErrors'
+import FormErrorSummary from '@/components/common/FormErrorSummary.vue'
+import { showError } from '@/utils/showError'
 import {
   staggerReveal, progressAnimate, cleanupScrollTriggers,
   tilt3D, buttonPress, hoverLift, rippleClick, DUR, EASE,
@@ -125,6 +204,8 @@ const goals = ref<HealthGoal[]>([])
 const currentGoalId = ref<number | null>(null)
 const createFormRef = ref<FormInstance>()
 const progressFormRef = ref<FormInstance>()
+const createSummaryRef = ref<InstanceType<typeof FormErrorSummary> | null>(null)
+const progressSummaryRef = ref<InstanceType<typeof FormErrorSummary> | null>(null)
 
 const createForm = reactive({
   title: '', description: '', metricKey: '', targetValue: 0, unit: '',
@@ -132,6 +213,43 @@ const createForm = reactive({
 })
 
 const progressForm = reactive({ value: 0, note: '' })
+
+/**
+ * 两个表单各一个投影实例：字段顺序与标签都不同。
+ *
+ * `title` 在本页是「目标标题」而非全局表的「标题」，`value` 是「当前值」/「进度值」
+ * 而非「指标数值」—— 按 Contract 4.5 规则 4 用 per-call `labels` 覆盖，绝不改全局表
+ * （改全局表会把档案页、阈值页的 title 一起误标）。
+ *
+ * 用 `reactive()` 持有返回值，让 `fieldErrors` / `summaryItems` 在模板里按普通对象读取
+ * （否则 `xxx.fieldErrors['title']` 拿到的是 Ref 而不是字符串）。
+ */
+const createErrors = reactive(useFormServerErrors({
+  fieldOrder: ['title', 'metricKey', 'targetValue', 'unit', 'dateRange'],
+  labels: { title: '目标标题', description: '目标描述', value: '当前值' }
+}))
+
+const progressErrors = reactive(useFormServerErrors({
+  fieldOrder: ['value'],
+  labels: { value: '进度值' }
+}))
+
+/**
+ * 客户端校验失败 → 与服端校验共用同一份汇总通道（GOV.UK 双呈现，D-01），零 toast。
+ * 抽成一个函数只因为本页有两个表单：共享收集器的调用点仍然只有一处
+ * （它是 14-03 交付的无状态纯函数），不是本地重新实现。
+ */
+type ProjectableErrors = typeof createErrors
+
+const projectClientErrors = async (
+  target: ProjectableErrors,
+  invalidFields: Record<string, Array<{ message?: string }>> | undefined,
+  summary: InstanceType<typeof FormErrorSummary> | null | undefined
+): Promise<void> => {
+  target.setErrors(collectInvalidFieldMessages(invalidFields))
+  await nextTick()
+  summary?.focusSummary()
+}
 
 const createRules: FormRules = {
   title: [{ required: true, message: '请输入目标标题', trigger: 'blur' }],
@@ -149,12 +267,129 @@ const getStatusTagType = (s: string): string => statusTagTypes[s] || 'info'
 const getProgressPercent = (g: HealthGoal): number => g.targetValue === 0 ? 0 : Math.min(100, Math.round((g.currentValue / g.targetValue) * 100))
 const getProgressColor = (g: HealthGoal): string => { const p = getProgressPercent(g); return p >= 100 ? '#67c23a' : p >= 70 ? '#409eff' : p >= 40 ? '#e6a23c' : '#f56c6c' }
 
-const fetchGoals = async () => { loading.value = true; try { const r = await goalsApi.list(); goals.value = r.data || [] } catch (e) { ElMessage.error('获取目标列表失败') } finally { loading.value = false } }
+/**
+ * 列表加载失败：本页不渲染错误状态块，因此 `forbidden` / `notFound` 没有落点，
+ * 必须显式 opt-in 一条常驻 toast —— 静默是唯一不可接受的结果。
+ */
+const fetchGoals = async () => {
+  loading.value = true
+  try {
+    const r = await goalsApi.list()
+    goals.value = r.data || []
+  } catch (error) {
+    showError(error, 'goal.loadFailed', { presentStates: true })
+  } finally {
+    loading.value = false
+  }
+}
+
+/** 弹窗打开时的初始化：不是失败路径，绝不搬进任何 catch（会破坏 ERR-05）。 */
 const showCreateDialog = () => { createForm.title = ''; createForm.description = ''; createForm.metricKey = ''; createForm.targetValue = 0; createForm.unit = ''; createForm.dateRange = null; createVisible.value = true }
-const handleCreate = async () => { if (!createFormRef.value) return; await createFormRef.value.validate(async (v) => { if (!v) return; submitting.value = true; try { await goalsApi.create({ title: createForm.title, description: createForm.description || undefined, metricKey: createForm.metricKey, targetValue: createForm.targetValue, unit: createForm.unit, startDate: createForm.dateRange![0], endDate: createForm.dateRange![1] }); ElMessage.success('目标创建成功'); createVisible.value = false; fetchGoals() } catch (e) { ElMessage.error('创建目标失败') } finally { submitting.value = false } }) }
+
+const handleCreate = async () => {
+  if (!createFormRef.value) return
+
+  // 上一轮的残留投影不进入本次尝试；只清投影，不碰用户输入（ERR-05）。
+  createErrors.reset()
+
+  await createFormRef.value.validate(async (valid, invalidFields) => {
+    if (!valid) {
+      // 客户端校验失败也走同一份汇总通道（GOV.UK 双呈现），零 toast。
+      await projectClientErrors(createErrors, invalidFields, createSummaryRef.value)
+      return
+    }
+
+    submitting.value = true
+    try {
+      await goalsApi.create({
+        title: createForm.title,
+        description: createForm.description || undefined,
+        metricKey: createForm.metricKey,
+        targetValue: createForm.targetValue,
+        unit: createForm.unit,
+        startDate: createForm.dateRange![0],
+        endDate: createForm.dateRange![1]
+      })
+      // 成功路径顺序保持不变：关闭弹窗只在创建解析成功之后。
+      ElMessage.success('目标创建成功')
+      createVisible.value = false
+      fetchGoals()
+    } catch (error) {
+      // validation → 0 toast，汇总 + 内联承担呈现；其余 kind 由 showError 呈现。
+      const err = showError(error, 'goal.saveFailed', { presentStates: true })
+      if (err.kind === 'validation') {
+        createErrors.apply(err)
+        await nextTick()
+        createSummaryRef.value?.focusSummary()
+      }
+    } finally {
+      submitting.value = false
+    }
+  })
+}
+
 const showProgressDialog = (g: HealthGoal) => { currentGoalId.value = g.id; progressForm.value = g.currentValue; progressForm.note = ''; progressVisible.value = true }
-const handleAddProgress = async () => { if (!progressFormRef.value || !currentGoalId.value) return; await progressFormRef.value.validate(async (v) => { if (!v) return; submittingProgress.value = true; try { await goalsApi.addProgress(currentGoalId.value!, { value: progressForm.value, note: progressForm.note || undefined }); ElMessage.success('进度更新成功'); progressVisible.value = false; fetchGoals() } catch (e) { ElMessage.error('更新进度失败') } finally { submittingProgress.value = false } }) }
-const handleDelete = async (id: number) => { try { await ElMessageBox.confirm('确定要删除这个目标吗？', '提示', { type: 'warning' }); await goalsApi.remove(id); ElMessage.success('删除成功'); fetchGoals() } catch (e) { if (e !== 'cancel') ElMessage.error('删除失败') } }
+
+const handleAddProgress = async () => {
+  if (!progressFormRef.value || !currentGoalId.value) return
+
+  progressErrors.reset()
+
+  await progressFormRef.value.validate(async (valid, invalidFields) => {
+    if (!valid) {
+      await projectClientErrors(progressErrors, invalidFields, progressSummaryRef.value)
+      return
+    }
+
+    submittingProgress.value = true
+    try {
+      await goalsApi.addProgress(currentGoalId.value!, {
+        value: progressForm.value,
+        note: progressForm.note || undefined
+      })
+      ElMessage.success('进度更新成功')
+      progressVisible.value = false
+      fetchGoals()
+    } catch (error) {
+      // `GoalServiceImpl:103` 在这个动作上抛 GOAL_NOT_FOUND：目标已被删掉时若不 opt-in，
+      // 一次失败的「记录进度」会完全静默。
+      const err = showError(error, 'goal.saveFailed', { presentStates: true })
+      if (err.kind === 'validation') {
+        progressErrors.apply(err)
+        await nextTick()
+        progressSummaryRef.value?.focusSummary()
+      }
+    } finally {
+      submittingProgress.value = false
+    }
+  })
+}
+
+/**
+ * 删除：确认与请求彻底分离。
+ *
+ * 取消路径是一个裸 `return` —— 用户按了「取消」不是失败，零提示（D-12 / ERR-08）。
+ * 原先的 `if (e !== 'cancel')` 手写判断对 `AbortError` 与归一化后的
+ * `ApiError('', 'cancel')` 都会误判成真失败，因此整段删掉。
+ * 删除一个「已经不存在的行」返回 RESOURCE_NOT_FOUND，第三个参数
+ * 让它仍然产生恰好一条提示。
+ */
+const handleDelete = async (id: number) => {
+  try {
+    await ElMessageBox.confirm('确定要删除这个目标吗？', '提示', { type: 'warning' })
+  } catch {
+    // 取消确认框：刻意静默，不弹任何提示。
+    return
+  }
+
+  try {
+    await goalsApi.remove(id)
+    ElMessage.success('删除成功')
+    fetchGoals()
+  } catch (error) {
+    showError(error, 'goal.deleteFailed', { presentStates: true })
+  }
+}
 onMounted(async () => {
   await fetchGoals()
   await nextTick()
