@@ -287,7 +287,7 @@ const handleSubmit = async () => {
  *
  * 取消路径是一个裸 `return` —— 用户按了「取消」不是失败，零提示（D-04 / ERR-08）。
  * 旧实现把确认框与请求塞进同一个 try、再用「拒绝值是否等于字符串 cancel」来判断
- * 是否提示；那个手写比较对 `AbortError`（`e.name === 'AbortError'`）与归一化后的
+ * 是否提示；那个手写比较按 `AbortError` 的错误名与归一化后的
  * `ApiError('', 'cancel')` 都会判成真失败并弹红灯，因此整段判断删除。
  */
 const handleDelete = async (id: number) => {

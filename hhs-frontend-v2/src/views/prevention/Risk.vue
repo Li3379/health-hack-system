@@ -307,7 +307,9 @@ const fetchAssessments = async () => {
     assessments.value = data
     pagination.total = data.length
   } catch (error) {
-    ElMessage.error('获取评估列表失败')
+    // 表格保留原有行（UI Considerations · error E7）：失败时不清空 assessments。
+    // 键复用 profile.*：这是健康档案的「风险」页，两者共享同一个后端聚合（见台账理由）。
+    showError(error, 'profile.loadFailed', { presentStates: true })
   } finally {
     loading.value = false
   }
@@ -332,7 +334,7 @@ const createRiskAssessment = async () => {
     ElMessage.success('评估创建成功')
     fetchAssessments()
   } catch (error) {
-    ElMessage.error('创建评估失败')
+    showError(error, 'profile.saveFailed', { presentStates: true })
   }
 }
 
@@ -432,7 +434,9 @@ const backfillAndCreate = async () => {
       await createRiskAssessment()
     } catch (error) {
       // validation → 0 toast，内联 + 汇总承担呈现；其余由 showError 单条呈现。
-      const err = showError(error, 'profile.saveFailed')
+      // presentStates：本页没有状态块，补填保存是用户主动动作 —— 一次 403（无权限）
+      // 或 404（档案已被删除）若默认静默，用户的点击就换不来任何反馈。
+      const err = showError(error, 'profile.saveFailed', { presentStates: true })
       if (err.kind === 'validation') {
         apply(err)
         await nextTick()
