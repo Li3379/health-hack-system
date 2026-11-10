@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 4
+open_count: 5
 waived_count: 0
 fixed_count: 2
-total_count: 6
-last_updated: 2026-11-09T13:27:01.200Z
+total_count: 7
+last_updated: 2026-11-10T12:24:41.503Z
 ---
 
 # Broken Windows Ledger
@@ -21,6 +21,7 @@ last_updated: 2026-11-09T13:27:01.200Z
 | 4 | 13 | unrun-verify | hhs-frontend-v2/src/components/common/EstimateBadge.vue |  | Backstop: verify the estimate badge label does not wrap at a 320px viewport | open |  | 2026-11-09T13:09:53.236Z |  |
 | 5 | 13 | unrun-verify | hhs-frontend-v2/src/components/common/ProfileReminderBanner.vue |  | Backstop: verify the banner's two buttons plus close control do not collide at 640px or 768px | open |  | 2026-11-09T13:10:01.346Z |  |
 | 6 | 13 | unrun-verify | hhs-frontend-v2/src/views/prevention/Profile.vue |  | Hint wrapping and the 639px label-position flip cannot be measured in happy-dom; CSS rules implemented, visual review pending at 320-639px | open |  | 2026-11-09T13:27:01.200Z |  |
+| 7 | 14 | unrun-verify | hhs-frontend-v2/src/assets/styles/theme.css |  | UI-SPEC 4.2 four computed-style self-checks (errored input border-color resolves to the token, textarea shadow contains inset, 3px tint halo present with border still red for all three control families, halo gone after blur) are deferred to the phase UAT in 14-14 — happy-dom returns empty strings for getComputedStyle | open |  | 2026-11-10T12:24:41.503Z |  |
 
 ````json
 [
@@ -99,6 +100,19 @@ last_updated: 2026-11-09T13:27:01.200Z
     "status": "open",
     "reason": "",
     "recorded_at": "2026-11-09T13:27:01.200Z",
+    "resolved_at": null,
+    "milestone": "v1.3"
+  },
+  {
+    "id": 7,
+    "kind": "unrun-verify",
+    "phase": "14",
+    "file": "hhs-frontend-v2/src/assets/styles/theme.css",
+    "line": null,
+    "description": "UI-SPEC 4.2 four computed-style self-checks (errored input border-color resolves to the token, textarea shadow contains inset, 3px tint halo present with border still red for all three control families, halo gone after blur) are deferred to the phase UAT in 14-14 — happy-dom returns empty strings for getComputedStyle",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-11-10T12:24:41.503Z",
     "resolved_at": null,
     "milestone": "v1.3"
   }
