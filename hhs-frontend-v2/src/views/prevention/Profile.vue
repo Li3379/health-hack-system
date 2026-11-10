@@ -261,7 +261,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { gsap, cleanupScrollTriggers, DUR, EASE } from '@/composables/useGsap'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { preventionApi } from '@/api/prevention'
-import { useFormServerErrors } from '@/composables/useFormServerErrors'
+import { useFormServerErrors, collectInvalidFieldMessages } from '@/composables/useFormServerErrors'
 import FormErrorSummary from '@/components/common/FormErrorSummary.vue'
 import ProfileCompleteness from '@/components/common/ProfileCompleteness.vue'
 import { useProfileCompletenessStore } from '@/stores/profileCompleteness'
@@ -406,21 +406,6 @@ const fetchProfile = async () => {
   } finally {
     loading.value = false
   }
-}
-
-/**
- * 把 Element Plus 的 `invalidFields` 摊平成 `字段 → 首条中文消息`。
- * 汇总块与内联提示消费同一形状，因此客户端校验不需要单独的渲染分支。
- */
-function collectInvalidFieldMessages(
-  invalidFields: Record<string, Array<{ message?: string }>> | undefined
-): Record<string, string> {
-  const next: Record<string, string> = {}
-  for (const [field, errors] of Object.entries(invalidFields ?? {})) {
-    const message = errors?.[0]?.message
-    if (message) next[field] = message
-  }
-  return next
 }
 
 const handleSubmit = async () => {
