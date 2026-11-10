@@ -96,11 +96,11 @@ Icons enumerated by `node -p "Object.keys(require('@element-plus/icons-vue')).le
 
 | Token | Value | Usage（绑定到具体声明） |
 |-------|-------|------------------------|
-| xs | 4px | `el-form-item__error` 的 `padding-top`（`body .el-form-item__error { padding-top: 4px }`，Phase 11 已归一化 EP 的 2px）；toast 内动作按钮内边距垂直分量（`.error-toast__retry, .error-toast__action { padding: 4px 8px }`）；S2 说明句内动作间隙（`.error-state__actions { gap: 4px }`） |
+| xs | 4px | `el-form-item__error` 的 `padding-top`（`body .el-form-item__error { padding-top: 4px }`，Phase 11 已归一化 EP 的 2px）；toast 内动作按钮内边距垂直分量（`.error-toast__retry, .error-toast__action { padding: 4px 8px }`） |
 | sm | 8px | S1/S2 图标圆 → 标题、标题 → 说明各 8px（`.error-state { gap: 8px }`）；S2 动作对水平间距（`.error-state__actions { gap: 8px }`）；S1/S2 标题与说明之间的固定间隔；toast 动作按钮内边距水平分量（`4px 8px`） |
 | sm-3 | 12px | toast 垂直内边距（`body .el-message { --el-message-padding: 12px 16px }`，Phase 11 已归一化 EP 的 11px 15px）；S3 汇总块 alert 垂直内边距（`padding: 12px 16px 8px`） |
-| md | 16px | S3 汇总块底部间距（`.form-error-summary { margin-bottom: 16px }`）；说明 → 动作的**实际**间距（`.error-state { gap: 8px }` + `.error-state__actions { margin-top: 16px }` = 24px，见下条说明）；toast 文案 → 动作间距（`.error-toast { gap: 16px }`）；S3 汇总列表水平内边距（`padding: 0 16px 12px 40px`） |
-| lg | 24px | S1/S2 说明句 → 动作区的**渲染值**（上面 8px gap + 16px margin = 24px，与 Phase 11 的 lg 行一致，本阶段保持不变）；S1/S2 水平内边距（`padding: 48px 24px`） |
+| md | 16px | S3 汇总块底部间距（`.form-error-summary { margin-bottom: 16px }`）；S1/S2 说明 → 动作区的 `margin-top`（`.error-state__actions { margin-top: 16px }`）；toast 文案 → 动作间距（`.error-toast { gap: 16px }`）；S3 汇总列表水平内边距（`padding: 0 16px 12px 40px`） |
+| lg | 24px | S1/S2 说明句 → 动作区的**渲染值** 24px（`.error-state { gap: 8px }` + `.error-state__actions { margin-top: 16px }` 合成；**两个分量分别属于 sm 与 md，本行只声明合成后的视觉间隔**）；S1/S2 水平内边距（`padding: 48px 24px`） |
 | xl | 32px | toast 视口左右留白（EP 自带 `max-width: calc(100% - 32px)`，即每侧 16px，**沿用不改**） |
 | 2xl | 40px | S3 汇总列表缩进（`padding-left: 40px` = 16 alert + 16 icon + 8 margin，与 alert 标题左缘对齐） |
 | 3xl | 48px | S1/S2 块级垂直内边距（`padding: 48px 24px`） |
@@ -108,7 +108,45 @@ Icons enumerated by `node -p "Object.keys(require('@element-plus/icons-vue')).le
 
 **No exceptions.** 全部为 4 的倍数。`1px`/`2px`/`3px` 只出现在边框、描边与焦点环的**宽度**上，不属于间距。
 
-**本阶段新增的一条几何刻度（不是新间距值）：** S1 页级状态的垂直高度 `min-height: calc(100vh - 104px)`，其中 `104px = 64px（.header 高）+ 40px（.el-main 上下 padding 20px × 2）`。两个分量都是 4 的倍数，合计仍是 4 的倍数。**不得**改写成 `calc(100vh - 100px)` 或类似值。
+**本阶段新增的一条几何刻度（不是新间距值）：S1 页级块的高度是「可用视口 − 页头 − 宿主页自身垂直内边距」，这个数在宿主之间是可变的，不是一个常量。**
+
+三个分量：
+
+| 分量 | 来源 | 值 |
+|------|------|-----|
+| 页头高 | `MainLayout.vue:355` `.header { height: 64px }` | 64px（全站恒定） |
+| `<el-main>` 的垂直内边距 | **0px，且不是 EP 的 `--el-main-padding`。** `MainLayout.vue:472` 给 `<el-main class="main-content">` 写了 `padding: 0`，编译为 `.main-content[data-v-*]`（`0,2,0`），**胜出** EP 的 `.el-main`（`0,1,0`）—— EP 的 20px 在本项目中**从未生效** | **0px（恒定）** |
+| 宿主页根元素的垂直内边距 | 各页自己的页面根类（`padding: Npx` → 上下合计 `2N`） | **可变** |
+
+宿主页实测值：
+
+| 宿主页 | 页面根类声明 | 垂直内边距合计 | 该宿主的正确块高 |
+|--------|-------------|---------------|-----------------|
+| `settings/DevicePlatformConfig.vue:491` `.device-platform-config { padding: 20px }` | `20px` | 40px | `calc(100vh - 104px)` |
+| `health/Metrics.vue:297` `.metrics-page { padding: 0 }` | `0` | 0px | `calc(100vh - 64px)` |
+| `dashboard/Index.vue:513` `.dashboard { padding: 32px }` | `32px` | 64px | `calc(100vh - 128px)` |
+
+**因此 `104px` 只对 `DevicePlatformConfig` 这一个宿主成立。** 把 104 当全站常量复制到别处，在 `padding: 0` 的宿主上会**欠填 40px**（块底露出一条 `--bg`），在 `padding: 32px` 的宿主上会**溢出 24px**（块被裁掉一截）。
+
+**正确写法（首选，宿主无关）：** 把宿主的内边距做成一个局部自定义属性，块自己扣掉它 —— 这样 104 就不再被硬编码：
+
+```css
+/* ErrorState.vue 的 .error-state--page */
+min-height: calc(100vh - 64px - var(--hhs-page-pad-y, 0px));
+```
+
+```css
+/* 各宿主页根类里声明自己的一半×2（不声明时默认 0px，即 padding:0 的宿主无需任何改动） */
+.device-platform-config { --hhs-page-pad-y: 40px; }   /* DevicePlatformConfig.vue */
+.dashboard             { --hhs-page-pad-y: 64px; }   /* dashboard/Index.vue */
+/* .metrics-page 是 padding:0，用默认值即可 */
+```
+
+`--hhs-page-pad-y` 是**局部布局变量**，不是设计 token（不进 `theme.css` 的 token 段，不参与 Color/Spacing 的 60/30/10 与 4 倍数审计）。
+
+**次选（等价，允许）：** 在每个宿主页的 scoped 块里直接覆盖 `.error-state--page { min-height: calc(100vh - <上表对应值>) }`。两种写法的渲染结果相同，执行者任选一种，但**不得**只写 104 而不声明宿主前提。
+
+**不得**用「EP 的 `.el-main` 给了 20px」作为 104 的推导依据 —— 那 20px 在本项目中从未生效（见上表第二行）。也**不得**改用 `min-height: 100%`：宿主页根类的高度是 `auto`（内容撑开），百分比会解析成 `auto`，`min-height` 归零，块反而缩到内容高度。
 
 **两条必须覆盖的 Element Plus 默认值（否则 S3 的「所有表单一模一样」不成立）：**
 
@@ -199,7 +237,7 @@ Phase 11 的 `ErrorState.vue:127` 给说明句写了 `color: var(--text-3)`。Ph
 | `#8d909c` on 中性圆（`--bg` 合成 · Dark） | `#1a1b1f` | **5.41:1** |
 | `#8d909c` on 中性圆（`--surface-1` 合成 · Dark） | `#202127` | **5.05:1** |
 
-**中性圆在 `--surface-3` 上不达标（Light 仅 2.28:1）** —— 因此 S1/S2 **永不**渲染在 `--surface-3` 底面上。S1 渲染在 `--bg`，S2 渲染在自己的 `--surface-1` 卡片里。
+**中性圆在 `--surface-3`（Light `#e4e7ed`）上不达标：`#7c7f8e` on `#dadde3` 仅 2.92:1** —— 因此 S1/S2 **永不**渲染在 `--surface-3` 底面上。S1 渲染在 `--bg`，S2 渲染在自己的 `--surface-1` 卡片里。（`#dadde3` 是 `rgba(141,144,156,.12)` 中性圆叠在 `#e4e7ed` 上的合成色，2.92:1 是本表所有组合中唯一低于 3:1 的一档；作为参照，不透明 `--surface-3` 本身给出 3.21:1 —— 达标但余量极小，仍不采用。）
 
 ### S5 字段错误描边（本阶段新增渲染、不新增颜色）
 
@@ -245,13 +283,19 @@ export type ErrorKind =
 
 **插入位置：紧接现有第 3 步（401）之后、第 4 步（断网）之前。** 理由：两者都以 `err.response` 存在为前提，必须早于断网分支；401 必须先判（会话过期优先于授权失败，否则 `auth.forbidden` 与 401 会互相抢）。`appError.ts:60-74` 的「分类顺序即契约，不可调换」注释**必须同步更新**，把新步骤编号写进去 —— 否则下一个人会把它「修正」回去。
 
-> **不要把 `notFound` 的判定接到第 6 步（信封业务码）之后。** 一旦落后于业务分支，`health.profile_not_found` 已被判成 `business`，`prevention/Profile.vue` 的「创建模式」分支与 `stores/profileCompleteness.ts:67` 的 `NOT_FOUND_CODES` 会同时失效。这是回归风险最高的一处，`appError.spec.ts` 必须新增反回归锚点。
+> **不要把 `notFound` 的判定接到第 6 步（信封业务码）之后。** 顺序仍然必须正确，但**后果比"既有分支会静默失效"更窄、也更具体**：`prevention/Profile.vue:395-400` 与 `stores/profileCompleteness.ts:67` 都读 `err.status` / `err.code`，而现有 `business` 分支（`appError.ts:152-153`）已经把 `status` 与 `errorCode` 原样带出 —— 所以**它们不会静默失效**，`health.profile_not_found` 落到 `business` 时 `err.code` 仍是 `health.profile_not_found`，两个分支照常命中。
+>
+> 真正的风险是两条：
+> 1. **新增的状态块通道变成死代码。** `forbidden` / `notFound` 永远不被判出，S1/S2 的状态块（本阶段的核心交付）在任何 403/404 上都不会渲染。
+> 2. **信封形态的 403/404 被误标成 `business` toast。** 后端把 `BusinessException(AUTH_FORBIDDEN)` 包成 HTTP 200 + 信封，走不到第 3 步之后的新分支，于是本该「零 toast 的状态块」变成「一条业务 toast」—— 直接违反 D-03 与「一次失败恰好一条提示」的通道分工。
+>
+> 这正是 A-2 的 ①-④ 四条反回归用例所钉的东西：② 与 ④ 专门验证**信封**形态不被判成 `business`。把这四条写进 `appError.spec.ts` 是本阶段最不可省的一步。
 
 ### 1.2 呈现通道表
 
 | `kind` | 通道 | toast 条数 | toast 形态 | 调用点职责 |
 |--------|------|-----------|-----------|-----------|
-| `validation` | **内联 + 汇总** | **0** | — | `useFormServerErrors.apply()`；`focusSummary()`；**不得**改 `presentValidation`（唯一例外见下） |
+| `validation` | **内联 + 汇总** | **0** | — | `useFormServerErrors.apply()`；`focusSummary()`；**不得**把默认值改成 `presentValidation: true`（全站唯一例外：`health/Thresholds.vue:260` 的 `presentDuplicateError`，该表单没有内联绑定，见 §1.2 下方说明） |
 | `business` | toast | 1 | `error` / `duration 4000` / `showClose` / 可分组 | `showError(err, key)` |
 | `business` + 恢复动作 | toast | 1 | `error` / `duration 0` / VNode / `打开编辑` | `showError(err, key, { action })` |
 | `network` | toast | 1 | `error` / `duration 0` / VNode / `重试` | `showError(err, key)`（`retryRequest` 自动挂上） |
@@ -279,6 +323,8 @@ export interface ShowErrorOptions {
 - **`presentStates: true`** 只允许在「用户主动发起的一次动作」上使用（删除、更新、提交、导出），**并且该调用点没有对应状态块**。用法与 `Thresholds.vue:260` 的 `presentValidation: true` 完全同构，理由也相同：宁可让调用点显式声明，也不让后端错误静默消失。
 - 迁移台账必须为每个 `presentStates: true` 记录一句理由（Contract 6 的台账字段）。
 
+**`presentValidation` 的唯一既有例外（全站一处，本阶段不新增）：** `health/Thresholds.vue:260` 的 `presentDuplicateError()` 传 `presentValidation: true`。理由是阈值页的「重复指标」错误由后端以 400 + `fieldErrors` 下发，而该页的指标选择器是向导式控件、没有 `prop` / `data-field` / `:error` 三件套，无法渲染内联 —— 若不放行，这个 400 会完全不可见。本阶段把阈值页接入内联不在范围内（A-3），所以这条例外**保留原样**；除此之外任何调用点都不得使用 `presentValidation: true`。
+
 ### 1.3 分层判定顺序（执行者按此顺序走）
 
 ```
@@ -305,14 +351,14 @@ export interface ShowErrorOptions {
 
 D-03 允许「扩展 variant」或「轻量包装」两种形式。本契约选定**扩展 `ErrorState`**，理由是可测试面单一（一份 `ErrorState.spec.ts` 覆盖两档几何），且不需要新的组件文件。
 
-**新增 2 个可选 prop（默认值等于 Phase 11 行为，15 条既有断言全部保持通过）：**
+**新增 2 个可选 prop（默认值等于 Phase 11 行为，14 条既有 `it()` 全部保持通过）：**
 
 | Prop | Type | Default | 作用 |
 |------|------|---------|------|
 | `scope` | `'content' \| 'page'` | `'content'` | `'page'` → 无卡片面、无虚线边框、页级高度、标题升级为 Display |
 | `actions` | `Array<{ label: string; onClick: () => void \| Promise<void>; variant?: 'primary' \| 'default' }>` | `undefined` | 有序动作列表。**非空时不渲染 `retry` 按钮**（二者互斥；`actions` 里需要重试就显式写一条）。`label` 同时是可见文本与可访问名，**必须是动词 + 宾语** |
 
-**既有 `retry` / `retryLabel` / `retrying` / `variant` / `title` / `description` 全部不动。** `ErrorState.spec.ts` 的 15 条断言不新增、不删除、不修改。
+**既有 `retry` / `retryLabel` / `retrying` / `variant` / `title` / `description` 全部不动。** `ErrorState.spec.ts` 的 14 条 `it()`（26 个 `expect`）不新增、不删除、不修改。
 
 ### 2.2 结构
 
@@ -339,7 +385,8 @@ D-03 允许「扩展 variant」或「轻量包装」两种形式。本契约选�
 │              [ 返回首页 ]                     │   ← primary，唯一动作
 │                                              │
 └──────────────────────────────────────────────┘
-   页级高度：min-height: calc(100vh - 104px)
+   页级高度：min-height: calc(100vh - 64px - var(--hhs-page-pad-y, 0px))
+              （104 只对 padding:20px 的宿主成立，见 Spacing）
 ```
 
 ### 2.3 与 S2（404 内容区）的五重差异 —— 必须同时成立
@@ -348,7 +395,7 @@ D-03 允许「扩展 variant」或「轻量包装」两种形式。本契约选�
 |------|------------|--------------|
 | 1. 表面 | **无容器面**（透明，坐在 `--bg` 上） | `--surface-1` 卡片面 + `1px dashed var(--border)` + `radius-lg` |
 | 2. 标题字号 | **24px / 600 / 1.2**（Display） | 18px / 600 / 1.3（Heading） |
-| 3. 高度 | `min-height: calc(100vh - 104px)`，垂直居中 | `min-height: 320px`，max-width 480px，居中于内容区 |
+| 3. 高度 | `min-height: calc(100vh - 64px - var(--hhs-page-pad-y, 0px))`，垂直居中（宿主内边距由变量承担，见 Spacing） | `min-height: 320px`，max-width 480px，居中于内容区 |
 | 4. 图标 | `Lock`（锁 = 权限） | `DocumentDelete`（文档缺失 = 资源不存在） |
 | 5. 动作数 | **1**（`返回首页`） | **2**（`返回列表` + `重新加载该记录`） |
 
@@ -359,7 +406,13 @@ D-03 允许「扩展 variant」或「轻量包装」两种形式。本契约选�
 ```css
 /* 页级：不画卡片面、不画虚线边，坐在 --bg 上；垂直填满内容区 */
 .error-state--page {
-  min-height: calc(100vh - 104px);   /* 64 header + 40 main padding，见 Spacing */
+  /* 页级高度 = 视口 − 页头 64px − 宿主页自身的垂直内边距。
+     宿主通过 --hhs-page-pad-y 声明自己的上下内边距合计；未声明时为 0px
+     （padding:0 的宿主如 health/Metrics.vue 无需任何改动）。
+     不得把 104 硬编码进来：104 = 64 + 40，而 40 只对 DevicePlatformConfig 成立。
+     不得改成 min-height:100%：宿主页根类高度是 auto，百分比会解析成 auto 而归零。
+     见 Spacing 的宿主相关说明。 */
+  min-height: calc(100vh - 64px - var(--hhs-page-pad-y, 0px));
   max-width: 720px;                  /* 页级说明句一行可达 40 字，480px 会折 3 行 */
   padding: 48px 24px;
   background: transparent;
@@ -399,6 +452,8 @@ D-03 允许「扩展 variant」或「轻量包装」两种形式。本契约选�
 @media (max-width: 639px) {
   .error-state__actions { flex-direction: column; align-items: stretch; }
   .error-state__actions :deep(.el-button) { width: 100%; }
+  /* 窄屏放弃满高：手机上强制 100vh 会把唯一动作推到折叠线以下，
+     用户必须滚动才能看到出口 —— 宁可让块贴内容高。 */
   .error-state--page { min-height: 0; padding: 48px 16px; }
 }
 ```
@@ -554,6 +609,12 @@ Phase 11 Contract 1 把 `重试` 定为唯一 primary，因为当时只有「加
    4) .el-textarea__inner **没有** 被 theme.css 覆盖：EP 用
         border: none;  box-shadow: 0 0 0 1px var(--el-input-border-color) inset;
       → theme.css 的 border-color 方案对 textarea 无效，必须继续用 inset box-shadow。
+   5) el-date-picker type="daterange" 的根节点**自己就是** .el-input__wrapper
+      （picker.vue 的 rangeInputKls 含 nsInput.e("wrapper")），但它不经过 ElInput，
+      因此永远拿不到 .is-focus；它的聚焦标记是 nsDate.is("active", pickerVisible)
+      → .is-active。EP 唯一的聚焦视觉是 `.el-range-editor.is-active:hover{box-shadow:…inset}`
+      （无 !important），会被规则 ① 的 `box-shadow: none !important` 压掉。
+      → 规则 ③ 必须显式包含 .is-active，否则该控件出错且聚焦时没有任何焦点指示。
 
    因此两类控件走两条不同声明。混用任何一条都会导致该类控件「出错时外观无变化」。 */
 
@@ -571,8 +632,18 @@ body .el-form-item.is-error .el-form-item__content .el-textarea__inner {
 }
 
 /* ③ 出错且聚焦：错误描边保持，光晕换成错误 tint。
-      WCAG 2.4.7 由「光晕的有无」满足，不依赖红色与青色的色相差异。 */
+      WCAG 2.4.7 由「光晕的有无」满足，不依赖红色与青色的色相差异。
+
+      三种聚焦类名，一个都不能漏 —— 它们是三个不同控件族的标记：
+        .is-focus    → el-input / el-input-number（ElInput 内部给 wrapper 加）
+        .is-focused  → el-select
+        .is-active   → el-date-picker type="daterange"（picker.vue 的 rangeInputKls
+                       用 nsDate.is("active", pickerVisible)；范围选择器的根 div 自身
+                       就是 .el-input__wrapper，不经过 ElInput，因此永远不会拿到
+                       .is-focus）。goals/Index.vue:83 与 health/Metrics.vue:18 两处
+                       范围选择器都在本阶段迁移集内。 */
 body .el-form-item.is-error .el-form-item__content .el-input__wrapper.is-focus,
+body .el-form-item.is-error .el-form-item__content .el-input__wrapper.is-active,
 body .el-form-item.is-error .el-form-item__content .el-select__wrapper.is-focused {
   border-color: var(--hhs-color-error-text) !important;
   box-shadow: 0 0 0 3px var(--hhs-color-error-tint) !important;
@@ -586,12 +657,21 @@ body .el-form-item.is-error .el-form-item__content .el-textarea__inner:focus {
 
 **`.el-input-number` 不需要单独规则：** 它内部渲染的就是 `.el-input__wrapper`，规则 ① 已覆盖。写入 `.el-input-number .el-input__wrapper` 这类冗余选择器会让后人误以为它是独立控件。
 
-**特异性核对：** 规则 ① 为 `0,4,1`（`body` + 4 个类）＞ theme.css `.el-input__wrapper` 的 `0,1,0`。两者都带 `!important` 时由特异性决定，规则 ① 胜。规则 ② 为 `0,4,1` ＞ EP 的 `0,4,1`，同特异性下本文件后加载（`main.ts` 在 `element-plus/dist/index.css` 之后引 `theme.css`），后写者胜。
+**特异性核对（三个规则都靠特异性 + `!important` 取胜，**不**靠加载顺序）：**
 
-**执行者的三条自检（缺一即视为描边未交付）：**
+| 规则 | 本契约选择器 | 特异性 | 被覆盖的声明 | 其特异性 | 胜出原因 |
+|------|-------------|--------|-------------|---------|---------|
+| ① | `body .el-form-item.is-error .el-form-item__content .el-input__wrapper` | `0,4,1` | theme.css `.el-input__wrapper`（`border` / `box-shadow`，均带 `!important`） | `0,1,0` | 双方都有 `!important` → 特异性高者胜 |
+| ② | `body .el-form-item.is-error .el-form-item__content .el-textarea__inner` | `0,4,1` | EP `.el-form-item.is-error .el-form-item__content .el-textarea__inner`（**无** `!important`） | `0,4,0` | 本规则带 `!important`，EP 不带；且特异性也多一个元素 |
+| ③ | 同 ①② 再加一个状态类（`.is-focus` / `.is-active` / `.is-focused`） | `0,5,1` | theme.css `.el-input__wrapper.is-focus` / `.el-select__wrapper.is-focused`（`0,2,0`，带 `!important`） | `0,2,0` | 双方都有 `!important` → 特异性高者胜 |
+
+> **不要用「本文件后加载，后写者胜」作为理由 —— 那是本项目已经记录过的陷阱。** `theme.css:1208-1216` 明确写着：`theme.css` 虽在 `main.ts` 中于 `element-plus/dist/index.css` 之后引入，但 `unplugin-vue-components` 会**按路由 chunk 再次注入** EP 组件样式，注入位置在 `theme.css` **之后**。这正是 Phase 11 那段归一化规则统一改用 `body .类名`（`0,1,1`）而非裸类名（`0,1,0`）的原因 —— 与注入顺序解耦。本阶段的三条规则沿用同一策略：靠 `body` 前缀抬高特异性、并保留 `!important`，因此在任何注入顺序下都成立。
+
+**执行者的四条自检（缺一即视为描边未交付）：**
 1. 出错字段的 `.el-input__wrapper` 计算样式 `border-color` 解析为 `rgb(185,28,28)`（Light）/ `rgb(245,108,108)`（Dark）。
 2. 出错字段的 `.el-textarea__inner` 计算样式 `box-shadow` 含 `inset` 且颜色为同一 token。
-3. 出错字段聚焦后 `box-shadow` 含 `3px` 的 tint 光晕，且 `border-color` 仍是错误色。
+3. 出错字段聚焦后 `box-shadow` 含 `3px` 的 tint 光晕，且 `border-color` 仍是错误色 —— **三类控件各验一次**：`el-input`（`.is-focus`）、`el-select`（`.is-focused`）、`el-date-picker type="daterange"`（`.is-active`）。第三类是唯一会在 rule ① 的 `box-shadow: none !important` 下丢失焦点指示的控件，必须实跑确认。
+4. 出错字段失焦后 `box-shadow` 回到 `none`（光晕消失），`border-color` 仍是错误色 —— 确认焦点态与错误态可分辨。
 
 **除上述全局块外，任何页面不得出现 `el-form-item__error`、`is-error`、`--el-color-danger` 的局部覆盖。** 迁移台账的 Review 列必须能回答「这个页面有没有写错误样式」，答案必须是「没有」。
 
@@ -688,7 +768,13 @@ grep -rn "ElMessage\.error" src --include=*.vue --include=*.ts \
 | 业务（无出口） | `business` / `unknown` | `error` | `4000` | `true` | 无 | `CircleCloseFilled` | 否 |
 | 业务（有恢复） | `business` + `resource.exists` | `error` | **0** | `true` | `打开编辑` | `CircleCloseFilled` | 是 |
 | 权限（动作型） | `forbidden` + `presentStates` | `error` | **0** | `true` | **无** | `CircleCloseFilled` | 是 |
-| 资源已消失（动作型） | `notFound` + `presentStates` | `error` | `4000` | `true` | 无 | `CircleCloseFilled` | 否 |
+| 资源已消失（动作型） | `notFound` + `presentStates` | `error` | **0** | `true` | 无 | `CircleCloseFilled` | 是 |
+
+**「资源已消失」为什么是常驻而非 4s：** 它的文案 `该记录已不存在，请刷新列表` 含指令（§5.5：带指令性内容的 toast 必须 `duration: 0`）。4s 自动消失会让用户在读到指令前就失去它，且 EP 只在 hover 暂停计时、键盘聚焦不暂停（§5.5），键盘用户必然读不完。**因此它没有按钮、也没有计时器**：正文本身承担「下一步」（Copywriting 纪律 1），用户用 `×` 关闭。
+
+> **这需要 `showError` 的一处显式改动，执行者不得遗漏。** 现有实现里 `needsVNode = hasRetry || hasAction || kind === 'network' || kind === 'server'`（`showError.ts:168`），`notFound` + `presentStates` 既无 retry 也无 action，会落进**字符串分支**，而该分支硬编码 `duration: 4000`（`showError.ts:172`）。若不改，本行的 `duration: 0` 不可能实现。
+>
+> **要求：** 把条件扩为 `needsVNode = hasRetry || hasAction || err.kind === 'network' || err.kind === 'server' || err.kind === 'notFound'`，或在 `presentStates` 分支内单独传 `duration: 0`。**不要**为此给 `notFound` 造一个动作按钮 —— 那需要每个动作型调用点自备 `刷新列表` 回调（跳到哪个列表？各页不同），且会把 §5.2 的「动作」列变成一列可选值。`forbidden` 已经是 `duration: 0`（`hasRetry === false` 且无 action 时会落字符串分支 —— **同样需要这条改动**，请一并用 `err.kind === 'forbidden'` 覆盖）。
 
 **图标只有一种。** EP 的 `error` 类型自动渲染 `CircleCloseFilled`（`element-plus/es/utils/vue/icon.mjs` 的 `TypeComponentsMap.error`），颜色取 `--el-message-text-color`（已被 `theme.css:1226-1228` 改成 `--hhs-color-error-text`）。**不得**为不同变体手工传 `icon` —— 那就是 29 个页面 6 种图标的图标大杂烩。
 
@@ -871,12 +957,12 @@ Phase 13 把 `prevention/Profile.vue` 与 `health/Score.vue` 的 `取消` 改成
 
 | Key | Copy | 字长 |
 |-----|------|------|
-| `goal.loadFailed` | `无法加载健康目标，请点击重试` | 15 |
+| `goal.loadFailed` | `无法加载健康目标，请点击重试` | 14 |
 | `goal.saveFailed` | `无法保存健康目标，请检查填写内容` | 16 |
 | `goal.deleteFailed` | `无法删除该健康目标，请稍后重试` | 15 |
 | `reminder.loadFailed` | `无法加载提醒列表，请点击重试` | 14 |
 | `reminder.saveFailed` | `无法保存提醒设置，请检查时间格式后重试` | 19 |
-| `reminder.deleteFailed` | `无法删除该提醒，请稍后重试` | 14 |
+| `reminder.deleteFailed` | `无法删除该提醒，请稍后重试` | 13 |
 | `screening.loadFailed` | `无法加载体检报告，请稍后重试` | 14 |
 | `screening.deleteFailed` | `无法删除该体检报告，请稍后重试` | 15 |
 | `mood.saveFailed` | `无法保存心情记录，请稍后重试` | 14 |
@@ -886,7 +972,7 @@ Phase 13 把 `prevention/Profile.vue` 与 `health/Score.vue` 的 `取消` 改成
 | `alert.updateFailed` | `无法更新预警状态，请稍后重试` | 14 |
 | `alert.deleteFailed` | `无法删除该预警，请稍后重试` | 13 |
 | `ai.loadFailed` | `无法加载 AI 会话，请稍后重试` | 16 |
-| `ai.deleteFailed` | `无法删除该会话，请稍后重试` | 14 |
+| `ai.deleteFailed` | `无法删除该会话，请稍后重试` | 13 |
 | `wellness.loadFailed` | `无法加载保健数据，请稍后重试` | 14 |
 | `wellness.saveFailed` | `无法保存保健记录，请稍后重试` | 14 |
 | `device.loadFailed` | `无法加载设备配置，请点击重试` | 14 |
@@ -896,7 +982,7 @@ Phase 13 把 `prevention/Profile.vue` 与 `health/Score.vue` 的 `取消` 改成
 | `user.saveFailed` | `无法保存个人信息，请检查填写内容` | 16 |
 | `metric.loadFailed` | `无法加载指标记录，请点击重试` | 14 |
 | `score.loadFailed` | `无法加载健康评分，请点击重试` | 14 |
-| `resource.gone` | `该记录已不存在，请刷新列表` | 12 |
+| `resource.gone` | `该记录已不存在，请刷新列表` | 13 |
 
 **既有 18 键中可直接复用于迁移的：** `metric.saveFailed`、`metric.deleteFailed`、`ai.parseFailed`、`ocr.uploadFailed`、`report.generateFailed`、`threshold.*`、`profile.*`、`push.saveFailed`、`network.offline`、`server.unavailable`。台账必须写明「复用既有键」还是「新增键」。
 
@@ -1012,7 +1098,7 @@ Applicable state considerations resolved: **31 covered (29 explicit, 2 backstop,
 | populated | E7 / E8 | ✅ covered | 正常态零错误 chrome；成功提示用既有 `ElMessage.success`（不在本禁令内） |
 | populated | E3 nav | ✅ covered | 页级块渲染时侧边栏与页头保持完全可用（不是路由跳转，不是全屏遮罩） —— 用户必须有出口 |
 | loading | E6 动作型 | ✅ covered | `重试` 点击后 toast 立即关闭（`handler.close()`），由调用方重新发起请求；**不自动重试**（Phase 11 D-03） |
-| error | E6 动作型 | ✅ covered | 权限 toast **无 `重试`**；资源消失 toast 为 4s 定时（带 `资源已不存在，请刷新列表` 的可行动作） |
+| error | E6 动作型 | ✅ covered | 权限 toast **无 `重试`**（`forbidden.retryable === false`）；资源消失 toast 同样**无动作按钮**，但为 `duration: 0` 常驻 —— 文案 `该记录已不存在，请刷新列表` 自带指令，§5.5 禁止带指令内容自动消失。两处一致口径见 Contract 5 §5.2 的 F4 澄清 |
 | long-text | E1 / E2 动作标签 | 🧪 backstop | `重新加载该记录`（8 字）在 320px 下与 `返回列表` 并排会换行；已声明 `flex-wrap: wrap` 与 <639px 的纵向拉伸。需在 320px 复核按钮是否撑出块宽 |
 
 **两个 backstop 的验证方式：** 在 320px 与 640px 两个视口实跑一次 S1/S2，读数（说明句行数、按钮是否换行、有无横向溢出）。无显式证据则不允许声称通过。
@@ -1042,6 +1128,22 @@ Applicable state considerations resolved: **31 covered (29 explicit, 2 backstop,
 
 **Approval:** pending
 
+### Revision log (2026-11-10) — checker findings resolved
+
+| ID | 类别 | 处理 |
+|----|------|------|
+| BLOCK / Dim 5 · E1 | 两个 token 抢同一份声明 | xs 行删除了虚假的 `.error-state__actions { gap: 4px }`；xs 现只绑定两条真实渲染 4px 的声明（`body .el-form-item__error { padding-top: 4px }`、`.error-toast__retry/.error-toast__action { padding: 4px 8px }`） |
+| BLOCK / Dim 5 · E2 | 页级高度推导为假 | 104px 的「EP `.el-main` 20px」推导已删除。改为「视口 − 64px 页头 − 宿主页自身垂直内边距」，并列出三个宿主实测值（20/0/32px → 104/64/128）。CSS 改为 `calc(100vh - 64px - var(--hhs-page-pad-y, 0px))`，不再硬编码 104，也不再禁止替代写法 |
+| F1 | 四格字长错一 | `goal.loadFailed` 14、`reminder.deleteFailed` 13、`ai.deleteFailed` 13、`resource.gone` 13（总数 44 与全部 ≤30 不变） |
+| F2 | 悬空例外引用 | §1.2 点名唯一例外 `health/Thresholds.vue:260` 并说明理由；通道表单元格不再写「见下」 |
+| F3 | 测试条数错 | `ErrorState.spec.ts` 为 14 条 `it()` / 26 个 `expect`（原写 15 条断言） |
+| F4 | 资源消失 toast 自相矛盾 | 统一为 **`duration: 0` + 无动作按钮**（依据 §5.5 的「带指令内容不得自动消失」）。§5.2 与 UI Considerations E6 行口径一致；同时写明这需要把 `showError.ts:168` 的 `needsVNode` 扩到含 `forbidden` / `notFound`（否则二者会落进硬编码 `duration: 4000` 的字符串分支） |
+| F5 | 范围选择器缺焦点指示 | 规则 ③ 增加 `.el-input__wrapper.is-active`，并在前提事实里记录 `.is-focus` / `.is-focused` / `.is-active` 三族来源；自检从 3 条扩到 4 条，明确要求三类控件各验一次 |
+| F6 | 一个对比度数字不成立 | `--surface-3` 上中性圆改为实测 **2.92:1**（`#7c7f8e` on 合成色 `#dadde3`）；结论（surface-3 禁用）不变。其余 10 个数字全部复现 |
+| F7 | 特异性理由教了项目已记录的陷阱 | 删除「后加载，后写者胜」，改为三行特异性表，并引用 `theme.css:1208-1216` 关于 EP 样式在 theme.css **之后**再注入的既有记载；结论（靠 `body` 前缀 + `!important`）不变 |
+| C3 后果 | 后果描述不准确 | 保留顺序要求（第 3 步后、第 4 步前）。后果改写为：状态块通道成死代码 + 信封 403/404 被误标 `business` toast；明确说明 `Profile.vue:395-400` 与 `profileCompleteness.ts:67` **不会**静默失效（`business` 分支保留 `status`/`code`）。A-2 的 ①-④ 四条用例保持不变 |
+| 非约束注记 | `toHaveLength` 不应硬编码 | A-2 改为「只扩 `DICTIONARY_KEYS` 数组，断言保持 `toHaveLength(DICTIONARY_KEYS.length)`」，不再要求改成字面量 44 |
+
 ---
 
 ## Appendix — 顺序影响、测试断言影响与未收口项
@@ -1050,7 +1152,7 @@ Applicable state considerations resolved: **31 covered (29 explicit, 2 backstop,
 
 | 序 | 事项 | 不改的后果 |
 |----|------|-----------|
-| 1 | `appError.ts` 新增 `forbidden` / `notFound` 两个 kind + 判定规则（Contract 1.1） | 87 处迁移完成后才发现 403/404 无对应通道，全部需要二次返工；且 `prevention/Profile.vue` 的创建模式分支会被 `business` 覆盖而失效 |
+| 1 | `appError.ts` 新增 `forbidden` / `notFound` 两个 kind + 判定规则（Contract 1.1） | 87 处迁移完成后才发现 403/404 无对应通道，全部需要二次返工；状态块通道成为死代码，且信封形态的 403/404 被误标成 `business` toast（既有 `Profile.vue` / `profileCompleteness.ts` 分支不会失效 —— 它们读 `status`/`code`，`business` 分支仍原样带出，详见 Contract 1.1 的说明） |
 | 2 | `theme.css` 的错误描边全局块（Contract 4.2） | 迁移页的内联错误只有红字、没有描边 —— 「87 个页面看起来一样」不成立，且「首个无效字段可见」不成立 |
 | 3 | `showError` 的 `presentStates` 选项 + `ErrorState` 的 `scope` / `actions` prop | 动作型 403/404 无处可去，执行者会临时写 `ElMessage.error` —— 把刚清零的裸调用重新引入 |
 
@@ -1058,12 +1160,12 @@ Applicable state considerations resolved: **31 covered (29 explicit, 2 backstop,
 
 | 文件 | 断言 | 现状 | 本契约要求 |
 |------|------|------|-----------|
-| `__tests__/utils/errorMessages.spec.ts` | `DICTIONARY_KEYS` 数组 + `expect(Object.keys(ERROR_MESSAGES)).toHaveLength(18)` | 18 键精确相等 | **扩展为 44**：把 26 个新键逐条加入 `DICTIONARY_KEYS` 数组，并把 `toHaveLength` 改为 44。精确相等断言本身**保留** —— 它防止的是无意的键泄漏，不是新增键 |
+| `__tests__/utils/errorMessages.spec.ts` | `DICTIONARY_KEYS` 数组 + `expect(Object.keys(ERROR_MESSAGES)).toHaveLength(DICTIONARY_KEYS.length)` | 18 键精确相等（断言读 `DICTIONARY_KEYS.length`，不硬编码 18） | **只扩数组，不改断言**：把 26 个新键逐条加入 `DICTIONARY_KEYS` 数组即可，断言自动变成 44。**不得**把 `toHaveLength` 硬编码成 `44` —— 那会在文件里复制一份计数，下次加键又要改两处。精确相等语义本身**保留**（它防止的是无意的键泄漏，不是新增键） |
 | 同上 | `expect(Object.keys(FIELD_LABELS)).toHaveLength(17)` | 17 标签 | **改为 39**，并补 3–4 条 `fieldLabel('cronExpression' \| 'targetValue' \| 'clientSecret')` 的定点断言 |
 | 同上 | `caps every entry at 30 characters` | 遍历全部键 | 自动覆盖新键；26 个新键已全部 ≤30（本契约逐条标注字长） |
 | `__tests__/utils/showError.spec.ts` | `keeps every dictionary fallback at or below 30 characters` | 遍历 `Object.keys` | 自动覆盖，无需改断言 |
 | `__tests__/utils/appError.spec.ts` | `const kinds: ErrorKind[] = [...6 项]` | 局部数组，非联合类型穷举 | **无需修改**（新增 kind 不破坏该循环）；但**必须新增** 4 条反回归用例：① 真 HTTP 403 → `forbidden`；② 信封 `errorCode: 'auth.forbidden'` + `code: 500` → `forbidden`（**不是** `business`）；③ 信封 `code: 404` → `notFound`；④ `errorCode: 'health.profile_not_found'` → `notFound`（**不是** `business`） |
-| `__tests__/components/ErrorState.spec.ts` | 15 条既有断言 | 覆盖 `variant` / `retry` / `retryLabel` / `aria` / 焦点 | **不变**（新增 prop 默认值等于原行为）。**新增** 5 条：`scope="page"` 加 `.error-state--page` 类且渲染 Display 标题类；`actions` 非空时不渲染 `retry` 按钮；`actions` 按声明顺序渲染；`actions[].label` 同时是可见文本与 `aria-label`；`forbidden` 仍走中性圆 |
+| `__tests__/components/ErrorState.spec.ts` | 14 条既有 `it()`（26 个 `expect`） | 覆盖 `variant` / `retry` / `retryLabel` / `aria` / 焦点 | **不变**（新增 prop 默认值等于原行为）。**新增** 5 条 `it()`：`scope="page"` 加 `.error-state--page` 类且渲染 Display 标题类；`actions` 非空时不渲染 `retry` 按钮；`actions` 按声明顺序渲染；`actions[].label` 同时是可见文本与 `aria-label`；`forbidden` 仍走中性圆 |
 | `__tests__/composables/useFormServerErrors.spec.ts` | 既有断言 | 不传 `labels` | **不变**；**新增** 1 条：`labels` 覆盖优先于 `FIELD_LABELS` |
 | `__tests__/views/QuickInputDialog.spec.ts` | E2E 契约 | 成功文案 | **不变** |
 
