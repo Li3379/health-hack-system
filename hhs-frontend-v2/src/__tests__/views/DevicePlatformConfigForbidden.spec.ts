@@ -359,4 +359,21 @@ describe('settings/DevicePlatformConfig.vue — 源码级几何契约', () => {
     expect(ruleBody).toContain('var(--text-2)')
     expect(ruleBody).not.toContain('var(--text-3)')
   })
+
+  it('两个宿主各自声明 --hhs-page-pad-y，值不同（40px / 64px）', () => {
+    // 一行里同时出现两个不同取值，是「变量为宿主私有」而不是「常量换名」的证据。
+    const device = readFileSync(
+      resolve(process.cwd(), 'src/views/settings/DevicePlatformConfig.vue'),
+      'utf8'
+    )
+    const dashboard = readFileSync(resolve(process.cwd(), 'src/views/dashboard/Index.vue'), 'utf8')
+    expect(device).toContain('--hhs-page-pad-y: 40px')
+    expect(dashboard).toContain('--hhs-page-pad-y: 64px')
+  })
+
+  it('padding:0 的宿主（health/Metrics.vue）无需声明该变量', () => {
+    // 默认回退值 0px 已覆盖它；一旦有人给它也加一条声明，就说明有人开始把它当常量维护。
+    const metrics = readFileSync(resolve(process.cwd(), 'src/views/health/Metrics.vue'), 'utf8')
+    expect(metrics).not.toContain('hhs-page-pad-y')
+  })
 })

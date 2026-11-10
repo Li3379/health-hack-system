@@ -80,16 +80,23 @@ describe('request interceptors', () => {
       expect(getResponseHandler().fulfilled({ data: envelope })).toBe(envelope)
     })
 
-    it('rejects a code!==200 envelope as a business ApiError with the backend message', async () => {
+    // Phase 14 起：信封 404 是「资源不存在」状态，不再是普通业务失败。
+    // A-2 用例 ③④ 把它钉在 appError.spec.ts 里；这里验证拦截器这一层也真的
+    // 把信封交给了归一化函数，并完整带出后端文案与错误码。
+    it('rejects a code=404 envelope as a notFound ApiError, preserving message and errorCode', async () => {
       const err = await rejectionOf(
         getResponseHandler().fulfilled({
           data: { code: 404, message: '健康档案不存在', errorCode: 'health.profile_not_found' }
         }) as Promise<unknown>
       )
 
-      expect(err.kind).toBe('business')
+      expect(err.kind).toBe('notFound')
+      expect(err.kind).not.toBe('business')
       expect(err.message).toBe('健康档案不存在')
       expect(err.code).toBe('health.profile_not_found')
+      // 404 不是可重试的传输层故障，拦截器不得给它挂上「重发同一请求」回调。
+      expect(err.retryable).toBe(false)
+      expect(err.retryRequest).toBeUndefined()
     })
 
     // 反回归锚点：假 response 的 status 固定为 200，

@@ -5,10 +5,11 @@ import ErrorState from '@/components/common/ErrorState.vue'
 // el-button stub 写法 A（UI-SPEC 之外的关键细节）：模板里出现的 aria-label 会被 Vue
 // 归一化成 ariaLabel prop。若声明了 prop 却不绑回模板，该值会被吞掉、永远落不到 DOM。
 // 因此这里显式 `:aria-label="ariaLabel"`，让下面的 attributes('aria-label') 断言有意义。
+// `:type="type"` 同理：S2 的 primary/default 动作分级必须能从 DOM 上读出来。
 const globalStubs = {
   'el-button': {
     template:
-      '<button class="el-button" :disabled="loading" :aria-label="ariaLabel"><slot /></button>',
+      '<button class="el-button" :type="type" :disabled="loading" :aria-label="ariaLabel"><slot /></button>',
     props: ['type', 'size', 'loading', 'ariaLabel']
   },
   'el-icon': {
@@ -246,6 +247,48 @@ describe('ErrorState.vue', () => {
       'error-state__icon-circle--muted'
     )
     expect(wrapper.find('.icon-lock').exists()).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('announces the page-scope block the same way (role=status, aria-live=polite)', () => {
+    // 页级块只是换了几何，不是另一种无障碍语义：屏幕阅读器仍应把它当作状态区播报，
+    // 且不得升级成 role=alert（Phase 11 的纪律对本阶段新增表面继续生效）。
+    const wrapper = mountErrorState({ scope: 'page', variant: 'forbidden', title: '无权访问此页面' })
+
+    const root = wrapper.find('.error-state')
+    expect(root.attributes('role')).toBe('status')
+    expect(root.attributes('aria-live')).toBe('polite')
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('renders both action variants (primary and default)', () => {
+    // S2 的 404 动作对是 primary + default 两档；两档都必须真的渲染出来，
+    // 否则「返回列表」与「重新加载该记录」会退化成一个无法区分的按钮对。
+    const wrapper = mountErrorState({
+      variant: 'notFound',
+      actions: [
+        { label: '返回列表', onClick: vi.fn(), variant: 'primary' },
+        { label: '重新加载该记录', onClick: vi.fn(), variant: 'default' }
+      ]
+    })
+
+    const buttons = wrapper.findAll('.el-button')
+    expect(buttons).toHaveLength(2)
+    expect(buttons[0].attributes('type')).toBe('primary')
+    expect(buttons[1].attributes('type')).toBeUndefined()
+    wrapper.unmount()
+  })
+
+  it('does not leak a rejected action callback (parent owns the error surface)', async () => {
+    const failing = vi.fn().mockRejectedValue(new Error('parent should present this'))
+    const wrapper = mountErrorState({
+      actions: [{ label: '返回首页', onClick: failing, variant: 'primary' }]
+    })
+
+    // 未捕获的拒绝会变成 unhandled rejection；组件必须自己接住。
+    await expect(wrapper.find('.el-button').trigger('click')).resolves.toBeUndefined()
+    expect(failing).toHaveBeenCalledTimes(1)
     wrapper.unmount()
   })
 });
