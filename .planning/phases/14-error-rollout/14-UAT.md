@@ -115,3 +115,48 @@ blocked: 0
 ## Gaps
 
 <!-- None yet -->
+---
+
+## 🔴 UAT 发现缺陷 #1 — 全局错误描边未生效（步骤 11 失败）
+
+**严重度**: major（err-03 的视觉验收项之一）
+**步骤**: 11（必填留空提交：输入框应有红描边，不只是红字）
+
+### 症状
+
+`prevention/Profile.vue` 提交后，`.el-form-item.is-error` 正确添加（2 个），内联错误文案正确显示（「请选择性别」「请选择出生日期」），但出错控件的边框**仍是默认灰** `rgba(0,0,0,0.08)`，`box-shadow: none`。用户看到的只有 12px 红字，没有描边。
+
+### 已排除
+
+| 假设 | 结论 |
+|------|------|
+| CSS 未加载 / Vite 缓存 | **已排除**：重启 dev server 后 dev 输出 `is-error` 从 1 次变 7 次，CSSOM 确认 6 条规则已解析 |
+| Token 未定义 | **已排除**：`--hhs-color-error-text` 在元素上解析为 `#b91c1c`（light） |
+| 选择器不匹配 | **已排除**：`wr.matches('body .el-form-item.is-error .el-form-item__content .el-input__wrapper')` = **true** |
+| 特异性不足 | **已排除**：我的规则 401 vs 基线 100，两者均 `!important` |
+| 过渡未完成 | **已排除**：0/200/500/1000/2000ms 五次采样全部灰色 |
+| 页面 scoped 覆盖 | **已排除**：`Profile.vue` 无 `border`/`border-color` 声明 |
+| `@layer` 层级 | **已排除**：全站无 `@layer` |
+| 样式表被 disabled | **已排除**：含规则的 197 条样式表 `disabled: false` |
+| 手写注入同样规则 | **也无效**——注入 `border-color: rgb(185,28,28) !important` 后计算值仍为灰色 |
+
+### 关键矛盾
+
+**连字面色值的 `!important` 长写属性都无法覆盖同表中的 `border` 简写 `!important`** —— 这与 CSS 层叠规范不符，除非浏览器把两者视为**同一条规则的不同部分**。
+
+同表位置：
+- 基线：`theme.css:502` `.el-input__wrapper { border: 1px solid var(--border) !important }`
+- 我的：`theme.css:1413` `body .el-form-item.is-error .el-form-item__content .el-input__wrapper { border-color: ... !important }`
+
+### 修复方向（待验证）
+
+1. **把基线规则也改成 `border-color`** ——让两条规则操作同一长写属性，特异性 401 > 100 必然生效
+2. **或提高选择器特异性**（如加 `:where()` 或重复类名），但这不解决"同表简写 vs 长写"的核心问题
+3. **或在基线规则上加 `:not(.el-form-item.is-error *)`** 排除法
+
+方案 1 最小且最可能有效。
+
+### 待办
+
+- [ ] 修复后重跑步骤 11 与步骤 12（描边 + 焦点光晕）
+- [ ] 补充单测/结构测试覆盖（当前 14-02 的 spec 只验证 CSS 文本存在，未验证计算值——happy-dom 无法算样式，属已知限制 WINDOWS #7）
