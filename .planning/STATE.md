@@ -38,7 +38,7 @@ See: `.planning/PROJECT.md`
 | v1.0 Optimization & Redeployment | done | 3/3 | 2026-05-29 |
 | v1.1 智能健康指标填报引导与友好校验 | done | 4/4 | 2026-11-05 |
 | v1.2 全站健康与保健指标录入标准化与体验对齐 | done | 3/3 | 2026-11-05 |
-| v1.3 引导式配置与友好错误反馈 | complete | 4/4 | 待 UAT |
+| v1.3 引导式配置与友好错误反馈 | done | 4/4 | 2026-11-11 |
 
 ## Phase Progress
 

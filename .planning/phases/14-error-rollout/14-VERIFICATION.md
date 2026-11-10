@@ -81,7 +81,7 @@ covered_files:
   - hhs-frontend-v2/src/views/user/Profile.vue
   - hhs-frontend-v2/src/views/user/PushSettings.vue
   - hhs-frontend-v2/src/views/wellness/Dashboard.vue
-covered_digest: "v1:sha256:61446899cb3e0e286f9ce6133c20fecab924dc0f58851c629736c70993dc079f"
+covered_digest: "v1:sha256:c16a195d07a1ad339b66832a4f39aa4d485f97f1565108ff57f2af188e47f70d"
 decision_coverage:
   honored: 6
   total: 6
