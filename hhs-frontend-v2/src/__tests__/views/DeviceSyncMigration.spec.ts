@@ -258,8 +258,10 @@ describe('data-input/DeviceSync.vue — 删除三个不可达 else 后行为不�
     await vm.handleConnect('huawei')
     await flushPromises()
 
-    // 旧实现：isOnline===false 会走 ElMessage.error(offlineMessage)，且 catch 若也走
-    // 另一条分支就会产生第二条。现在只有一个出口，无论页面标记如何都恰好 1 条。
+    // 旧实现：isOnline===false 会先 ElMessage.error(offlineMessage) 再走另一条分支。
+    // 现在只有一个出口。这里断言**总条数**而不只是错误条数 —— 页面级分支即使改用
+    // warning 而非 error 重新引入，总条数也会变成 2，所以总条数是更严的断言。
+    expect(toastCount()).toBe(1)
     expect(errorToastCount()).toBe(1)
     expect(lastErrorToastText()).toBe('网络连接异常，请检查网络后重试')
 
