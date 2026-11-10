@@ -29,7 +29,7 @@ affects: [14-06, 14-07, 14-09, 14-10, 14-11, 14-12, 14-13, 14-14]
 actuals:
   tokens: 16543
   tasks: 2
-  commits: 3
+  commits: 4
   plan_head_before: 2fa3d750c14ccfb97c3e54c16a2a4e39597a193e
 
 tech-stack:
@@ -348,4 +348,6 @@ guard, dropped `reset()`, dropped `focusSummary()`.
 
 - All 5 declared files exist (2 views, 2 specs, 1 ledger) plus this summary.
 - All 3 commits present in history: `ab46bc1`, `2373b99`, `958fc57`.
-- Measured commit count against the plan ledger: 3 (base `2fa3d75`).
+- Measured commit count against the plan ledger: 4 over base `2fa3d75` (the three
+  task/test commits above plus this summary's own `docs(14-05)` commit, which lands
+  inside the same range by construction).
