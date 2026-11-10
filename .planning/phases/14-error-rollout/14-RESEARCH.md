@@ -1067,7 +1067,7 @@ Test files that must exist **before** the migration waves start (all new, in `hh
 | A5 | `docker`/Testcontainers remain unavailable, so `-DskipITs` is the correct backend gate | Baseline | If the daemon *is* reachable, `mvn clean verify` (without `-DskipITs`) would be a stronger gate. `docker info` returned client info but daemon reachability was not confirmed |
 | A6 | E2E can run in this environment (Playwright browsers are cached; backend needs MySQL 3307 + Redis 6380 via `docker compose up`) | Baseline | If the stack cannot be brought up, D-06's automated half cannot run and the UAT must be manual-only. This would be a **blocking** environment gap, not a code problem |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Should the 3 success toasts in non-auth stores be moved?** (`ai.ts:123`, `wellness.ts:58`, `push.ts:83`)
    - What we know: UI-SPEC §5.1 permits them; Contract 6.3 check ② as written forbids them.
