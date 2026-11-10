@@ -134,9 +134,30 @@
       <template #header>
         <span>手动添加指标</span>
       </template>
-      <el-form :inline="true" :model="form" @submit.prevent="handleAdd">
-        <el-form-item label="指标类型">
-          <el-select v-model="form.metricKey" placeholder="请选择" style="width: 150px">
+      <!--
+        `:inline="true"` 的行内布局无法在字段行之上容纳一个全宽汇总块 —— 把它塞成
+        inline 表单的第一个子节点会让 EP 的 inline flex 把它压成一行里的一个单元格。
+        因此汇总块放在 el-form **紧前方**、同一个 el-card 内（Contract 4.3 的位置规则是
+        「位于所有 el-form-item 之上」；这是该规则意图的等价满足，已在台账 理由 列记录）。
+      -->
+      <FormErrorSummary
+        ref="summaryRef"
+        :summary-items="metricErrors.summaryItems"
+        @focus-field="metricErrors.focusField"
+      />
+      <el-form ref="formRef" :inline="true" :model="form" :rules="rules" @submit.prevent="handleAdd">
+        <el-form-item
+          label="指标类型"
+          prop="metricKey"
+          data-field="metricKey"
+          :error="metricErrors.fieldErrors['metricKey']"
+        >
+          <el-select
+            v-model="form.metricKey"
+            placeholder="请选择"
+            style="width: 150px"
+            @change="metricErrors.clearField('metricKey')"
+          >
             <el-option-group label="健康指标">
               <el-option label="心率" value="heartRate" />
               <el-option label="收缩压" value="systolicBP" />
@@ -156,11 +177,32 @@
             </el-option-group>
           </el-select>
         </el-form-item>
-        <el-form-item label="数值">
-          <el-input-number v-model="form.value" :precision="2" :min="0" style="width: 150px" />
+        <el-form-item
+          label="数值"
+          prop="value"
+          data-field="value"
+          :error="metricErrors.fieldErrors['value']"
+        >
+          <el-input-number
+            v-model="form.value"
+            :precision="2"
+            :min="0"
+            style="width: 150px"
+            @update:model-value="metricErrors.clearField('value')"
+          />
         </el-form-item>
-        <el-form-item label="单位">
-          <el-input v-model="form.unit" placeholder="如: bpm, mmHg" style="width: 120px" />
+        <el-form-item
+          label="单位"
+          prop="unit"
+          data-field="unit"
+          :error="metricErrors.fieldErrors['unit']"
+        >
+          <el-input
+            v-model="form.unit"
+            placeholder="如: bpm, mmHg"
+            style="width: 120px"
+            @update:model-value="metricErrors.clearField('unit')"
+          />
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="handleAdd">添加</el-button>
@@ -176,7 +218,7 @@ import {
   staggerReveal, cleanupScrollTriggers,
   tilt3D, glowPulse, buttonPress, hoverLift, rippleClick, DUR, EASE,
 } from '@/composables/useGsap'
-import { ElMessage } from 'element-plus'
+import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { Connection } from '@element-plus/icons-vue'
 import * as echarts from 'echarts/core'
 import { LineChart } from 'echarts/charts'
@@ -189,6 +231,9 @@ import { useRealtimeStore } from '@/stores/realtime'
 import { realtimeApi } from '@/api/realtime'
 import { formatRelativeTime } from '@/utils/format'
 import { useECharts } from '@/composables/useECharts'
+import { useFormServerErrors, collectInvalidFieldMessages } from '@/composables/useFormServerErrors'
+import FormErrorSummary from '@/components/common/FormErrorSummary.vue'
+import { showError } from '@/utils/showError'
 import GaugeChart from '@/components/charts/GaugeChart.vue'
 import type { RealtimeMetricVO } from '@/types/api'
 
@@ -290,6 +335,33 @@ const form = reactive({
   unit: ''
 })
 
+const formRef = ref<FormInstance>()
+const summaryRef = ref<InstanceType<typeof FormErrorSummary> | null>(null)
+
+/**
+ * 一个投影实例，字段顺序与行内表单的视觉顺序一致（GOV.UK：汇总顺序必须匹配页面）。
+ *
+ * 三个 prop 名（`metricKey` / `value` / `unit`）全部命中全局 `FIELD_LABELS`，
+ * 因此不需要 `labels` 覆盖 —— 汇总条目读出「指标类型」「指标数值」「单位」。
+ * `reactive()` 让模板里 `metricErrors.fieldErrors['value']` 读到字符串而非 Ref。
+ */
+const metricErrors = reactive(useFormServerErrors({
+  fieldOrder: ['metricKey', 'value', 'unit']
+}))
+
+/**
+ * 客户端规则镜像后端 `RealtimeMetricRequest`：`metricKey` @NotBlank、
+ * `value` @NotNull + @DecimalMin("0.0")。空提交因此产出汇总 + 三项内联，
+ * 取代原先那句「请填写完整信息」的含糊警告提示。
+ */
+const rules: FormRules = {
+  metricKey: [{ required: true, message: '请选择指标类型', trigger: 'change' }],
+  value: [
+    { required: true, message: '请输入指标数值', trigger: 'change' },
+    { type: 'number', min: 0, message: '指标数值不能为负数', trigger: 'change' }
+  ]
+}
+
 const connect = () => {
   if (authStore.token) {
     realtimeStore.connect(authStore.token)
@@ -316,6 +388,10 @@ const fetchLatestMetrics = async () => {
   }
 }
 
+/**
+ * 趋势加载失败：本页不渲染任何错误状态块，`forbidden` / `notFound` 没有落点，
+ * 因此显式 opt-in 一条常驻 toast —— 静默是唯一不可接受的结果（Contract 1.3）。
+ */
 const fetchTrend = async () => {
   if (!selectedMetric.value) return
 
@@ -325,31 +401,53 @@ const fetchTrend = async () => {
     trendData = res.data
     updateOption()
   } catch (error) {
-    ElMessage.error('获取趋势数据失败')
+    showError(error, 'realtime.loadFailed', { presentStates: true })
   } finally {
     chartLoading.value = false
   }
 }
 
 const handleAdd = async () => {
-  if (!form.metricKey || !form.value) {
-    ElMessage.warning('请填写完整信息')
-    return
-  }
+  if (!formRef.value) return
 
-  try {
-    await realtimeApi.addMetric({
-      metricKey: form.metricKey,
-      value: form.value,
-      unit: form.unit,
-      source: 'MANUAL'
-    })
-    ElMessage.success('添加成功')
-    Object.assign(form, { metricKey: '', value: 0, unit: '' })
-    fetchLatestMetrics()
-  } catch (error) {
-    ElMessage.error('添加失败')
-  }
+  // 上一轮的残留投影不进入本次尝试；只清投影，绝不碰用户输入（ERR-05）。
+  metricErrors.reset()
+
+  await formRef.value.validate(async (valid, invalidFields) => {
+    if (!valid) {
+      // 客户端校验失败也走同一份汇总通道（GOV.UK 双呈现），零 toast。
+      // 这一支取代了原来那句「请填写完整信息」的警告 —— 保留两者会让
+      // 一次空提交同时出现一条含糊警告和一份汇总，是同一次失败的两次呈现。
+      metricErrors.setErrors(collectInvalidFieldMessages(invalidFields))
+      await nextTick()
+      summaryRef.value?.focusSummary()
+      return
+    }
+
+    try {
+      await realtimeApi.addMetric({
+        metricKey: form.metricKey,
+        value: form.value,
+        unit: form.unit,
+        source: 'MANUAL'
+      })
+      ElMessage.success('添加成功')
+      // 这一段重置**必须**留在这里、留在 try 内、留在成功之后：它是本文件唯一一处
+      // 「一次失败可能摧毁用户正在输入的内容」的地方（ERR-05 / T-14-25）。
+      // 把它移进 catch、或在失败时调用，都会让一次常规失败变成静默数据丢失。
+      Object.assign(form, { metricKey: '', value: 0, unit: '' })
+      fetchLatestMetrics()
+    } catch (error) {
+      // validation → 0 toast，汇总 + 内联承担呈现；其余 kind 由 showError 呈现。
+      // 本页无状态块，缺 `presentStates` 会把一次权限或资源消失变成静默。
+      const err = showError(error, 'realtime.saveFailed', { presentStates: true })
+      if (err.kind === 'validation') {
+        metricErrors.apply(err)
+        await nextTick()
+        summaryRef.value?.focusSummary()
+      }
+    }
+  })
 }
 
 // 启动心跳

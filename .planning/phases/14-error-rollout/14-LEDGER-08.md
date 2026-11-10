@@ -1,0 +1,31 @@
+# 14-08 迁移台账片段 — mood 的结构性改造与 realtime 行内表单
+
+本片段记录 plan 14-08 触达的五个裸 toast 调用点（`views/mood/MoodTracker.vue` 三行 + `views/realtime/Monitor.vue` 两行，一行一个调用点、绝不按分支拆行，Contract 6.1）；plan 14-13 会把各份片段合并为 `14-MIGRATION-LEDGER.md` 并对账到迁移前的 87 个调用点。
+
+`file:line` 一列取自迁移前的 commit（`14-RESEARCH.md` 的「87 Bare ElMessage.error Calls — Classified Inventory」），因此在本片段落盘后源码行号已经漂移 —— 这是台账的设计前提，不是笔误。
+
+**本片段承接 plan 14-05 建立的呈现通道规则**：一个文件若不渲染 `ErrorState`，其中每个 `showError` 都带 `{ presentStates: true }`；若渲染了，则一个都不带，绝不两可。`views/mood/MoodTracker.vue` 与 `views/realtime/Monitor.vue` 都不渲染 `ErrorState`，因此两个文件里 `presentStates: true` 的条数等于 `showError(` 的条数（3 / 2），这条等式本身就是可断言的验收判据。
+
+**本片段的特殊之处：两个文件都不是「加四个属性」就能迁移的表单。** `MoodTracker.vue` 的 `<el-form>` 原先没有 `:model`、也没有任何 `prop`，`validate()` 无法运行、`:error` 无处可落；`Monitor.vue` 的行内表单有 `:model` 但一个 `prop` 也没有，并在发请求前用一句 `ElMessage.warning('请填写完整信息')` 预检。plan 14-08 对两者做的是**结构改造**（绑定模型、补 prop、删预检），而不是台账式的属性追加。这也是本 plan 被排在 wave 3 而非机械迁移波次的原因。
+
+| file:line | 原文案 | kind 覆盖 | 迁移后形态 | fallback key | 理由 | spec 断言 |
+|-----------|--------|-----------|------------|--------------|------|-----------|
+| `mood/MoodTracker.vue:127` | `获取数据失败` | `notFound`, `forbidden`, `server`, `network`, `business`, `auth`, `validation`, `cancel`, `unknown` | `presentStates-toast` | `mood.loadFailed` | 本页不渲染任何错误状态块，`forbidden` / `notFound` 没有落点。该调用点等待的是 `Promise.all([moodApi.list(), moodApi.getInsights(30)])` 这一对：任一失败只呈现一次，因此**刻意不拆成两条独立错误路径** —— 拆开会把一次失败变成两条提示（Contract 6.4「恰好一条提示」的反例）。 | `src/__tests__/views/MoodTrackerInlineError.spec.ts#400：汇总读作「心情评分」与「睡眠质量」，两个驼峰键一个都不许露出来`（挂载期即调用 `fetchData`，两条请求都返回 200，故该路径零 toast —— 该用例同时守护加载路径不得引入噪音） |
+| `mood/MoodTracker.vue:149` | `记录失败` | `validation`, `business`, `forbidden`, `notFound`, `server`, `network`, `auth`, `cancel`, `unknown` | `presentStates-toast` | `mood.saveFailed` | 表单接入 `useFormServerErrors` 后仍要 `showError` 的返回值来取归一化 `ApiError`：`validation` 由汇总 + 内联承担（0 toast），其余 kind 由 toast 承担。本页无状态块，第三个参数必带；`WellnessServiceImpl:118` 在同类写路径上抛 `AUTH_FORBIDDEN`（「无权修改他人记录」），缺它会把一次真实的权限拒绝变成静默。**注意**：`RecordMoodRequest.java:17-33` 的 `@NotNull` / `@Min` / `@Max` 让 400 在此端点真实可达，因此内联通道不是防御性代码。 | `src/__tests__/views/MoodTrackerInlineError.spec.ts#400：汇总读作「心情评分」与「睡眠质量」，两个驼峰键一个都不许露出来`；`#客户端校验失败（未发出请求）：同样填充汇总、聚焦汇总、零 toast` |
+| `mood/MoodTracker.vue:155` | `删除失败`（含 `if (e !== 'cancel')`） | `notFound`, `forbidden`, `business`, `server`, `network`, `auth`, `validation`, `cancel`, `unknown` | `presentStates-toast` | `mood.deleteFailed` | **本 plan 负责的那 1 处手写 cancel 判断**。旧实现把确认框与请求塞进同一个 try，再用「拒绝值不等于字符串 `cancel`」决定是否提示 —— 该比较对 `AbortError`（`e.name === 'AbortError'`）与归一化后的 `ApiError('', 'cancel')` 都会判成真失败并弹红灯。现在确认与请求彻底分离，取消路径是裸 `return`（零提示，ERR-08）。请求失败时 `MoodServiceImpl:167` 抛「心情记录不存在或无权删除」，第三个参数让这条**必须可见**的失败仍产生恰好一条提示。 | `src/__tests__/views/MoodTrackerInlineError.spec.ts#删除确认框以 AbortError 取消：零提示，且不发 DELETE（ERR-08）`（把旧的手写判断加回去后该用例失败 —— mutation-verified）；`#删除已被删除的行（FORBIDDEN 信封）：恰好一条提示，且文案是后端消息（presentStates 护栏）`（去掉 `presentStates` 后读到 0 条 —— mutation-verified） |
+| `realtime/Monitor.vue:328` | `获取趋势数据失败` | `forbidden`, `notFound`, `server`, `network`, `business`, `auth`, `validation`, `cancel`, `unknown` | `presentStates-toast` | `realtime.loadFailed` | 本页不渲染任何错误状态块，`forbidden` / `notFound` 没有落点；一次趋势加载失败必须换一条常驻 toast 而不是静默。与 `fetchLatestMetrics` 的裸 `catch {}` 不同，本行原本就有提示，故只做出口替换、不新增呈现。 | `src/__tests__/views/MonitorInlineError.spec.ts#趋势加载失败：恰好一条 toast（本页无状态块，presentStates 承重）`（去掉 `presentStates` 后读到 0 条 —— mutation-verified） |
+| `realtime/Monitor.vue:351` | `添加失败`（另有 `ElMessage.warning('请填写完整信息')` 预检） | `validation`, `business`, `forbidden`, `notFound`, `server`, `network`, `auth`, `cancel`, `unknown` | `presentStates-toast` | `realtime.saveFailed` | **预检被删除而不是被迁移**：`ElMessage.warning('请填写完整信息')` 与 `validate()` 后的汇总块是同一次空提交的两种呈现，保留两者就是「一次失败两条提示」。空提交现在产出汇总 + 三项内联（E8 空表单规则），零 toast。**本行的关键不变量是那句 `Object.assign(form, { metricKey: '', value: 0, unit: '' })` 的位置**：它是 `try` 内、api `await` 之后的成功分支部分重置，是本文件唯一「一次失败可能摧毁用户输入」的地方（ERR-05 / T-14-25）。把它移出 try 或复制进 catch 会把一次常规失败变成静默数据丢失，因此 spec 用**值断言**而非注释钉住它，并额外加一条成功路径用例，证明前一条不是靠「永远不重置」空过的。 | `src/__tests__/views/MonitorInlineError.spec.ts#400：汇总读作「指标数值」、一项内联、零 toast，且表单值原样保留`；`#500：恰好一条 toast，且已选的指标与已输入的数值都还在（成功-only 重置护栏）`（把 `Object.assign` 搬进 catch 后三条用例同时失败 —— mutation-verified）；`#成功路径：重置仍然发生`；`#空表单提交（客户端校验失败）：汇总 + 内联、零 toast，取代原来那句含糊的 warning` |
+
+## 两处结构性改造与两处显式偏离
+
+**1. `mood/MoodTracker.vue` 的表单从「装饰性」变为可校验。** 改造前 `<el-form label-width="80px">` 没有 `:model`、没有 `ref`、五个 `el-form-item` 没有一个 `prop`。`validate()` 在无 model 时无法运行，`:error` 也没有锚点 —— 这个表单**在结构上不可能**显示服务端字段错误。本次补上 `:model` + `ref` + `rules`（镜像 `RecordMoodRequest` 的 `@NotNull` 与 `@Min`/`@Max`），并给五个字段补 `prop` / `data-field` / `:error` / clearField。这是 RESEARCH §「Non-`prop` field identifiers」推荐 retrofit 而非 ledger 成 `presentValidation` 例外的直接落实。
+
+**2. `moodScore` 的焦点限制（刻意不修）。** 心情评分是一个裸按钮组（10 个 `<button>`），其 `el-form-item` 内容区里既没有 `input`、也没有 `textarea`、`.el-select__wrapper`、`.el-rate`。`focusField('moodScore')` 因此会找到 `[data-field="moodScore"]` 容器、找不到可聚焦控件、静默返回。**这是契约允许的降级而非缺陷**：Contract 4.4 把「首个无效字段的可见性」交给 `is-error` 描边承担，汇总条目本身仍是可点击的锚点，`useFormServerErrors.ts:167-168` 的选择器清单也是刻意窄的。为此写一个自定义选择器会把「焦点只移动一次到汇总」的纪律撕开一个口子，故不做。改行的可见性由汇总条目 + `el-form-item.is-error` 描边共同保证。
+
+**3. `realtime/Monitor.vue` 的汇总块位置偏离（Contract 4.3）。** 该表单是 `:inline="true"` 的 flex 行，把全宽汇总块塞成第一个子节点会让它被压成行内的一个单元格，破坏布局。因此汇总块放在 `el-form` **紧前方**、同一个 `el-card` 内。Contract 4.3 的位置规则本意是「位于所有字段之上、同一个组件内」，本条是等价满足而非豁免：汇总块仍然在视觉上位于全部 `el-form-item` 之上，仍然在 `add-card` 之内。若未来该表单改为竖排布局，应把汇总块移回第一个子节点。
+
+**4. `notes` 的标签复用而非新增。** 心情表单的备注字段 `prop="notes"`，命中全局 `FIELD_LABELS['notes'] = '备注说明'`，因此汇总条目读作「备注说明：…」。这是一个既有的、语义正确的键，本 plan 不为它新增 `moodNotes` 之类的近似重复键（Contract 4.5 规则 5：每个新键都要同步 `errorMessages.spec.ts` 的计数断言）。
+
+## 未触达但相关的调用点（说明为什么不在本片段）
+
+`realtime/Monitor.vue` 的 `fetchLatestMetrics` catch 是一个裸 `catch {}`（无文案、无呈现），不属于 87 个裸 `ElMessage.error` 调用点之一，因此不在本片段、也不在本 plan 的范围内。它是后台 10 秒轮询的静默路径，RESEARCH §「静默 catch」把这类归入「后台预加载」的合法静默语义（Contract 6.2），不是一次用户触发的动作失败。补一条 toast 会让每 10 秒一次的轮询在断网时反复弹窗，因此刻意保持静默。
