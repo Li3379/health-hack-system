@@ -47,16 +47,32 @@
           class="register-form"
           @submit.prevent="handleRegister"
         >
-          <el-form-item prop="username">
+          <!-- 汇总块必须是 <el-form> 的第一个子节点（Contract 4.3）。 -->
+          <FormErrorSummary
+            ref="summaryRef"
+            :summary-items="registerErrors.summaryItems"
+            @focus-field="registerErrors.focusField"
+          />
+
+          <el-form-item
+            prop="username"
+            data-field="username"
+            :error="registerErrors.fieldErrors['username']"
+          >
             <el-input
               v-model="form.username"
               placeholder="请输入用户名"
               :prefix-icon="User"
               class="register-input"
+              @update:model-value="registerErrors.clearField('username')"
             />
           </el-form-item>
 
-          <el-form-item prop="password">
+          <el-form-item
+            prop="password"
+            data-field="password"
+            :error="registerErrors.fieldErrors['password']"
+          >
             <el-input
               v-model="form.password"
               type="password"
@@ -64,10 +80,15 @@
               :prefix-icon="Lock"
               show-password
               class="register-input"
+              @update:model-value="registerErrors.clearField('password')"
             />
           </el-form-item>
 
-          <el-form-item prop="confirmPassword">
+          <el-form-item
+            prop="confirmPassword"
+            data-field="confirmPassword"
+            :error="registerErrors.fieldErrors['confirmPassword']"
+          >
             <el-input
               v-model="form.confirmPassword"
               type="password"
@@ -75,15 +96,21 @@
               :prefix-icon="Lock"
               show-password
               class="register-input"
+              @update:model-value="registerErrors.clearField('confirmPassword')"
             />
           </el-form-item>
 
-          <el-form-item prop="email">
+          <el-form-item
+            prop="email"
+            data-field="email"
+            :error="registerErrors.fieldErrors['email']"
+          >
             <el-input
               v-model="form.email"
               placeholder="请输入邮箱 (可选)"
               :prefix-icon="Message"
               class="register-input"
+              @update:model-value="registerErrors.clearField('email')"
             />
           </el-form-item>
 
@@ -131,15 +158,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, nextTick } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { User, Lock, Message, Key, TrendCharts, ChatDotRound } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import { showError } from '@/utils/showError'
+import { useFormServerErrors, collectInvalidFieldMessages } from '@/composables/useFormServerErrors'
+import FormErrorSummary from '@/components/common/FormErrorSummary.vue'
 import { gsap, magneticHover, buttonPress, hoverShine, rippleClick, DUR, EASE } from '@/composables/useGsap'
 
 const authStore = useAuthStore()
 const formRef = ref<FormInstance>()
+const summaryRef = ref<InstanceType<typeof FormErrorSummary> | null>(null)
 const loading = ref(false)
 
 const form = reactive({
@@ -148,6 +178,23 @@ const form = reactive({
   confirmPassword: '',
   email: ''
 })
+
+/**
+ * 服务端字段错误投影（Contract 4）。
+ *
+ * 四个字段分三类（这是本页最容易说错的地方，勿混）：
+ * - **三个服务端可达**：`username`（`@NotBlank` + `@Size`）、`password`（`@NotBlank` + `@Size`）、
+ *   `email`（`@Email`）—— 它们是 `RegisterRequest` 上真实存在的约束，也是本页实际提交的三个字段。
+ * - **一个纯客户端**：`confirmPassword` —— `RegisterRequest` **没有**这个字段，后端永远不会在
+ *   `fieldErrors` 里下发它。它在投影表里只作为防御性绑定存在，真正生效的是下面那条
+ *   自定义的「两次密码一致」客户端规则。
+ * - **一个不提交**：`nickname` —— DTO 上声明但无约束，且本页提交时不发送，因此不绑定、
+ *   也不加入 payload。
+ * 不传 `labels`：四个标签都已在全局 `FIELD_LABELS` 中（用户名 / 密码 / 确认密码 / 邮箱）。
+ */
+const registerErrors = reactive(
+  useFormServerErrors({ fieldOrder: ['username', 'password', 'confirmPassword', 'email'] })
+)
 
 const validateConfirmPassword = (_rule: any, value: any, callback: any) => {
   if (value !== form.password) {
@@ -268,22 +315,42 @@ onMounted(() => {
 const handleRegister = async () => {
   if (!formRef.value) return
 
-  await formRef.value.validate(async valid => {
-    if (valid) {
-      loading.value = true
-      try {
-        await authStore.register({
-          username: form.username,
-          password: form.password,
-          email: form.email || undefined
-        })
-      } catch (error) {
-        // 拦截器只翻译不展示：注册失败（用户名重复等）必须由本调用点呈现，
-        // 否则会变成未处理的 Promise 拒绝且用户无任何反馈。
-        showError(error, 'auth.registerFailed')
-      } finally {
-        loading.value = false
+  // 上一轮的残留投影不进入本次尝试；只清投影，不碰用户输入（ERR-05）。
+  registerErrors.reset()
+
+  await formRef.value.validate(async (valid, invalidFields) => {
+    if (!valid) {
+      // 客户端校验失败也走同一份汇总通道（GOV.UK 双呈现，Contract 4.3），零 toast。
+      registerErrors.setErrors(
+        collectInvalidFieldMessages(
+          invalidFields as Record<string, Array<{ message?: string }>> | undefined
+        )
+      )
+      await nextTick()
+      summaryRef.value?.focusSummary()
+      return
+    }
+
+    loading.value = true
+    try {
+      await authStore.register({
+        username: form.username,
+        password: form.password,
+        email: form.email || undefined
+      })
+    } catch (error) {
+      // 拦截器只翻译不展示：注册失败（用户名重复等）必须由本调用点呈现，
+      // 否则会变成未处理的 Promise 拒绝且用户无任何反馈。
+      // validation → 0 toast，汇总 + 内联承担呈现；其余 kind 由 showError 呈现。
+      // 本页没有任何页级状态块，因此 forbidden / notFound 必须 opt-in 一条常驻 toast。
+      const err = showError(error, 'auth.registerFailed', { presentStates: true })
+      if (err.kind === 'validation') {
+        registerErrors.apply(err)
+        await nextTick()
+        summaryRef.value?.focusSummary()
       }
+    } finally {
+      loading.value = false
     }
   })
 }

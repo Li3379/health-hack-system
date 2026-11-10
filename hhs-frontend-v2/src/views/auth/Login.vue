@@ -37,12 +37,41 @@
 
         <!-- Form -->
         <el-form ref="formRef" :model="form" :rules="rules" label-width="0" size="large" class="login-form" @submit.prevent="handleLogin">
-          <el-form-item prop="username">
-            <el-input v-model="form.username" placeholder="请输入用户名" :prefix-icon="User" @change="syncFromNative" />
+          <!-- 汇总块必须是 <el-form> 的第一个子节点（Contract 4.3）。 -->
+          <FormErrorSummary
+            ref="summaryRef"
+            :summary-items="loginErrors.summaryItems"
+            @focus-field="loginErrors.focusField"
+          />
+
+          <el-form-item
+            prop="username"
+            data-field="username"
+            :error="loginErrors.fieldErrors['username']"
+          >
+            <el-input
+              v-model="form.username"
+              placeholder="请输入用户名"
+              :prefix-icon="User"
+              @change="syncFromNative"
+              @update:model-value="loginErrors.clearField('username')"
+            />
           </el-form-item>
 
-          <el-form-item prop="password">
-            <el-input v-model="form.password" type="password" placeholder="请输入密码" :prefix-icon="Lock" show-password @change="syncFromNative" />
+          <el-form-item
+            prop="password"
+            data-field="password"
+            :error="loginErrors.fieldErrors['password']"
+          >
+            <el-input
+              v-model="form.password"
+              type="password"
+              placeholder="请输入密码"
+              :prefix-icon="Lock"
+              show-password
+              @change="syncFromNative"
+              @update:model-value="loginErrors.clearField('password')"
+            />
           </el-form-item>
 
           <el-form-item>
@@ -82,22 +111,34 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, nextTick } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { User, Lock, Monitor, ChatDotRound, TrendCharts } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import { showError } from '@/utils/showError'
+import { useFormServerErrors, collectInvalidFieldMessages } from '@/composables/useFormServerErrors'
+import FormErrorSummary from '@/components/common/FormErrorSummary.vue'
 import { gsap, magneticHover, buttonPress, hoverShine, rippleClick, DUR, EASE } from '@/composables/useGsap'
 
 const authStore = useAuthStore()
 const formRef = ref<FormInstance>()
+const summaryRef = ref<InstanceType<typeof FormErrorSummary> | null>(null)
 const loading = ref(false)
 
 const form = reactive({
   username: '',
   password: ''
 })
+
+/**
+ * 服务端字段错误投影（Contract 4）。
+ *
+ * 不传 `labels`：`username`（用户名）与 `password`（密码）已在全局 `FIELD_LABELS` 中，
+ * 本页没有语义歧义，不需要 per-call 覆盖。
+ * 用 `reactive()` 持有返回值，让模板里 `loginErrors.fieldErrors['username']` 读到字符串
+ * 而不是 Ref。
+ */
+const loginErrors = reactive(useFormServerErrors({ fieldOrder: ['username', 'password'] }))
 
 const rules: FormRules = {
   username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
@@ -200,11 +241,23 @@ onMounted(() => {
 
 const handleLogin = async () => {
   if (!formRef.value) return
+
+  // 上一轮的残留投影不进入本次尝试；只清投影，不碰用户输入（ERR-05）。
+  loginErrors.reset()
+
   syncFromNative()
   try {
     await formRef.value.validate()
-  } catch {
-    ElMessage.warning('请检查输入信息')
+  } catch (invalidFields) {
+    // 客户端校验失败也走同一份汇总通道（GOV.UK 双呈现，Contract 4.3），零 toast。
+    // EP 的 validate() 拒绝值就是 invalidFields，因此直接投影，不需要第二套提示。
+    loginErrors.setErrors(
+      collectInvalidFieldMessages(
+        invalidFields as Record<string, Array<{ message?: string }>> | undefined
+      )
+    )
+    await nextTick()
+    summaryRef.value?.focusSummary()
     return
   }
   loading.value = true
@@ -212,7 +265,14 @@ const handleLogin = async () => {
     await authStore.login(form)
   } catch (error) {
     // 拦截器只翻译不展示：登录失败（密码错误 / 限流 / 账号禁用）必须由本调用点呈现。
-    showError(error, 'auth.loginFailed')
+    // validation → 0 toast，汇总 + 内联承担呈现；其余 kind 由 showError 呈现。
+    // 本页没有任何页级状态块，因此 forbidden / notFound 必须 opt-in 一条常驻 toast。
+    const err = showError(error, 'auth.loginFailed', { presentStates: true })
+    if (err.kind === 'validation') {
+      loginErrors.apply(err)
+      await nextTick()
+      summaryRef.value?.focusSummary()
+    }
   } finally {
     loading.value = false
   }
