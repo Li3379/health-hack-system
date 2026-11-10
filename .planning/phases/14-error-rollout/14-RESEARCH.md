@@ -1090,14 +1090,17 @@ Test files that must exist **before** the migration waves start (all new, in `hh
    - What we know: it is duplicated verbatim in 2 files and needed by ~13 more.
    - Recommendation: extract it into `useFormServerErrors.ts` as an exported helper **in the same task as the first form migration**, so the 13 later forms import it. Doing it first avoids 13 copies; doing it later means a 13-file cleanup.
 
+   - **RESOLVED (2026-11-10): 迁移前先提取，并入 A-1 前置改动。** 否则同一逻辑要改 15 遍且必然漂移。
 5. **Which `FIELD_LABELS` additions beyond the spec's 22?**
    - What we know: mood (5 fields), goals `description`/`startDate`/`endDate`/`note`, device-config (6 fields), user `avatar` are emitted by real DTOs but absent from the spec's 22.
    - Recommendation: add only those whose absence makes the summary unreadable (mood's 5 are the clearest case — `moodScore：...` is meaningless). For the rest, rely on UI-SPEC §4.5 rule 2 (render backend message alone). Record the decision per field in the ledger.
 
+   - **RESOLVED (2026-11-10): 22 + mood 的 5 个 = 27。** 否则 mood 表单向用户暴露原始 key；同步更新 `FIELD_LABELS` 的精确相等断言。
 6. **Does `FloatingChatPanel.vue` have an inline error surface?**
    - What we know: not read in this session.
    - Recommendation: read `src/components/ai-floating-ball/FloatingChatPanel.vue` around line 215 before deciding store call #8's fate.
 
+   - **RESOLVED (2026-11-10): 由 planner 在计划中就地核实。** 已有内联面则接入，否则用问题 2 的 retry 气泡。
 ## Environment Availability
 
 | Dependency | Required By | Available | Version | Fallback |
