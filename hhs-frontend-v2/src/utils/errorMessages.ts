@@ -27,7 +27,68 @@ export const ERROR_MESSAGES: Record<string, string> = {
   'auth.registerFailed': '注册未成功，请检查用户名与邮箱',
   'network.offline': '网络连接异常，请检查网络后重试',
   'server.unavailable': '服务暂时不可用，请稍后重试',
-  'dialog.unsavedConfirm': '内容尚未保存，确定离开？'
+  'dialog.unsavedConfirm': '内容尚未保存，确定离开？',
+
+  // --- 健康目标（views/goals）---
+  'goal.loadFailed': '无法加载健康目标，请点击重试',
+  'goal.saveFailed': '无法保存健康目标，请检查填写内容',
+  'goal.deleteFailed': '无法删除该健康目标，请稍后重试',
+
+  // --- 提醒（views/reminders）---
+  'reminder.loadFailed': '无法加载提醒列表，请点击重试',
+  'reminder.saveFailed': '无法保存提醒设置，请检查时间格式后重试',
+  'reminder.deleteFailed': '无法删除该提醒，请稍后重试',
+
+  // --- 体检报告（views/screening）---
+  'screening.loadFailed': '无法加载体检报告，请稍后重试',
+  'screening.deleteFailed': '无法删除该体检报告，请稍后重试',
+
+  // --- 心情记录（views/mood）---
+  'mood.saveFailed': '无法保存心情记录，请稍后重试',
+  'mood.loadFailed': '无法加载心情记录，请点击重试',
+  'mood.deleteFailed': '无法删除该心情记录，请稍后重试',
+
+  // --- 实时监测（views/realtime）---
+  'realtime.loadFailed': '无法加载实时数据，请点击重试',
+  'realtime.saveFailed': '无法保存实时指标，请检查设备连接',
+
+  // --- 健康预警（views/alerts）---
+  'alert.loadFailed': '无法加载健康预警，请点击重试',
+  'alert.updateFailed': '无法更新预警状态，请稍后重试',
+  'alert.deleteFailed': '无法删除该预警，请稍后重试',
+
+  // --- AI 会话（views/ai、components/ai-floating-ball）---
+  'ai.loadFailed': '无法加载 AI 会话，请稍后重试',
+  'ai.deleteFailed': '无法删除该会话，请稍后重试',
+
+  // --- 保健数据（views/wellness）---
+  'wellness.loadFailed': '无法加载保健数据，请稍后重试',
+  'wellness.saveFailed': '无法保存保健记录，请稍后重试',
+
+  // --- 设备配置（views/settings）---
+  'device.loadFailed': '无法加载设备配置，请点击重试',
+  'device.saveFailed': '无法保存设备配置，请稍后重试',
+  'device.syncFailed': '设备同步未完成，请检查连接后重试',
+
+  // --- 个人信息（views/user）---
+  'user.loadFailed': '无法加载个人信息，请稍后重试',
+  'user.saveFailed': '无法保存个人信息，请检查填写内容',
+
+  // --- 指标与评分（views/health）---
+  'metric.loadFailed': '无法加载指标记录，请点击重试',
+  'score.loadFailed': '无法加载健康评分，请点击重试',
+
+  // --- 通用资源消失（列表页删除后刷新）---
+  'resource.gone': '该记录已不存在，请刷新列表'
+
+  // 刻意复用既有键、不新增键的调用点（RESEARCH §"Dictionary key gaps" 的收敛结果）：
+  // - reminders/Index.vue:181 复用 alert.updateFailed（通用「状态更新失败」措辞贴切）
+  // - health/Score.vue:457 复用 score.loadFailed
+  // - prevention/Risk.vue:310,335 复用 profile.loadFailed / profile.saveFailed
+  // - settings/DevicePlatformConfig.vue:355 复用 device.saveFailed
+  // - OcrHistory 复用 ai.loadFailed / ai.deleteFailed
+  // - ai.sendFailed 刻意不新增：14-12 的发送失败走就地 retry 气泡，
+  //   再加一个字典键会形成第二套、且无人消费的词汇表。
 }
 
 /**
@@ -52,8 +113,47 @@ export const FIELD_LABELS: Record<string, string> = {
   lifestyleHabits: '生活习惯',
   familyHistory: '家族病史',
   allergyHistory: '过敏史',
-  notes: '备注说明'
+  notes: '备注说明',
+
+  // --- UI-SPEC Copywriting Contract 的 22 个新标签 ---
+  bloodType: '血型',
+  clientId: '客户端 ID',
+  clientSecret: '客户端密钥',
+  confirmPassword: '确认密码',
+  cronExpression: 'Cron 表达式',
+  dateRange: '起止日期',
+  email: '邮箱',
+  file: '报告文件',
+  institution: '体检机构',
+  newPassword: '新密码',
+  nickname: '昵称',
+  oldPassword: '原密码',
+  password: '密码',
+  phone: '手机号',
+  reminderType: '提醒类型',
+  reportDate: '报告日期',
+  reportName: '报告名称',
+  targetValue: '目标值',
+  title: '标题',
+  trend: '趋势',
+  unit: '单位',
+  username: '用户名',
+
+  // --- 心情表单（RecordMoodRequest 的 @NotNull / @Min / @Max 字段）---
+  // 这五个键是承重的：moodScore 无标签时，一次 mood 400 会在汇总里渲染
+  // `moodScore：心情评分不能为空` —— 把原始驼峰键露给用户。
+  // notes 已在上面存在（`备注说明`），心情表单的备注字段直接复用，因此是 5 个而非 6 个。
+  moodScore: '心情评分',
+  energyLevel: '精力值',
+  stressLevel: '压力值',
+  sleepQuality: '睡眠质量',
+  entryDate: '记录日期'
 }
+
+// 刻意不为以下字段加标签（Contract 4.5 规则 2：未知字段只渲染后端消息，绝不露原始键）：
+// description / startDate / endDate / note / 设备配置的 6 个字段 / avatar。
+// 理由：这些字段的后端消息本身已是完整中文句子，加标签只会制造噪音；
+// 需要更贴切措辞的页面用 useFormServerErrors 的 `labels` 覆盖（见 UI-SPEC §"必须用 labels 覆盖的歧义字段"）。
 
 /**
  * 解析最终展示文案：后端优先（D-05），其次场景字典，最后通用服务不可用。

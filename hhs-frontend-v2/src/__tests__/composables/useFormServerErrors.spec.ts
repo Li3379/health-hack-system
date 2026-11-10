@@ -1,6 +1,9 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import { ApiError } from '@/utils/appError'
-import { useFormServerErrors } from '@/composables/useFormServerErrors'
+import {
+  useFormServerErrors,
+  collectInvalidFieldMessages
+} from '@/composables/useFormServerErrors'
 
 // 本 composable 无 store 依赖，因此无需 setActivePinia。
 function validationError(fieldErrors: Record<string, string>, formField?: string): ApiError {
@@ -190,5 +193,38 @@ describe('useFormServerErrors', () => {
     expect(() => focusField('metricKey')).not.toThrow()
     expect(() => focusField('')).not.toThrow()
     expect(document.activeElement?.id).not.toBe('probe')
+  })
+
+  it('lets a caller-supplied label override the global field label table', () => {
+    // goals 的 title 是「目标标题」而非全局的「标题」—— 歧义字段靠 labels 覆盖，
+    // 不改全局表（UI-SPEC §"必须用 labels 覆盖的歧义字段"）。
+    const { summaryItems, setErrors } = useFormServerErrors({
+      labels: { title: '目标标题' }
+    })
+
+    setErrors({ title: '标题不能为空' })
+
+    expect(summaryItems.value[0].label).toBe('目标标题')
+    expect(summaryItems.value[0].label).not.toBe('标题')
+    // 后端消息不被 labels 影响。
+    expect(summaryItems.value[0].message).toBe('标题不能为空')
+  })
+
+  it('falls back to the global field label when no labels map is supplied', () => {
+    const { summaryItems, setErrors } = useFormServerErrors()
+
+    setErrors({ title: '标题不能为空' })
+
+    expect(summaryItems.value[0].label).toBe('标题')
+  })
+
+  it('collectInvalidFieldMessages keeps only fields that carry a message', () => {
+    expect(
+      collectInvalidFieldMessages({ value: [{ message: '请输入数值' }], unit: [] })
+    ).toEqual({ value: '请输入数值' })
+  })
+
+  it('collectInvalidFieldMessages returns an empty object for undefined input', () => {
+    expect(collectInvalidFieldMessages(undefined)).toEqual({})
   })
 })

@@ -24,8 +24,41 @@ const DICTIONARY_KEYS = [
   'auth.registerFailed',
   'network.offline',
   'server.unavailable',
-  'dialog.unsavedConfirm'
+  'dialog.unsavedConfirm',
+  // Phase 14（14-03）：Copywriting Contract 的 26 键 + mood 的 2 个读写失败键
+  'goal.loadFailed',
+  'goal.saveFailed',
+  'goal.deleteFailed',
+  'reminder.loadFailed',
+  'reminder.saveFailed',
+  'reminder.deleteFailed',
+  'screening.loadFailed',
+  'screening.deleteFailed',
+  'mood.saveFailed',
+  'mood.loadFailed',
+  'mood.deleteFailed',
+  'realtime.loadFailed',
+  'realtime.saveFailed',
+  'alert.loadFailed',
+  'alert.updateFailed',
+  'alert.deleteFailed',
+  'ai.loadFailed',
+  'ai.deleteFailed',
+  'wellness.loadFailed',
+  'wellness.saveFailed',
+  'device.loadFailed',
+  'device.saveFailed',
+  'device.syncFailed',
+  'user.loadFailed',
+  'user.saveFailed',
+  'metric.loadFailed',
+  'score.loadFailed',
+  'resource.gone'
 ]
+
+// 心情表单的五个受约束字段（RecordMoodRequest 的 @NotNull / @Min / @Max）。
+// 单独成常量：下面的循环断言依赖它，删键会立刻失败而不是静默通过。
+const MOOD_FIELD_KEYS = ['moodScore', 'energyLevel', 'stressLevel', 'sleepQuality', 'entryDate']
 
 const BANNED_COPY = /操作失败|请求失败|系统错误|出错了|Error|Failed|Invalid|Please|Sorry|Exception/
 
@@ -80,11 +113,28 @@ describe('resolveMessage', () => {
 })
 
 describe('FIELD_LABELS / fieldLabel', () => {
-  it('maps all 17 backend field names to Chinese labels', () => {
-    expect(Object.keys(FIELD_LABELS)).toHaveLength(17)
+  it('maps all 44 backend field names to Chinese labels', () => {
+    expect(Object.keys(FIELD_LABELS)).toHaveLength(44)
     expect(FIELD_LABELS.metricKey).toBe('指标类型')
     expect(FIELD_LABELS.warningHigh).toBe('警告高值')
     expect(FIELD_LABELS.notes).toBe('备注说明')
+  })
+
+  it('covers every field the contract calls out as newly labelled', () => {
+    expect(fieldLabel('moodScore')).toBe('心情评分')
+    expect(fieldLabel('cronExpression')).toBe('Cron 表达式')
+    expect(fieldLabel('targetValue')).toBe('目标值')
+    expect(fieldLabel('clientSecret')).toBe('客户端密钥')
+  })
+
+  it('never resolves a mood field back to its raw key (the mood-400 raw-key leak)', () => {
+    // 这条断言就是那个「本该捕获原始 key 泄漏」的断言：
+    // 一旦有人删掉 FIELD_LABELS.moodScore，汇总会渲染 `moodScore：心情评分不能为空`。
+    expect(fieldLabel('moodScore')).not.toBe('moodScore')
+    for (const field of MOOD_FIELD_KEYS) {
+      expect(fieldLabel(field), `missing label: ${field}`).not.toBe('')
+      expect(fieldLabel(field), `raw key leaked: ${field}`).not.toBe(field)
+    }
   })
 
   it('pins all four threshold field labels (THR-05: threshold violations must never render a blank label)', () => {
