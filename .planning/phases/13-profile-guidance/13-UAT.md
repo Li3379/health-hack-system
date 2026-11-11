@@ -5,7 +5,9 @@ source:
   - 13-VERIFICATION.md
   - 13-08-SUMMARY.md
 started: 2026-11-10T00:20:00Z
-updated: 2026-11-10T00:35:00Z
+updated: 2026-11-11T03:10:00Z
+reverified: 2026-11-11
+reverified_reason: verification fingerprint drift caused by Phase 14 migration commits touching 5 covered files
 ---
 
 ## Current Test
@@ -65,6 +67,57 @@ blocked_by: third-party
 reason: "本机 docker info 报 Server 29.8.1 可用，但 Testcontainers 仍报 'Could not find a valid Docker environment'，PreventionIntegrationTest 4 个用例全部因此 Error（非断言失败）。既有环境限制（WINDOWS.md #3），Phase 13 未引入；需在 Docker socket 对 JVM 可达的环境重跑"
 
 
+## 复验会话（2026-11-11）：验证指纹漂移后的重新确认
+
+**触发原因**：`verification.status` 报 `stale`。根因不是代码退化，而是 **Phase 14 的迁移提交改动了本阶段 VERIFICATION 的 5 个受覆盖文件**（`theme.css` ×2、`dashboard/Index.vue`、`health/Score.vue`、`prevention/Profile.vue`、`prevention/Risk.vue`），摘要比验证报告新，指纹失配。
+
+**漂移性质**：全部为 Phase 14 把裸 `ElMessage.error` 迁移到 `showError` 的加法式改动。两处需注意的语义点已逐条核对：
+
+- `Risk.vue` 的 `presentStates: true` **不改变校验通道** —— `showError` 中 `validation` 早退（`showError.ts:139`）先于 `presentStates` 判定（`:144`），因此 13-09 承诺的「校验 → 内联 + 汇总、零 toast」不受影响。
+- `collectInvalidFieldMessages` 由各页私有副本改为共享导出，函数体逐字未变（`b0e9a16` 的 diff 为纯删除）。
+
+### R-1. 9 条字段说明与三档重要度徽标（13-07 / SC1）
+result: pass
+evidence: |
+  `/prevention/profile` 实测：`.field-hint` 恰 **9** 条；徽标类同时存在 `hhs-imp-badge--required` / `--recommended` / `--optional` 三档；
+  承诺句「推荐与可选字段不填也可保存」全文出现 **1** 次。
+
+### R-2. 完整度分段数与图例严格等于字段数（13-01/13-06 / SC1）
+result: pass
+evidence: |
+  `.hhs-completeness-meter__seg` = **9**，`.completeness__legend-item` = **9**，`.completeness__state--missing` = **9**。
+  分数显示 `0%`、「已填 0 / 9」、等级 pill `hhs-tier-pill--basic`、无档案时的影响句
+  「尚未填写健康档案，评分与风险结果将按通用参考值估算。」；每行图例带 `visually-hidden` 的「未填」文本（无障碍）。
+
+### R-3. 无路由门禁、必填字段仍为 2 个（13-07 / SC5）
+result: pass
+evidence: |
+  `.el-form-item.is-required` 计数 = **2**（性别、出生日期）；页面全文无「无权访问 / 请先完善 / 必须先填写」类门禁文案。
+  与阶段前 `git show 6b3c74d` 的 2 个 `required: true` 一致。
+
+### R-4. 仪表盘提示横幅三动作 + 点名缺失项 + 频率上限写入（13-08 / SC4）
+result: pass
+evidence: |
+  `.profile-banner` 文案：「档案完整度 0%，还缺 9 项 / 缺少性别、出生日期、身高、体重、BMI、血型、过敏史、家族病史、生活习惯，健康评分与风险结果会按参考值估算。」
+  按钮实测 **3 个**：「完善档案」「稍后提醒」「×」。
+  点「稍后提醒」→ 横幅卸载、`localStorage.hhs_profile_reminder_dismissed_at = 2026-11-11T02:54:45.301Z`（频率上限写入生效）。
+
+### R-5. 估算徽标双页渲染且跳转带 ?focus=（13-10 / SC2）
+result: pass
+evidence: |
+  `/health/score` 与 `/prevention/risk` 均渲染 `button` 承载「基于不完整档案估算 · 完善档案」。
+  点击后跳转 `http://localhost:5173/prevention/profile?focus=gender` —— `goProfileWithFocus` 的 query 契约成立。
+
+### R-6. 风险页三段式创建路径仍在（13-09 / SC5）
+result: pass
+evidence: |
+  点「创建评估」后面板同时提供「直接创建（按估算）」与「放弃创建」，全程 `.el-message` 计数 **0**
+  （放弃创建不产生任何提示，也无 API 调用）。
+
+**环境说明（复验者必读）**：IAB 面板非前台时 `document.hasFocus() === false`，Chrome 会冻结 CSS 动画时间轴
+（实测 8 个动画 `currentTime` 恒为 0），弹层 leave 过渡不结束、遮罩滞留。这与 Phase 12 向导自动关闭属同一类环境假阳性，
+**不是代码缺陷**；本次所有判定均以 DOM/样式读数与 localStorage 为准，不以遮罩消失或过渡完成为准。
+
 ## Automated Coverage (pre-verified — 不再重复人工验证)
 
 以下由全量自动化钉死（后端 845 / 前端 445 全绿，编排器独立复跑）：
@@ -90,6 +143,16 @@ issues: 0
 pending: 0
 skipped: 0
 blocked: 1
+
+### 复验会话（2026-11-11）
+
+total: 6
+passed: 6
+issues: 0
+skipped: 0
+blocked: 0
+
+复验 6 项全部通过，无新增缺陷。唯一 blocked 项仍为既有 Testcontainers 环境限制（`WINDOWS.md #3`），与代码无关。
 
 ## Gaps
 

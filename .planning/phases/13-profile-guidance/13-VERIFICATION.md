@@ -1,6 +1,6 @@
 ---
 phase: 13-profile-guidance
-verified: 2026-11-10T00:40:00Z
+verified: 2026-11-11T03:10:00Z
 status: passed
 score: 12/12 must-haves verified
 covered_files:
@@ -69,9 +69,30 @@ covered_files:
   - hhs-frontend-v2/src/views/health/Score.vue
   - hhs-frontend-v2/src/views/prevention/Profile.vue
   - hhs-frontend-v2/src/views/prevention/Risk.vue
-covered_digest: "v1:sha256:cfb34cfe319032ffedf518f573bac77c36cd85f4918a12226eb14d435d6004cc"
+covered_digest: "v1:sha256:7df641550da503a7c040ec8a94957528d60aeb37beae32058f5e5eec7f22f43e"
 behavior_unverified: 0
 overrides_applied: 0
+re_verification_2026_11_11:
+  trigger: "verification.status reported stale — Phase 14 migration commits touched 5 of this phase's covered_files"
+  scope: "re-ran the six user-visible checkpoints in a live stack; no full UAT re-run"
+  result: "6/6 reverification checkpoints pass, 0 new defects"
+  gates:
+    backend: "845 tests / 0 failures (BUILD SUCCESS)"
+    frontend: "642 tests / 59 files passed"
+  drifted_files_justification: |
+    All 5 drifted files are additive Phase 14 migrations from bare ElMessage.error to showError:
+    theme.css (error-border rules appended), dashboard/Index.vue, health/Score.vue,
+    prevention/Profile.vue, prevention/Risk.vue. Two semantic points were checked explicitly:
+    (a) Risk.vue's new `presentStates: true` does NOT widen the validation channel — showError's
+        `validation` early-return (showError.ts:139) precedes the presentStates test (:144), so
+        truth 7's "validation renders inline + summary with zero toast" is unchanged; and
+    (b) collectInvalidFieldMessages became a shared export (b0e9a16) with a pure-deletion diff,
+        so first-error-wins semantics are identical.
+  environment_note: |
+    IAB non-foreground (document.hasFocus() === false) freezes every CSS animation timeline,
+    so overlay leave transitions never complete. Same class of environment false positive as
+    Phase 12's wizard auto-close. All verdicts here were taken from DOM/computed-style readings
+    and localStorage, never from overlay disappearance.
 human_verification:
   - test: "Open /prevention/profile at a 320px viewport width and read a field's explanation line (e.g. 过敏史 hint)."
     expected: "The hint wraps onto its own line under the control; a 24-character explanation is never clipped, and no `overflow:hidden` truncation occurs."
