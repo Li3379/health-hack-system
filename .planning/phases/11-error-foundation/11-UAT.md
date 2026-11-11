@@ -11,8 +11,10 @@ source:
   - 11-07-SUMMARY.md
   - 11-08-SUMMARY.md
 started: 2026-11-07T01:00:00Z
-updated: 2026-11-07T09:25:00Z
+updated: 2026-11-11T03:05:00Z
 mode: automated-browser
+reverified: 2026-11-11
+reverified_reason: verification fingerprint drift caused by Phase 14 migration commits touching 19 covered files
 ---
 
 ## Tests
@@ -122,6 +124,62 @@ evidence: |
   `120.00 / 100.00 / 50.00 / 40.00`，指标类型显示「心率」。
   全流程未出现 `Threshold already exists`。
 
+## 复验会话（2026-11-11）：验证指纹漂移后的重新确认
+
+**触发原因**：`verification.status` 报 `stale`。根因不是代码退化，而是 **Phase 14 的迁移提交改动了本阶段 VERIFICATION 的 `covered_files`**（19 个受覆盖文件被 14-01/14-02/14-03/14-09/14-11/14-14 触及），摘要比验证报告新，指纹失配。
+
+**复验方式**：只重测受漂移影响的呈现面，其余真值以 diff 范围 + 全量门禁重新确认（不做全量重跑，因为原 7 项检查覆盖的场景未被修改）。
+
+### R-1. 双呈现契约在漂移后仍成立（`Profile.vue` 被 Phase 14 改过 4 次）
+result: pass
+evidence: |
+  实时读者：`/prevention/profile` 保存空必填项后——
+  - `toastCount = 0`（零 toast，D-02 分工未破）
+  - `.form-error-summary` 恰 1 个，标题「请修正以下 2 项填写问题」
+  - 汇总条目 2 条：「性别：请选择性别」「出生日期：请选择出生日期」
+  - 内联错误 2 条，`.el-form-item.is-error` 计数 = 2
+  - 点击汇总第 1 条 → `document.activeElement` 落在 `.el-form-item` 标签为「性别」的 `input[type=radio]`
+  - 已输入的「过敏史 = 青霉素过敏」在失败提交后保留（ERR-05 非破坏性）
+
+### R-2. 视觉契约数值未漂移（`FormErrorSummary.vue` 未被 Phase 14 修改，但 `theme.css` 改了 5 次）
+result: pass
+evidence: |
+  汇总标题 computed style：`14px / 600 / 19.6px`（= 14 × 1.4），色 `rgb(185,28,28)`（= `#b91c1c` token）。
+  列表 `max-height: 144px; overflow-y: auto`。
+
+### R-3. 四通道 toast 分类在 9 步分类器插入 403/404 后未回归
+result: pass
+evidence: |
+  - **业务失败**：错误密码登录 → 恰 1 条「密码不正确: 用户名或密码错误」，停留 `/login`，零英文。
+  - **网络失败**：劫持 `XMLHttpRequest.send` 制造真实 `error` 事件 → 删除阈值 → 恰 1 条「网络连接异常，请检查网络后重试」+「重试」按钮。
+  - **用户取消**：删除 → 确认框点「取消」→ 零 toast、行数仍 6。
+  - **令牌过期**：写入无效 token → 恰 1 条「登录已过期，请重新登录」并跳 `/login`，1.2s 与 3.2s 两次采样均为 1（401 闩锁仍先于新增的 403/404 分支）。
+
+### R-4. OAuth 回调页仍只显示固定中文
+result: pass
+evidence: |
+  - `/oauth/callback/weibo` → 「无效的平台 / 该设备平台暂不支持授权连接」，禁用串 0 命中。
+  - `/oauth/callback/huawei?error=access_denied&error_description=User%20denied%20access` → 「授权被拒绝 / 您在授权页面取消了授权」，`User denied access` 0 命中（外部可控参数仍不回显）。
+
+### R-5. 双主题错误 token 未漂移
+result: pass
+evidence: |
+  `data-theme` 切换实测：light → `--hhs-color-error-text: #b91c1c`、`--hhs-color-error-tint: #fef0f0`；
+  dark → `#f56c6c`、`rgba(245,108,108,0.12)`。与 Phase 11 原记录逐字一致。
+  `theme.css` 四条 `body .el-*` 归一化规则（`:1220/:1226/:1232/:1238`）仍在，无 `!important` 回退成加载顺序依赖。
+
+### R-6. 结构性真值（不重测，改以门禁 + diff 范围确认）
+result: pass
+evidence: |
+  - `utils/` 内 `ElMessage` 唯一出口仍是 `showError.ts`（`grep` 确认）。
+  - `src/stores` 内 `ElMessage.error` = **0**。
+  - 生产裸 `ElMessage.error` 残留 **87 → 4**（Phase 14 按 D-01 迁移，比本阶段基准更好，非退化）。
+  - `normalizeApiError` 幂等直通 `raw instanceof ApiError` 仍在 `:91`，位于 `isCancel` 之前。
+  - `roles=status` / `aria-live=polite` / `aria-busy` 在 `ErrorState.vue` 未变。
+  - 全量门禁：后端 **845 tests / 0 failures**（BUILD SUCCESS）；前端 **642 tests / 59 files** 全绿。
+
+**环境说明（复验者必读）**：IAB 面板非前台时（`document.hasFocus() === false`）Chrome **冻结全部 CSS 动画时间轴**（实测 8 个动画 `currentTime` 恒为 0），导致 `el-message-box` 的 leave 过渡永不结束、遮罩滞留。这是与 Phase 12 同一类环境假阳性，**不是代码缺陷**——R-3 的取消判定因此以「零 toast + 行数不变」为准，不以遮罩消失为准。
+
 ## Current Test
 
 [testing complete]
@@ -134,6 +192,16 @@ issues: 0
 issues_found_and_fixed: 4
 skipped: 0
 blocked: 0
+
+### 复验会话（2026-11-11）
+
+total: 6
+passed: 6
+issues: 0
+skipped: 0
+blocked: 0
+
+复验 6 项全部通过，无新增缺陷。验证指纹已刷新；本阶段结论维持 `passed`。
 
 ## Issues Found and Fixed In-Session
 

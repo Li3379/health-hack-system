@@ -1,6 +1,6 @@
 ---
 phase: 11-error-foundation
-verified: 2026-11-07T09:42:10Z
+verified: 2026-11-11T03:05:00Z
 status: passed
 score: 18/18 must-haves verified
 covered_files:
@@ -57,9 +57,33 @@ covered_files:
   - .planning/phases/11-error-foundation/11-07-SUMMARY.md
   - .planning/phases/11-error-foundation/11-08-PLAN.md
   - .planning/phases/11-error-foundation/11-08-SUMMARY.md
-covered_digest: "v1:sha256:8015ca89f25244c86b2c6351c6d8251f954fa0dd76531574c6ab1c28a7116004"
+covered_digest: "v1:sha256:c5689eedfa2acee882fc8da19ee49b469b77c44e5deca84df10d14da61d0ffdb"
 behavior_unverified: 0
 overrides_applied: 0
+re_verification_2026_11_11:
+  trigger: "verification.status reported stale — Phase 14 migration commits touched 19 of this phase's covered_files"
+  scope: "re-ran the drifted presentation checkpoints in a live stack plus full regression gates; no full UAT re-run"
+  result: "6/6 reverification checkpoints pass, 0 new defects"
+  gates:
+    backend: "845 tests / 0 failures (BUILD SUCCESS)"
+    frontend: "642 tests / 59 files passed"
+  drifted_files_justification: |
+    All 19 drifted files fall into two groups, neither of which invalidates a Phase 11 truth:
+    (a) the shared error utilities themselves (appError.ts, showError.ts, errorMessages.ts,
+        ErrorState.vue, useFormServerErrors.ts, theme.css) — Phase 14 EXTENDED them additively
+        (forbidden/notFound kinds, presentStates, 46-key dictionary) and its own 14-VERIFICATION.md
+        re-verified them line by line; the 9-step classification order keeps 401 at step 3, ahead of
+        the new 403/404 at steps 4-5, so every Phase 11 channel classification is unchanged.
+    (b) consumer pages Phase 14 migrated from bare ElMessage.error to showError (Login.vue,
+        Register.vue, Thresholds.vue, Profile.vue, PushSettings.vue, metricMeta.ts, push.ts) —
+        migrating MORE call sites onto the single exit strengthens truth 2 and truth 10, and the
+        residual count fell 87 -> 4.
+  environment_note: |
+    IAB non-foreground (document.hasFocus() === false) freezes every CSS animation timeline
+    (all 8 observed animations held currentTime at 0), so el-message-box leave transitions never
+    complete and the overlay lingers. Same class of environment false positive recorded for
+    Phase 12's wizard auto-close. Cancel-channel verdicts were therefore taken from
+    "zero toast + row count unchanged", not from overlay disappearance.
 re_verification:
   previous_status: gaps_found
   previous_score: 17/18
