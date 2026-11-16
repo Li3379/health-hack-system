@@ -1,6 +1,6 @@
 ---
 phase: 14-error-rollout
-verified: 2026-11-10T16:11:12Z
+verified: 2026-11-16T15:50:00Z
 status: passed
 score: 21/24 must-haves verified
 behavior_unverified: 3
@@ -81,7 +81,7 @@ covered_files:
   - hhs-frontend-v2/src/views/user/Profile.vue
   - hhs-frontend-v2/src/views/user/PushSettings.vue
   - hhs-frontend-v2/src/views/wellness/Dashboard.vue
-covered_digest: "v1:sha256:c16a195d07a1ad339b66832a4f39aa4d485f97f1565108ff57f2af188e47f70d"
+covered_digest: "v1:sha256:12c0f6974a98dbd89f0241b3e389633a3dfd730db66c2cfe735c64ba34755866"
 decision_coverage:
   honored: 6
   total: 6

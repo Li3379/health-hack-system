@@ -145,8 +145,9 @@ describe('appError.normalizeApiError', () => {
       expect(err.retryable).toBe(false)
     })
 
-    // 线上真实形态：BusinessException 经 parseCodeToInt 回退后信封 code 恒为 500。
+    // 信封 code 500 仍是 business：真实传输层 5xx 走第 7 步，信封内的 500 走第 8 步。
     // 这条是本计划的反回归锚点 —— 把 5xx 判定放到信封业务码之前就会失败。
+    // （旧后端把所有业务失败都压成 500，新后端改下发 ErrorCode.httpStatus，但本断言两者都必须成立。）
     it('keeps envelope code 500 as business, not server, and preserves the Chinese message', () => {
       const err = normalizeApiError(
         axiosError(200, {
@@ -311,6 +312,34 @@ describe('appError.normalizeApiError', () => {
         const err = normalizeApiError(axiosError(200, { code: 500, errorCode, message: '不存在' }))
         expect(err.kind, `errorCode=${errorCode}`).toBe('notFound')
         expect(err.code).toBe(errorCode)
+      }
+    })
+
+    it('⑤ 后端口径统一后，9 个 404 族码在数值 404 形态下仍judged notFound 而非 business', () => {
+      // ee4d534 让 GlobalExceptionHandler 下发 ErrorCode.httpStatus，于是这些码的信封
+      // code 从恒为 500 变成 404。若分类器仍只靠 errorCode 正则（不认数值 404），
+      // 或反过来只认数值却没保住正则，两个方向都会静默退化 —— 前者退回 business
+      // 并弹出一条本不该出现的 toast，后者丢掉旧后端兼容。
+      const codes = [
+        'user.not_found',
+        'health.metric_not_found',
+        'health.profile_not_found',
+        'health.alert_not_found',
+        'goal.not_found',
+        'mood.entry_not_found',
+        'resource.not_found',
+        'resource.file_not_found',
+        'not_found'
+      ]
+
+      for (const errorCode of codes) {
+        // 新后端形态：信封 code 已是语义 404。
+        const modern = normalizeApiError(axiosError(200, { code: 404, errorCode, message: '不存在' }))
+        expect(modern.kind, `modern ${errorCode}`).toBe('notFound')
+
+        // 旧后端形态：信封 code 回退 500，只能靠正则识别。
+        const legacy = normalizeApiError(axiosError(200, { code: 500, errorCode, message: '不存在' }))
+        expect(legacy.kind, `legacy ${errorCode}`).toBe('notFound')
       }
     })
   })

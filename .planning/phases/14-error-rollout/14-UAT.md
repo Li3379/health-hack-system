@@ -5,7 +5,9 @@ source:
   - 14-VERIFICATION.md
   - 14-UAT-SCRIPT.md（13 步可执行脚本原件，保留备查）
 started: 2026-11-11T01:10:00Z
-updated: 2026-11-11T02:20:00Z
+updated: 2026-11-16T15:50:00Z
+reverified: 2026-11-16
+reverified_reason: ee4d534 removed the "envelope code is always 500" premise that the 403/404 channel was built on
 ---
 
 ## 采样口径
@@ -129,6 +131,61 @@ blocked: 0
    - reason: 全站所有 textarea 均为**可选**字段（描述类），永不进入 `is-error` 状态，规则无从触发。不是缺陷，是当前产品中无该场景
    - artifacts: `hhs-frontend-v2/src/assets/styles/theme.css:1421-1424`（规则②已就位）
    - missing: 若将来出现必填 textarea，需补验
+
+## 环境限制说明（非缺陷，供后续复验者参考）
+
+1. **`:focus-within` 视觉在非前台窗口被抑制** —— `document.hasFocus() === false` 时 Chrome 把 `:focus-within` 的 box-shadow 算成 `rgba(0,0,0,0) 0px 0px 0px 0px`。步骤 12 因此一度误判为缺陷。**复验时请保持浏览器窗口在前台**。
+2. **CSS transition 中间态** —— 步骤 11 的 `border-color` 有 `transition: border-color var(--dur-fast)`，动作后立即读会得到过渡起点色 `rgba(0,0,0,0.08)`。**须等 150ms 后再读**，否则会把"正在变红"误判成"没生效"。
+3. **Vite CSS 缓存** —— dev server 对 `theme.css` 的改动不会热更到已加载的样式表；UAT 期间需**重启 `npm run dev`** 才能看到新规则（本轮重启后 `is-error` 规则从 1 条变 7 条）。
+4. **CSS 动画时间轴在非前台窗口被整体冻结**（2026-11-16 复验补记）—— `document.hasFocus() === false` 时实测 8 个动画的 `currentTime` 恒为 0，`el-message-box` 的 leave 过渡永不结束、遮罩滞留。与 Phase 12 向导自动关闭属同一类环境假阳性，**不是代码缺陷**。凡涉及「弹层是否消失」的判定，应以 DOM/样式/存储读数为准，不以过渡完成或遮罩消失为准。
+
+## 复验会话（2026-11-16）：信封语义变更后的重新确认
+
+**触发原因**：`verification.status` 报 `stale`。根因是 `ee4d534` 主动改变了本阶段的关键前提。
+
+**前提变更**：本阶段 D-03 的 403/404 状态通道建立在「业务失败的信封 `code` 恒为 500 回退值」之上 —— 正因如此，`appError.ts` 第 4/5 步才必须靠 `errorCode` 正则识别。`ee4d534` 让 `GlobalExceptionHandler` 改下发 `ErrorCode.httpStatus`，该前提消失：9 个 `404` 族码的数值信封 code 从 500 变成 404。
+
+**风险面**：`showError` 对 `notFound` **默认零 toast**。若某调用点原本依赖 404 触发提示，分类变化会让它静默。
+
+### 复-1. 403 页级块未受影响
+result: pass
+evidence: |
+  `/settings/device-platform` 实测：`.error-state--page`、标题「无权访问此页面」、
+  单个「返回首页」、**零 toast**。403 走第 4 步，位于分类顺序不变的位置。
+
+### 复-2. 404 内容区块未受影响
+result: pass
+evidence: |
+  `/screening/detail/999999` 实测：`.error-state`（无 `--page` 后缀）、标题「资源不存在」、
+  两个动作（返回列表 / 重新加载该记录）、**零 toast**。与 403 的形态对比仍然成立。
+
+### 复-3. 409 仍归 business，未被误吞成状态通道
+result: pass
+evidence: |
+  后端实测 `POST /api/thresholds` 重复提交 → `{"code":409,"errorCode":"resource.exists",
+  "message":"资源已存在: 该指标已有阈值，是否改为编辑？"}`。
+  分类第 4/5 步只匹配 403/404，409 落到第 8 步 business，**未被新语义改变**。
+  `appError.spec.ts`「classifies envelope code 409 as business」通过。
+
+### 复-4. 分类顺序契约文本已修正，并加了非空泛的反回归锚点
+result: pass
+evidence: |
+  `appError.ts:72-80` 原本断言「第 4/5 步必须读 `errorCode`，因为信封 code 恒回退 500」。
+  该断言随改动失效，已改写为「三种证据缺一不可（数值信封 code / 真实 status / errorCode 正则）」，
+  并明确保留正则的理由是**兼容旧后端**，避免后人误删。
+  `appError.spec.ts` 新增用例 ⑤：对全部 **9** 个 404 族码，同时断言
+  **现代形态（信封 code=404）** 与 **旧形态（code=500 + errorCode）** 都判为 `notFound`。
+  **变异验证**：临时删除正则分支后，用例 ⑤ 与原有 ④、分隔符族共 **3 个** 用例转红 → 断言非空泛；
+  恢复后 34/34 通过。
+
+### 复-5. 门禁
+result: pass
+evidence: |
+  - 前端全量：**643 tests / 59 files** 通过（原 642 + 新增反回归用例 1）。
+  - 后端全量：**849 tests / 0 failures**。
+
+**本阶段结论维持 `passed`**，无新增功能缺陷。上述 4 条环境说明与 1 条既有缺陷（`PreventionController`
+三处 `Result.failure(404, msg)` 不带 `errorCode`，见 11-UAT R-11）一并结转。
 
 ## 环境限制说明（非缺陷，供后续复验者参考）
 

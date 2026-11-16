@@ -11,10 +11,10 @@ source:
   - 11-07-SUMMARY.md
   - 11-08-SUMMARY.md
 started: 2026-11-07T01:00:00Z
-updated: 2026-11-11T03:05:00Z
+updated: 2026-11-16T15:35:00Z
 mode: automated-browser
-reverified: 2026-11-11
-reverified_reason: verification fingerprint drift caused by Phase 14 migration commits touching 19 covered files
+reverified: 2026-11-16
+reverified_reason: ee4d534 changed the envelope code contract — business failures now carry the semantic HTTP status, so 9 not-found codes reclassify from business to notFound
 ---
 
 ## Tests
@@ -179,6 +179,66 @@ evidence: |
   - 全量门禁：后端 **845 tests / 0 failures**（BUILD SUCCESS）；前端 **642 tests / 59 files** 全绿。
 
 **环境说明（复验者必读）**：IAB 面板非前台时（`document.hasFocus() === false`）Chrome **冻结全部 CSS 动画时间轴**（实测 8 个动画 `currentTime` 恒为 0），导致 `el-message-box` 的 leave 过渡永不结束、遮罩滞留。这是与 Phase 12 同一类环境假阳性，**不是代码缺陷**——R-3 的取消判定因此以「零 toast + 行数不变」为准，不以遮罩消失为准。
+
+## 复验会话（2026-11-16）：信封语义变更后的重新确认
+
+**触发原因**：`verification.status` 再次报 `stale`。这次不是指纹滞后，而是 **`ee4d534` 主动推翻了本阶段 truth 7 的前提** —— `handleBusinessException` 从 `Result.failure(ec.getCode(), message)` 改为 `Result.failure(ec.getHttpStatus(), ec.getCode(), message)`，业务失败的信封 `code` 不再恒为 500 回退值。
+
+**为什么必须重测而不是刷摘要**：9 个 `404` 族 ErrorCode 的分类结果在改动前后**从 `business` 变成了 `notFound`**（`appError.ts` 第 5 步 `envelopeCode === 404` 命中）。而 `showError` 对 `notFound` **默认零 toast**。如果某处调用点原本依赖 404 触发一条提示，这次改动会让它变成静默失败 —— 这是必须实测确认的风险面。
+
+### R-7. 档案 404 端到端：仍进入可编辑、零 toast
+result: pass
+evidence: |
+  先确认后端确实在走新语义：`GET /api/prevention/profile`（无档案）返回
+  `{"code":404,"message":"健康档案不存在，请先创建","data":null}`，HTTP 200 信封。
+  **注意该响应没有 `errorCode`** —— 因为它来自 `PreventionController.java:62` 的 `Result.failure(404, msg)`，
+  不走 `handleBusinessException`。这是既有行为，与 `ee4d534` 无关，已单独记录。
+
+  `/prevention/profile` 实测：`toastCount = 0`、页面停在只读态并显示「编辑」按钮；
+  点「编辑」后出现「保存 / 放弃编辑」、零 toast、`.el-form-item.is-required` = 2、无「无权访问」类门禁文案。
+  与 N-1 的原记录（「编辑」按钮可用并成功进入编辑态）一致，**不是回归**。
+
+  说明：`editing` 不会自动置 true 是既有行为 —— `Profile.vue:397-399` 的 notFound 判定读
+  `err.status === 404 || err.code === 'health.profile_not_found' || err.code === 'resource.not_found'`，
+  而该 404 的 `err.status` 是 200（信封）且无 `errorCode`，三条全不命中。改动前后完全一致
+  （`git show ee4d534^:...appError.ts` 的第 5 步表达式逐字相同）。
+
+### R-8. 409 重复资源：仍归 business，未被新语义吞成静默
+result: pass
+evidence: |
+  后端实测：`POST /api/thresholds` 首次成功（`id: 17`），重复提交返回
+  `{"code":409,"message":"资源已存在: 该指标已有阈值，是否改为编辑？","data":null,"errorCode":"resource.exists"}`。
+  前端分类不变：`appError.spec.ts:133`「classifies envelope code 409 as business with backend message」
+  断言 `kind === 'business'`、`code === 'resource.exists'`、`retryable === false` —— 该用例在复验中通过。
+  原因：分类第 4/5 步只匹配 403 与 404，409 落到第 8 步的 business 分支，**没有被新语义改成 notFound**。
+
+### R-9. 四条展示通道的分工未被破坏
+result: pass
+evidence: |
+  - **403 页级块**：`/settings/device-platform` → `.error-state--page`、「无权访问此页面」、单个「返回首页」、**零 toast**。
+  - **404 内容区块**：`/screening/detail/999999` → `.error-state`（无 `--page` 后缀）、
+    两个动作（返回列表 / 重新加载该记录）、**零 toast**。与 403 形成预期对比。
+  - **business（409）**：见 R-8，仍走一条可重试文案通道。
+  - **auth（401）**：本会话未重测，其分类路径（第 3 步）位于新增的 403/404 之前，逻辑上不可能被影响；
+    `request.spec.ts` / `auth.spec.ts` 全绿。
+
+### R-10. 全量门禁
+result: pass
+evidence: |
+  - 后端 `mvn -f hhs-backend/pom.xml test`：**849 tests / 0 failures / 0 errors**（比原基线 845 多 4 个新测例，
+    全部来自 `GlobalExceptionHandlerTest` 与 `UserReminderControllerTest`）。
+  - 前端 `npm --prefix hhs-frontend-v2 run test:run`：**642 tests / 59 files** 全绿。
+  - 错误路径专项：`appError.spec.ts` + `showError.spec.ts` + `ProfileErrorSample.spec.ts` +
+    `ErrorLayerSample.spec.ts` 共 **74 tests** 全绿。
+
+### R-11. 发现并记录一个既有缺陷（非本阶段、非本次改动引入）
+result: pass
+evidence: |
+  `PreventionController.java:62/79/167` 三处使用 `Result.failure(404, "健康档案不存在，请先创建")`，
+  该重载**不设置 `errorCode`**（`Result.java:77` 只填 `code`/`message`）。因此档案 404 响应缺少
+  `errorCode` 字段，`Profile.vue` 无法靠 `err.code` 识别「不存在」，只能靠用户手动点「编辑」。
+  改动前同样如此（`parseCodeToInt` 会把它压成 500，更糟）。记为 **WINDOWS 观察项**，
+  建议后续统一为 `Result.failure(ErrorCode.HEALTH_PROFILE_NOT_FOUND, ...)`。
 
 ## Current Test
 

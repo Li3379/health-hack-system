@@ -1,6 +1,6 @@
 ---
 phase: 11-error-foundation
-verified: 2026-11-11T03:05:00Z
+verified: 2026-11-16T15:50:00Z
 status: passed
 score: 18/18 must-haves verified
 covered_files:
@@ -57,7 +57,7 @@ covered_files:
   - .planning/phases/11-error-foundation/11-07-SUMMARY.md
   - .planning/phases/11-error-foundation/11-08-PLAN.md
   - .planning/phases/11-error-foundation/11-08-SUMMARY.md
-covered_digest: "v1:sha256:c5689eedfa2acee882fc8da19ee49b469b77c44e5deca84df10d14da61d0ffdb"
+covered_digest: "v1:sha256:39169a5644021422c37c47607d2751c66d5d21d7964dbfd4ecc686fd1c05123d"
 behavior_unverified: 0
 overrides_applied: 0
 re_verification_2026_11_11:
@@ -146,7 +146,7 @@ deferred:
 | 4 | ROADMAP SC4 — 后台轮询/元数据预加载失败无 toast；令牌过期并发请求最多一条提示与一次跳转，且闩锁在登录成功后复位 | ✓ VERIFIED | `App.vue:18/23` 均传 `{ silent: true }`；`metricMeta.ts:59-84`、`alert.ts:11-22` 透传；`axios.d.ts:8` 模块增强；`showError.ts:131` silent 零 toast；`request.ts:71-75` 401 闩锁 + 单次 `logout({reason:'expired'})`；`authSession.ts` 全文 18 行零 import；`auth.ts:28` 登录成功 `resetAuthLatch()`。`request.spec.ts:139-165`（并发 401 单次 logout、复位后再次通知）、`auth.spec.ts:43-50`、`metricMeta.spec.ts:119-127` 证明 |
 | 5 | ROADMAP SC5 — 短时间内相同错误提示自动合并为一条 | ✓ VERIFIED | 字符串分支 `grouping: true`（`showError.ts:173-182`）；VNode 分支 `isDuplicateVNodeToast` 2000ms 模块级闩锁（`:95-106`、`:188`）；`registerToast` 最多 3 条且跳过 retry 类（`:66-78`）。`showError.spec.ts:133/164-179/245/252` 用假计时器证明；`ErrorLayerSample.spec.ts:185-199` 断言连续两次网络失败 ≤ 1 条 |
 | 6 | 后端字段校验响应含 `fieldErrors[]`（field/message/code），同时消费 `getFieldErrors()` 与 `getGlobalErrors()`，上限 20 条 | ✓ VERIFIED | `GlobalExceptionHandler.java:111-127` 两条循环 + `:117` `.limit(MAX_FIELD_ERRORS)`（`:44` = 20）；`:294-309` `extractField()` 缺失路径归 `_global`；`FieldErrorVO.java:16` record 三键 |
-| 7 | `Result.code` 数值语义不变、`parseCodeToInt` 未改、`errorCode`/`fieldErrors`/`errors` 为逐字段 `@JsonInclude(NON_EMPTY)` | ✓ VERIFIED | `Result.java:38-51` 三字段各自注解、类级无注解；`:140-146` `parseCodeToInt` 原样回退 500；`:59-67` 六参构造器；`:104-123` `failure(int,String,String)` / `invalidInput` |
+| 7 | `Result.code` 数值语义与 `parseCodeToInt` 的契约、`errorCode`/`fieldErrors`/`errors` 为逐字段 `@JsonInclude(NON_EMPTY)` | ✓ VERIFIED（语义已修订，见右） | **2026-11-16 修订**：原表述为“`Result.code` 数值语义不变”，该约束已被 `ee4d534` 主动推翻 —— `handleBusinessException` 改为 `Result.failure(getHttpStatus(), code, message)`，业务失败的信封 `code` 现在等于 `ErrorCode.httpStatus`（404/409/400），不再恒为回退值 500。修订后的契约：`parseCodeToInt` 本身仍原样回退 500 且未改（`:140-146`），仍是 `failure(String,String)` 的路径；显式传数值码的调用方（含 `PreventionController` 的 3 处 `failure(404, msg)`）行为不变。三字段逐字段 `@JsonInclude(NON_EMPTY)`（`:38-51`）与 `failure(int,String,String)` / `invalidInput`（`:104-123`）均未变。**该修订使 truth 15/16 的“一次失败一次呈现”契约更强而非更弱**：404 现在数值可判定，前端无需仅靠 `errorCode` 反推。回归证据：`GlobalExceptionHandlerTest` 断言 `code == 409` 与 404 族 `code == 404`；后端 849 / 0 failures。 |
 | 8 | `request.ts` 零 `ElMessage`、抛出类型化 ApiError、固定 `Accept-Language: zh-CN`、含 401 闩锁与 retryRequest | ✓ VERIFIED | `request.ts` 全文无 ElMessage；`:26` Accept-Language；`:52`/`:55` 两分支 `normalizeApiError`；`:59-62` retryRequest 挂载；`:71-75` 闩锁 |
 | 9 | `normalizeApiError` 对已归一化 ApiError 幂等（同一引用，先于 isCancel） | ✓ VERIFIED | `appError.ts:81` `if (raw instanceof ApiError) return raw` 位于 `:84` isCancel 之前；`appError.spec.ts` 以 `toBe` 断言同一引用 |
 | 10 | `utils/` 只有 `showError.ts` import ElMessage；`composables/` 与 `components/common/` 无 ElMessage import | ✓ VERIFIED | `grep -rn "ElMessage" src/utils src/composables src/components/common` → 6 行命中全部落在 `showError.ts`；`spec` 用例 5 另行断言 `stores/push.ts` 源码无 `ElMessage.error` |
