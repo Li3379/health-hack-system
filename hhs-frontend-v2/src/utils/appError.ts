@@ -71,9 +71,13 @@ export function isCancel(raw: unknown): boolean {
  *
  * 第 4/5 步的位置是契约：早于第 3 步会把会话过期误判成权限失败；晚于第 6 步
  * 则永远不会命中（ApiError 已在第 0 步直通，其余无 response 的形态已在第 6 步返回）。
- * 同理，只要落到第 8 步，403/404 就会被信封业务码吞成 `business` —— 而信封里的
- * code 无法区分权限与不存在：`Result.failure(String code, …)` 会先走
- * `parseCodeToInt`，任何非数字错误码都回退成 500。因此第 4/5 步必须读 `errorCode`。
+ * 同理，只要落到第 8 步，403/404 就会被信封业务码吞成 `business`，因此第 4/5 步
+ * 必须留在第 8 步之前。
+ *
+ * 第 4/5 步各自接受三种证据，缺一不可（兼容新旧后端）：数值信封 code
+ * （现由 ErrorCode.httpStatus 下发 403/404）、真实 HTTP status、errorCode 正则。
+ * 旧后端把字符串错误码交给 `parseCodeToInt` 后会恒回退成 500，那种形态只能靠
+ * `errorCode` 识别 —— 正则因此必须保留，不能因为数值码已可信就删掉。
  *
  * 已知语义边界：本后端把通用 500/系统异常也包成 HTTP 200 信封
  * （GlobalExceptionHandler.handleException / handleSystemException 返回 Result<Void>
