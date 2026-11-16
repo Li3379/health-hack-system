@@ -258,6 +258,10 @@ const presentDuplicateError = (error: unknown) => {
   )
   showError(error, 'threshold.duplicate', {
     presentValidation: true,
+    // presentStates：本页没有状态块。指标选择器只列出可评估指标，403/404 不会出现
+    // 在正常流程里 —— 一旦出现（例如操作他人的阈值，UserThresholdServiceImpl:94/129），
+    // 用户必须看到它，否则点了「保存」换不来任何反馈。
+    presentStates: true,
     ...(existing ? { action: { onClick: () => openExistingThreshold(existing) } } : {})
   })
 }
@@ -316,6 +320,8 @@ const deleteThresholdConfirmed = async (row: UserThreshold) => {
     fetchThresholds()
   } catch (error) {
     showError(error, 'threshold.deleteFailed', {
+      // 删除是用户主动动作且本页无状态块：403（删除他人的阈值）必须可见。
+      presentStates: true,
       retry: () => deleteThresholdConfirmed(row)
     })
   }

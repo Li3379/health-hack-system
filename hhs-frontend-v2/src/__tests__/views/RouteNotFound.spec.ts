@@ -46,11 +46,19 @@ describe('router — 路由级 404 catch-all', () => {
     expect(last.name).toBe('NotFound')
   })
 
-  it('catch-all 不带 requiresAuth / requiresAdmin —— 未知 URL 不得成为导航绕过', () => {
+  it('catch-all 合并父级 meta 后仍不带 requiresAuth / requiresAdmin —— 未知 URL 不得成为导航绕过', () => {
+    // 读 getRoutes() 的 record 是不够的：那是**未合并**的记录，而守卫读的是
+    // router.resolve() 合并后的 meta。NotFound 是父级 `/`（requiresAuth: true）的
+    // 子项，只"不写" meta 会继承 true，未登录用户访问未知 URL 会被踢去登录页。
+    // 因此这里必须断言 resolve() 的结果。
+    const resolved = router.resolve('/no-such-page-at-all')
+    expect(resolved.name).toBe('NotFound')
+    expect(resolved.meta.requiresAuth).toBe(false)
+    expect(resolved.meta.requiresAdmin).toBeUndefined()
+
     const record = router.getRoutes().find(r => r.name === 'NotFound')
     expect(record).toBeDefined()
-    // T-14-11：不给 meta，未登录用户也能看到 404 而不是被弹去登录页。
-    expect(record?.meta.requiresAuth).toBeUndefined()
+    expect(record?.meta.requiresAuth).toBe(false)
     expect(record?.meta.requiresAdmin).toBeUndefined()
   })
 

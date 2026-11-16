@@ -389,19 +389,20 @@ const fetchProfile = async () => {
       lifestyleHabits: res.data.lifestyleHabits || ''
     })
   } catch (error) {
-    // 只有「档案不存在」（404 / health.profile_not_found）才进入创建模式；
-    // 网络故障或服务端错误进入创建模式会让人以为要新建，提交时才报「已存在」，或在
-    // 部分故障下创建出重复档案（WR-12）。
+    // 只有「档案不存在」才进入创建模式；网络故障或服务端错误进入创建模式会让人以为
+    // 要新建，提交时才报「已存在」，或在部分故障下创建出重复档案（WR-12）。
+    //
+    // 判定只读 `kind`，不要再拼 status/code：本接口的 404 走 HTTP 200 信封，
+    // `err.status` 因此恒为 200；而 PreventionController 用的是
+    // `Result.failure(404, msg)`（不带 errorCode），`err.code` 是空串。
+    // 旧写法两个条件都不成立，创建模式永远进不去 —— 之前靠用户手动点「编辑」掩盖了。
+    // `normalizeApiError` 已经把这三种证据统一收敛成 `kind === 'notFound'`。
     const err = normalizeApiError(error)
-    const notFound =
-      err.status === 404 ||
-      err.code === 'health.profile_not_found' ||
-      err.code === 'resource.not_found'
-    if (notFound) {
+    if (err.kind === 'notFound') {
       editing.value = true
     } else {
-      // 非「不存在」失败不属于「正常状态」：走单一错误出口，让用户知道加载失败。
-      showError(err, 'profile.loadFailed')
+      // 非「不存在」失败不属于「正常状态」：本页没有状态块，必须让用户知道加载失败。
+      showError(err, 'profile.loadFailed', { presentStates: true })
     }
   } finally {
     loading.value = false
@@ -441,7 +442,10 @@ const handleSubmit = async () => {
       editing.value = false
     } catch (error) {
       // validation → 0 toast，内联 + 汇总承担呈现（GOV.UK 双呈现）。
-      const err = showError(error, 'profile.saveFailed')
+      // presentStates：本页没有状态块，保存是用户主动动作 —— 若档案在别处被删除
+      // （update() 匹配不到行 → 404）或无权修改（403），默认的零 toast 会让点击
+      // 「保存」换不来任何反馈。prevention/Risk.vue 的同类调用已如此处理。
+      const err = showError(error, 'profile.saveFailed', { presentStates: true })
       if (err.kind === 'validation') {
         apply(err)
         await nextTick()
