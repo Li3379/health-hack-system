@@ -49,10 +49,17 @@ public class GlobalExceptionHandler {
     /**
      * Handle business exceptions with ErrorCode support.
      *
-     * <p>The numeric envelope code keeps its historical {@code parseCodeToInt} semantics
-     * (non-numeric codes fall back to {@code 500}); the stable string code travels separately in
-     * {@code errorCode}. Detail text is appended only for non-{@code SYSTEM_*} codes — a
-     * {@code SYSTEM_*} detail is technical and must not reach the user.
+     * <p>The numeric envelope code is taken from {@link ErrorCode#getHttpStatus()} so the
+     * envelope agrees with the semantic code (404 for {@code *_NOT_FOUND}, 409 for
+     * {@code *_EXISTS}, 400 for {@code *_INVALID}, …). Passing the string code to
+     * {@code Result.failure(String, String)} instead would run it through
+     * {@code parseCodeToInt}, which cannot parse a dotted code and silently degrades every
+     * business failure to 500 — making a missing resource indistinguishable from a server
+     * fault for logs, metrics and non-frontend clients.
+     *
+     * <p>The stable string code still travels separately in {@code errorCode}. Detail text is
+     * appended only for non-{@code SYSTEM_*} codes — a {@code SYSTEM_*} detail is technical and
+     * must not reach the user.
      */
     @ExceptionHandler(BusinessException.class)
     public Result<Void> handleBusinessException(BusinessException ex, HttpServletRequest request) {
@@ -68,8 +75,7 @@ public class GlobalExceptionHandler {
         }
 
         log.warn("Business exception: {} - {} - {}", ec.getCode(), message, ex.getMessage());
-        Result<Void> result = Result.failure(ec.getCode(), message);
-        return result.withErrorCode(ec.getCode());
+        return Result.failure(ec.getHttpStatus(), ec.getCode(), message);
     }
 
     /**
