@@ -46,23 +46,23 @@
     {
       "number": "12",
       "name": "阈值配置向导化与告警正确性修复",
-      "status": "pending"
+      "status": "complete"
     },
     {
       "number": "13",
       "name": "健康档案完善引导（非阻塞）",
-      "status": "pending"
+      "status": "complete"
     },
     {
       "number": "14",
       "name": "全站收尾排查与回归验证",
-      "status": "pending"
+      "status": "complete"
     }
   ],
   "next": {
-    "command": "/gsd:progress --next",
-    "label": "Advance to the next step (plan phase 12)",
-    "reason": "Phase 12 of 11 — needs a plan"
+    "command": "/gsd:new-milestone",
+    "label": "Start a new milestone",
+    "reason": "All phases complete — start a new milestone"
   },
-  "updated_at": "2026-11-07T09:48:46.542Z"
+  "updated_at": "2026-11-16T17:32:52.454Z"
 }

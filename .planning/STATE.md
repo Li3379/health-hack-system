@@ -1,35 +1,35 @@
 ---
 gsd_state_version: "1.0"
-milestone: v1.3
-milestone_name: 引导式配置与友好错误反馈
-current_phase: 14
-current_phase_name: 全站收尾排查与回归验证
+milestone: none
+milestone_name: (awaiting next milestone)
+current_phase: null
 status: completed
-stopped_at: v1.3 all four phases verified passed (11/12/13/14); ready to archive
-last_updated: "2026-11-11T03:15:00.000Z"
-last_activity: 2026-11-11
-last_activity_desc: Phase 11 and 13 re-verified after Phase 14 fingerprint drift
-state_head: 56498f8fe89f177a85bbd31b2d4dee8a83c888ef
+stopped_at: v1.3 shipped and audited; ready for /gsd:new-milestone
+last_updated: "2026-11-16T17:32:52.291Z"
+last_activity: 2026-11-17
+last_activity_desc: Milestone v1.3 completed and archived
+state_head: 14a5982c8b7cc4db4f8cc4408905eb1f281f0b41
 progress:
   total_phases: 11
   completed_phases: 11
   total_plans: 41
   completed_plans: 41
+current_phase_name: null
 ---
 
 # State: Health Hack System
 
 **Created:** 2026-05-28
-**Current Milestone:** v1.3 引导式配置与友好错误反馈
-**Current Phase:** 14
-**Status:** Completed — all four phases verified passed
+**Current Milestone:** none — v1.3 shipped
+**Current Phase:** —
+**Status:** v1.3 milestone complete
 
 ## Project Reference
 
 See: `.planning/PROJECT.md`
 
 **Core value:** 平台核心价值是提供可靠、准确的健康评分和趋势分析 — 评分数据必须完整持久化（包括维度评分），历史趋势图必须正确展示，部署过程必须稳定可靠。
-**Current focus:** Phase 14 — 全站收尾排查与回归验证
+**Current focus:** define the next milestone — run `/gsd:new-milestone`
 
 ## Milestone Progress
 
@@ -66,12 +66,10 @@ See: `.planning/PROJECT.md`
 
 ## Current Position
 
-Phase: 14 (全站收尾排查与回归验证) — COMPLETED
-Plan: 14 of 14
-Status: All of v1.3 verified passed (11 · 12 · 13 · 14)
-Last activity: 2026-11-11 — Phase 11 and 13 re-verified after fingerprint drift
-
-Progress: [██████████] 100% (41/41 plans)
+Phase: Milestone v1.3 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-11-17 — Milestone v1.3 completed and archived
 
 ## Accumulated Context
 
@@ -88,22 +86,24 @@ Progress: [██████████] 100% (41/41 plans)
 
 ### Blockers
 
-- Phase 12 已闭环（9/9 计划 + UAT 6/7 通过；向导关闭 1 项经判定为隐藏标签页动画冻结的环境假阳性，需前台复验）
-- Phase 13 已闭环（10/10 计划，UAT 5 项视觉检查全部通过，1 项 Testcontainers 环境限制已记入 WINDOWS.md #3）
-- 遗留环境限制：Testcontainers 无法从 Maven JVM 访问 Docker socket（`docker info` 正常但 IT 报 Could not find a valid Docker environment），需在 socket 可达环境重跑集成测试
+- **无阻塞项** — v1.3 已交付并通过里程碑审计（29/29 需求）。
+- 遗留环境限制：Testcontainers 无法从 Maven JVM 访问 Docker socket（`docker info` 正常但 IT 报 Could not find a valid Docker environment），需在 socket 可达环境重跑集成测试（WINDOWS.md #3）。
+- 结转技术债（非阻塞，已记入 `MILESTONES.md` 与 `v1.3-MILESTONE-AUDIT.md`）：`FileUploadController:104` 的英文异常回显；`IntelligentAlertService` 的休眠重复区间逻辑；零请求取消接线；6 个未消费字典键。
 
 ### Session Continuity
 
-- Previous: v1.2 milestone completed (Phases 8-10, 7/7 requirements), frontend 90 tests green.
-- Now: v1.3 complete — 4 phases (11-14), 41/41 plans, all four VERIFICATION.md report `passed`.
-- Re-verified 2026-11-11: Phases 11 and 13 had gone `stale` only because Phase 14's migration commits touched their `covered_files`. Both were re-tested in a live stack (6/6 checkpoints each) and their digests refreshed; no defects found.
-- Next step: `/gsd:complete-milestone` — archive v1.3.
+- Previous: v1.2 milestone completed (Phases 8-10, 7/7 requirements).
+- Now: **v1.3 shipped and archived** — 4 phases (11-14), 41/41 plans, backend 849/0, frontend 644/59.
+- 2026-11-11: Phases 11 and 13 went `stale` only because Phase 14's migration commits touched their `covered_files`; both re-tested live (6/6 each), digests refreshed, no defects.
+- 2026-11-16: `ee4d534` changed the envelope-code contract, invalidating two recorded truths. Both were *amended*, not refreshed — Phase 11 truth 7 no longer claims `Result.code` semantics are unchanged.
+- 2026-11-17: Milestone audit found three real defects (two silent-error gaps introduced by `ee4d534`, one route-meta inheritance bug). All fixed with mutation-verified tests, then archived.
+- Next step: `/gsd:new-milestone`.
 
 ## Session
 
-**Last session:** 2026-11-11T03:15:00.000Z
-**Stopped at:** v1.3 all four phases verified passed (11/12/13/14); ready to archive
-**Resume file:** none — milestone ready for /gsd:complete-milestone
+**Last session:** 2026-11-17T01:35:00.000Z
+**Stopped at:** v1.3 shipped and audited; ready for /gsd:new-milestone
+**Resume file:** none — start a new milestone
 
 ## Performance Metrics
 
@@ -123,5 +123,4 @@ Progress: [██████████] 100% (41/41 plans)
 
 ## Operator Next Steps
 
-- `/gsd:complete-milestone` — archive v1.3 and prepare the next milestone
-- `/gsd:audit-uat` — full cross-phase UAT audit before archiving (optional)
+- Start the next milestone with /gsd-new-milestone
