@@ -1,11 +1,13 @@
 package com.hhs.controller;
 
 import com.hhs.common.Result;
+import com.hhs.dto.CreateReminderRequest;
 import com.hhs.entity.UserReminder;
 import com.hhs.security.SecurityUtils;
 import com.hhs.service.UserReminderService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -29,7 +31,7 @@ public class UserReminderController {
     @PostMapping
     @PreAuthorize("isAuthenticated()")
     @Operation(summary = "Create reminder")
-    public Result<UserReminder> create(@RequestBody CreateReminderRequest request) {
+    public Result<UserReminder> create(@RequestBody @Valid CreateReminderRequest request) {
         Long userId = SecurityUtils.getCurrentUserId();
         log.info("Creating reminder for user: {}", userId);
         UserReminder reminder = userReminderService.createReminder(
@@ -68,14 +70,4 @@ public class UserReminderController {
         return Result.success(null);
     }
 
-    /**
-     * Request body for creating a reminder
-     */
-    @lombok.Data
-    public static class CreateReminderRequest {
-        private String title;
-        private String description;
-        private String reminderType;
-        private String cronExpression;
     }
-}

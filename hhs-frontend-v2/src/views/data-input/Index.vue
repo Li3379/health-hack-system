@@ -125,6 +125,8 @@ const deviceSyncCount = ref(0)
 const aiRecognizeCount = ref(0)
 
 const recentRecordsRef = ref()
+const ocrHistoryRef = ref()
+const aiHistoryRef = ref()
 
 /**
  * 加载今日统计数据
@@ -144,11 +146,12 @@ const loadTodayStats = async () => {
 }
 
 // 刷新数据
+// 录入成功后，最近记录与两张历史表都必须同步 —— 否则 API 已有数据、界面仍显示「暂无记录」。
 const refreshData = () => {
   loadTodayStats()
-  if (recentRecordsRef.value) {
-    recentRecordsRef.value.refresh()
-  }
+  recentRecordsRef.value?.refresh()
+  ocrHistoryRef.value?.refresh()
+  aiHistoryRef.value?.refresh()
 }
 
 onMounted(async () => {

@@ -134,8 +134,8 @@ export function normalizeApiError(raw: unknown): ApiError {
   }
 
   // 5. 404 资源不存在。数值 404 由 GlobalExceptionHandler.handleNoResourceFoundException
-  //    下发（HTTP 200 信封）；字符串形态由 BusinessException(*_NOT_FOUND) 下发 ——
-  //    数值码是回退值 500，errorCode 才是判定依据。两种分隔符都要接受：
+  //    下发（HTTP 200 信封）；BusinessException(*_NOT_FOUND) 现也下发数值 404（信封 code
+  //    取自 ErrorCode.httpStatus）。errorCode 正则同时保留，兼容旧版本后端与两种分隔符：
   //    health.profile_not_found（下划线）与 resource.not_found（点号）在 ErrorCode 中并存。
   if (envelopeCode === 404 || status === 404 || /(^|_|\.)not[._]?found$/.test(errorCode)) {
     return new ApiError(data?.message || '资源不存在', 'notFound', status, errorCode)
@@ -175,10 +175,10 @@ export function normalizeApiError(raw: unknown): ApiError {
   }
 
   // 8. 信封业务失败（HTTP 200 + 信封 code !== 200）。
-  //    判定只读信封里的 data.code，不读 status、也不看 code 的数值大小：
-  //    本后端把 BusinessException 的字符串错误码交给 parseCodeToInt 后恒回退为 500
-  //    （WR-06 记录了这一契约缺陷，修复会改变既有 code 数值语义，超出本阶段范围）。
-  //    若按数值判 5xx，每条业务失败都会被改判成 server 并丢掉后端中文 message（违反 D-05）。
+  //    判定只读信封里的 data.code，不读 status、也不看 code 的数值大小 —— 这里刻意
+  //    不按数值判 5xx：业务失败必须保留后端中文 message（D-05），改判 server 会丢掉它。
+  //    后端现已让信封 code 与 ErrorCode.httpStatus 对齐（404/403/409/400 语义正确），
+  //    前四步已优先命中这些码；走到本步的是其余业务失败（以 400/500 为主）。
   //    typeof === 'number' 守卫生效：字符串码（如旧 AUTHENTICATION_REQUIRED）
   //    不进入本分支，落到兜底。
   if (typeof data?.code === 'number' && data.code !== 200) {

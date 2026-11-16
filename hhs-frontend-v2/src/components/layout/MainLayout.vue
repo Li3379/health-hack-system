@@ -89,7 +89,7 @@
       </el-scrollbar>
 
       <div class="sidebar-footer">
-        <button class="collapse-btn" @click="toggleCollapse">
+        <button class="collapse-btn" aria-label="折叠侧边栏" :aria-expanded="!collapsed" @click="toggleCollapse">
           <el-icon :size="18">
             <Fold v-if="!collapsed" />
             <Expand v-else />
@@ -103,7 +103,7 @@
       <!-- Header -->
       <el-header class="header">
         <div class="header-left">
-          <button class="mobile-menu-btn" @click="toggleCollapse">
+          <button class="mobile-menu-btn" aria-label="打开导航菜单" @click="toggleCollapse">
             <el-icon :size="20"><Expand /></el-icon>
           </button>
           <h3 class="page-title">{{ pageTitle }}</h3>
@@ -111,7 +111,10 @@
 
         <div class="header-right">
           <el-dropdown trigger="click" @command="handleThemeChange">
-            <button class="theme-toggle">
+            <button
+              class="theme-toggle"
+              :aria-label="themeStore.effectiveTheme === 'light' ? '切换到深色模式' : '切换到浅色模式'"
+            >
               <el-icon :size="18">
                 <Sunny v-if="themeStore.effectiveTheme === 'light'" />
                 <Moon v-else />
@@ -130,8 +133,8 @@
           </el-dropdown>
 
           <el-dropdown trigger="click" @command="handleCommand">
-            <div class="user-info">
-              <el-avatar :src="authStore.user?.avatar" :size="32" class="user-avatar">
+            <div class="user-info" role="button" tabindex="0" :aria-label="`用户菜单：${authStore.user?.nickname || authStore.user?.username || '当前用户'}`">
+              <el-avatar :src="authStore.user?.avatar" :alt="`${authStore.user?.nickname || authStore.user?.username || '用户'}的头像`" :size="32" class="user-avatar">
                 {{ authStore.user?.nickname?.[0] || authStore.user?.username?.[0] }}
               </el-avatar>
               <div class="user-details">
@@ -178,7 +181,7 @@ import { useAlertStore } from '@/stores/alert'
 import { useThemeStore } from '@/stores/theme'
 import {
   HomeFilled, DataLine, Upload, ChatDotRound, Sunny, Document,
-  Files, Fold, Expand, ArrowDown, User, Bell, SwitchButton, Moon
+  Files, Fold, Expand, ArrowDown, User, Bell, SwitchButton, Moon, Monitor
 } from '@element-plus/icons-vue'
 import type { Theme } from '@/stores/theme'
 import AiFloatingBall from '@/components/ai-floating-ball/AiFloatingBall.vue'

@@ -89,16 +89,34 @@ class GlobalExceptionHandlerTest {
     // ------------------------------------------------------------------
 
     @Test
-    @DisplayName("business failure keeps the legacy 500 numeric code and exposes errorCode")
-    void handleBusinessException_keepsNumericCodeAndExposesErrorCode() {
+    @DisplayName("business failure carries the semantic status code and exposes errorCode")
+    void handleBusinessException_usesErrorCodeStatusAndExposesErrorCode() {
         BusinessException ex = new BusinessException(
             ErrorCode.RESOURCE_ALREADY_EXISTS, "该指标已存在阈值，请直接编辑");
 
         Result<Void> body = handler.handleBusinessException(ex, request);
 
-        assertThat(body.getCode()).isEqualTo(500);
+        assertThat(body.getCode()).isEqualTo(ErrorCode.RESOURCE_ALREADY_EXISTS.getHttpStatus());
+        assertThat(body.getCode()).isEqualTo(409);
         assertThat(body.getErrorCode()).isEqualTo("resource.exists");
         assertThat(body.getMessage()).contains("该指标已存在阈值，请直接编辑");
+    }
+
+    @Test
+    @DisplayName("not-found business failures surface 404 instead of a generic 500")
+    void handleBusinessException_notFoundKeepsNotFoundStatus() {
+        for (ErrorCode code : List.of(
+            ErrorCode.USER_NOT_FOUND,
+            ErrorCode.HEALTH_PROFILE_NOT_FOUND,
+            ErrorCode.RESOURCE_NOT_FOUND)) {
+            Result<Void> body =
+                handler.handleBusinessException(new BusinessException(code), request);
+
+            assertThat(body.getCode())
+                .as("errorCode=%s", code.getCode())
+                .isEqualTo(404);
+            assertThat(body.getErrorCode()).isEqualTo(code.getCode());
+        }
     }
 
     @Test

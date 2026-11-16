@@ -6,9 +6,10 @@
 import { ref, onMounted, onUnmounted, watch } from 'vue'
 import * as echarts from 'echarts/core'
 import { LineChart } from 'echarts/charts'
+import { GridComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 
-echarts.use([LineChart, CanvasRenderer])
+echarts.use([LineChart, GridComponent, CanvasRenderer])
 
 const props = defineProps<{
   data: number[]
@@ -52,12 +53,15 @@ const initChart = () => {
 }
 
 watch(() => props.data, () => {
-  if (chartInstance && props.data.length) {
-    chartInstance.setOption({
-      xAxis: { data: props.data.map((_, i) => i) },
-      series: [{ data: props.data }],
-    })
+  if (!props.data.length) return
+  if (!chartInstance) {
+    initChart()
+    return
   }
+  chartInstance.setOption({
+    xAxis: { data: props.data.map((_, i) => i) },
+    series: [{ data: props.data }],
+  })
 }, { deep: true })
 
 onMounted(() => {

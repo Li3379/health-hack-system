@@ -244,7 +244,9 @@ class PushConfigControllerTest {
                         .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
-                .andExpect(jsonPath("$.code").value(500))
+                // A rejected URL is a client error: the envelope must mirror VALIDATION_INVALID_PARAMETER
+                // (400), not the historical parseCodeToInt fallback of 500.
+                .andExpect(jsonPath("$.code").value(400))
                 .andExpect(jsonPath("$.errorCode").value("validation.invalid_parameter"));
 
         verify(userPushConfigMapper, never()).insert(any());
@@ -264,7 +266,7 @@ class PushConfigControllerTest {
                         .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
-                .andExpect(jsonPath("$.code").value(500))
+                .andExpect(jsonPath("$.code").value(400))
                 .andExpect(jsonPath("$.errorCode").value("validation.invalid_parameter"));
 
         verify(userPushConfigMapper, never()).insert(any());
