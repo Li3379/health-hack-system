@@ -1,6 +1,6 @@
 ---
 phase: 14-error-rollout
-verified: 2026-11-16T15:50:00Z
+verified: 2026-11-17T01:30:00Z
 status: passed
 score: 21/24 must-haves verified
 behavior_unverified: 3
@@ -81,7 +81,7 @@ covered_files:
   - hhs-frontend-v2/src/views/user/Profile.vue
   - hhs-frontend-v2/src/views/user/PushSettings.vue
   - hhs-frontend-v2/src/views/wellness/Dashboard.vue
-covered_digest: "v1:sha256:12c0f6974a98dbd89f0241b3e389633a3dfd730db66c2cfe735c64ba34755866"
+covered_digest: "v1:sha256:3f4ee9b30c160e46b31146c34019f539e9bbd8e99a98477ea798523cdeb1f55c"
 decision_coverage:
   honored: 6
   total: 6
@@ -266,7 +266,7 @@ ROADMAP 字面写「裸 `ElMessage.error` 残留归零」。实测 **4**，不�
 |------|------|---------|----------|--------|
 | — | — | 本阶段改动的 41 个源文件无 `TBD`/`FIXME`/`XXX`/`TODO`/`HACK`/`PLACEHOLDER` | — | 无 |
 | `health/Metrics.vue`, `health/Alerts.vue` | — | 无 `FormErrorSummary` | ℹ️ Info | 仅 GET 筛选表单，无服务端字段校验，正确排除 |
-| `prevention/Profile.vue:404,444`；`health/Thresholds.vue:259,318` | — | `showError` 未带 `presentStates` | ℹ️ Info | 这 4 处相对阶段起点零改动（`git diff 3734bf1..HEAD` 为空），属 Phase 12/13 交付面。实际不可达：Prevention/Threshold 控制器均 `@PreAuthorize("isAuthenticated()")`，服务层抛 `BusinessException(404/400)`（归 `notFound`/`business`），无 `AUTH_FORBIDDEN`。`notFound` 在 `prevention/Profile.vue:396-400` 被**刻意**处理为 create 模式 |
+| `prevention/Profile.vue:404,444`；`health/Thresholds.vue:259,318` | — | `showError` 未带 `presentStates` | ⚠️ **2026-11-17 修正：原判「不可达」有误，已修复** | **原声明「实际不可达…无 AUTH_FORBIDDEN」被证伪**：`UserThresholdServiceImpl:94/129` 确实抛 `BusinessException(ErrorCode.AUTH_FORBIDDEN, "无权修改/删除其他用户的阈值数据")`，可经 IDOR 触及。更严重的是 `prevention/Profile.vue` 的保存路径：`HealthProfileServiceImpl:99` 在 update 匹配不到行时抛 404，`ee4d534` 后判为 `notFound`，无 `presentStates` 且该页**没有 `ErrorState`** → 点「保存」完全无反馈（改动前信封 code 恒为 500 判为 `business`，是有 toast 的）。四处均已补 `presentStates: true`。另：该页的 create 模式判定原读 `err.status === 404`（信封恒 200）与 `err.code`（该接口无 errorCode），恒不命中，已改为读归一化后的 `kind === 'notFound'`。锁定测试：`ProfileErrorSample.spec.ts` 用例 B2（真实 HTTP-200 信封形状）、`RouteNotFound.spec.ts`（meta 合并），均经变异验证 |
 | `data-input/components/OcrInput.vue:250`；`DeviceSync.vue:487` | — | `code === 200` 之后的 else/else-if | ℹ️ Info | 均为**可达**且非 toast 路径：前者 HTTP 成功但无 data → 填 failed 面板；后者 `code === 400 && '未配置'` → 打开配置向导（ledger 明确记录保留） |
 | `views/ai/Chat.vue:600`, `dashboard/Index.vue:269,354,361` 等 | — | 裸 `catch { }` | ℹ️ Info | 均为「保留默认值 / 渲染降级」的非用户动作路径（`// keep null values`、`// fallback: keep zeros`），非失败呈现路径 |
 

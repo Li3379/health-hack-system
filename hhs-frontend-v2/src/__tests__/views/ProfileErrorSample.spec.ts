@@ -273,6 +273,29 @@ describe('ProfileErrorSample.spec.ts — 健康档案全页表单双呈现', () 
     wrapper.unmount()
   })
 
+  it('B2. 档案不存在（真实线上形状：HTTP 200 信封 + 无 errorCode）：仍进入创建模式', async () => {
+    // 用例 B 用的是 status:404，但预防保健接口从不返回 HTTP 404 ——
+    // PreventionController 用 `Result.failure(404, msg)`，request.ts 把信封包成
+    // `{ response: { status: 200, data: envelope } }`，且该重载不设 errorCode。
+    // 于是 `err.status === 404` 与 `err.code === '..._not_found'` 双双不成立，
+    // 创建模式进不去，只能靠用户手动点「编辑」。本用例锁住真实形状。
+    getProfile.mockRejectedValueOnce({
+      response: {
+        status: 200,
+        data: { code: 404, message: '健康档案不存在，请先创建', data: null }
+      }
+    })
+
+    const wrapper = mountProfile()
+    await flushPromises()
+
+    const vm = wrapper.vm as any
+    expect(vm.editing).toBe(true)
+    expect(toastCount()).toBe(0)
+
+    wrapper.unmount()
+  })
+
   it('C. 保存成功：一条成功提示，且无任何错误 chrome', async () => {
     const wrapper = mountProfile()
     await flushPromises()

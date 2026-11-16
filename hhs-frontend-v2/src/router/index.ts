@@ -136,10 +136,14 @@ const routes: RouteRecordRaw[] = [
         // 路由级 404（UI-SPEC Contract 3 §3.6）。必须是 children 的最后一项：
         // vue-router 对同级路由按声明顺序匹配，而所有既有路径都更具体，
         // 因此 catch-all 只会吃掉真正未匹配的 URL，不会遮蔽任何已注册路由。
-        // 刻意不给 meta.requiresAuth —— 未登录用户访问一个不存在的 URL 应当看到
-        // 404，而不是被弹去登录页；同时 beforeEach 不动，全站仍只有 requiresAuth 一个判据（A-3）。
+        // 刻意显式关掉 requiresAuth —— 未登录用户访问一个不存在的 URL 应当看到
+        // 404，而不是被弹去登录页。**必须显式写 false**：本路由是父级 `/`
+        // （meta.requiresAuth: true）的子项，vue-router 会把父级 meta 合并进来，
+        // 只"不写"等于继承 true，守卫仍会把未登录用户踢去登录页。
+        // beforeEach 不动，全站仍只有 requiresAuth 一个判据（A-3）。
         path: '/:pathMatch(.*)*',
         name: 'NotFound',
+        meta: { requiresAuth: false },
         component: () => import('@/views/NotFound.vue')
       }
     ]

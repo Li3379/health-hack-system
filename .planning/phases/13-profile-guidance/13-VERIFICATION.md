@@ -1,6 +1,6 @@
 ---
 phase: 13-profile-guidance
-verified: 2026-11-11T03:10:00Z
+verified: 2026-11-17T01:30:00Z
 status: passed
 score: 12/12 must-haves verified
 covered_files:
@@ -69,7 +69,7 @@ covered_files:
   - hhs-frontend-v2/src/views/health/Score.vue
   - hhs-frontend-v2/src/views/prevention/Profile.vue
   - hhs-frontend-v2/src/views/prevention/Risk.vue
-covered_digest: "v1:sha256:7df641550da503a7c040ec8a94957528d60aeb37beae32058f5e5eec7f22f43e"
+covered_digest: "v1:sha256:1fb15fb96db5a15085718d73f2d2d05e65b4da2ae623a132005e3f2e5d008c25"
 behavior_unverified: 0
 overrides_applied: 0
 re_verification_2026_11_11:
