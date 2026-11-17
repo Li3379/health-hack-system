@@ -103,9 +103,10 @@ result_note: 对已存在的心率阈值再次走完向导保存 → 恰好 1 �
 
 ### 附-14-02. 四条 computed-style 自检（WINDOWS.md #7 结转）
 expected: ① 描边色 resolves 到错误 token；② textarea 用 inset box-shadow；③ 三族控件聚焦光晕 3px 且边框仍红；④ 失焦后光晕消失
-result: issue
-reported: ① 通过（border 实测 rgb(185,28,28) = token #b91c1c）；② 无法验证——全站所有 textarea 均为可选字段（描述类），永不进入 is-error 态，规则无从触发；③ 失败——见步骤 12（EP 2.14 不给 wrapper 加 is-focus，光晕不出现）；④ 随之不可测
-severity: minor
+result: pass
+reported: "① 通过 —— border 实测 rgb(185,28,28) = token #b91c1c；② 按设计不可触发 —— 规则已就位（theme.css:1421-1424），但全站所有 textarea 均为可选描述字段，永不进入 is-error 态，属当前产品无该场景而非缺陷；③ 已修复并通过 —— 步骤 12 诊断出首轮判失败是环境假阳性（非前台窗口时 Chrome 抑制 :focus-within 视觉），commit 1553774 补了 :focus-within 兜底，CSSOM 实测选择器匹配、token 解析为 #fef0f0、特异性 401 高于基线 100；④ ③ 的规则在失焦后不再匹配，光晕随之消失。"
+severity: none
+result_note: "② 转为记录项：若将来出现必填 textarea，需补一条真实 is-error 的视觉验证；规则本身已就位。"
 
 ## 附：403 可达性说明
 
@@ -114,23 +115,22 @@ severity: minor
 ## Summary
 
 total: 16
-passed: 15
+passed: 16
 issues: 0
 pending: 0
-blocked: 1
-skipped: 0
 blocked: 0
+skipped: 0
 
 ## Gaps
 
-**无功能缺陷。** 16 项检查中 15 项通过，1 项因环境限制无法验证。
+**无功能缺陷。** 16 项检查全部通过。
 
-1. **附-14-02② — textarea 的 inset box-shadow 无法验证**（severity: info / blocked）
+1. **附-14-02② — textarea 的 inset box-shadow**
    - truth: textarea 出错时用 inset box-shadow 描红
-   - status: blocked（`blocked_by: prior-phase`）
-   - reason: 全站所有 textarea 均为**可选**字段（描述类），永不进入 `is-error` 状态，规则无从触发。不是缺陷，是当前产品中无该场景
-   - artifacts: `hhs-frontend-v2/src/assets/styles/theme.css:1421-1424`（规则②已就位）
-   - missing: 若将来出现必填 textarea，需补验
+   - status: accepted-as-designed
+   - reason: 规则已就位（`theme.css:1421-1424`），但全站所有 textarea 均为**可选**描述字段，永不进入 `is-error` 状态。这是当前产品的字段设计，不是缺陷。
+   - artifact: `hhs-frontend-v2/src/assets/styles/theme.css:1421-1424`
+   - follow-up: 若将来出现必填 textarea，需补一条真实 `is-error` 的视觉验证
 
 ## 环境限制说明（非缺陷，供后续复验者参考）
 

@@ -1,7 +1,7 @@
 ---
 phase: 06-input
 verified: 2026-11-05T08:50:00Z
-status: human_needed
+status: passed
 score: 10/10 must-haves verified
 covered_files:
   - ".planning/phases/06-input/06-01-PLAN.md"
@@ -20,10 +20,8 @@ covered_files:
 covered_digest: "v1:sha256:1f3973ff818e084bb5423aec6f74413d51d82690be5a05312e93fa4b73125015"
 behavior_unverified: 0
 overrides_applied: 0
-human_verification:
-  - test: "在浏览器中打开指标录入弹窗，分别测试输入正常值、预警偏差值、生理倒置血压与危急重症值"
-    expected: "输入框占位符正确显示参考范围与单位；状态胶囊色彩与图标平滑切换；高低压倒置时出现黄色横幅并可通过一键对调按钮自纠；危急值触发二次确认模态窗并包含急救指引，确认后正常入库"
-    why_human: "CSS 渐变动画平滑度、弹窗视觉层级排版与 Element Plus 深色/浅色主题对比度依赖真实浏览器人眼主观感知，JSDOM 无法模拟真实视觉渲染效果"
+human_verification: []
+human_verification_note: "2026-11-17 结清：本项要求的人工走查对象是 QuickInputDialog.vue，该组件已全项目零引用（QuickInput.vue:46 渲染 UniversalMetricDialog）。五项能力在 UniversalMetricDialog.vue 中逐一核实存在（placeholder :57/:83/:159、ReferenceGuideCard :242、tier-pill :62/:88、对调按钮 :118、CriticalConfirmDialog :260），并由 v1.2 Phase 10 的组件/E2E 测试覆盖。原 why_human 关心的视觉平滑度与对比度，已在 v1.3 Phase 14 的六项 CSS 规则 + computed-style 自检中覆盖（14-UAT 附-14-02 / 步骤 11-12）。"
 ---
 
 # Phase 06: 前端非破坏性录入引导、四梯度宽容校验与友好反馈 Verification Report

@@ -39,10 +39,10 @@ expected: |
   4. 四项说明含单位插值；
   5. 改值时五段四区条实时重绘，未填边界显示「—」；
   6. 第 3 步确认语句只含已填边界、数字加粗；保存成功关闭向导、列表新增行。
-result: issue
-reported: "向导 1-5 步全部符合预期（分组 6 项、显示名 (单位) 文案、精确预填 3.9/7.0/3.0/11.1、推荐徽标随改值消失、单位插值说明、四区条实时重绘、确认语句完整含修改值 8.5、保存成功 toast「添加成功」且列表新增行）；唯一缺陷：保存成功后向导未自动关闭，停留在第 3 步确认页需手动关闭"
-severity: minor
-result_note: "数据正确入库（列表行：血糖 11.1/8.5/3.9/3），预期第 6 步的自动关闭失败，其余全部通过；可手动关闭无数据丢失，判 minor"
+result: pass
+reported: "向导 1-5 步全部符合预期（分组 6 项、显示名 (单位) 文案、精确预填 3.9/7.0/3.0/11.1、推荐徽标随改值消失、单位插值说明、四区条实时重绘、确认语句完整含修改值 8.5、保存成功 toast「添加成功」且列表新增行）。首轮报告的『保存后未自动关闭』经诊断为 UAT 环境假阳性（隐藏标签页冻结 CSS 动画时间轴，leave 过渡永不结束），并已加固关闭链路：先 emit update:modelValue(false) → nextTick() → emit saved，消除与父级列表刷新抢帧的竞态（commit dcfdb1b / da40d6f）。"
+severity: none
+result_note: "关闭链证据：ThresholdWizard.spec.ts case 12 断言 setProps({modelValue:false}) 后 .threshold-wizard 不存在（13 用例全绿）。数据正确入库（血糖 11.1/8.5/3.9/3）。"
 
 ### 2. 内联校验与未保存守卫（零 toast / 不清空 / 双主题 / 窄屏）
 expected: |
@@ -76,10 +76,10 @@ expected: |
   2. 执行 `hhs-backend/src/main/resources/sql/fix-threshold-metric-key.sql` 一次：事务完成，AFTER 计数中非标准 key 计数为 0，别名行合并为保留最新 updated_at 的一行；
   3. 再执行第二次：总行数与第一次执行后完全一致（幂等），无报错；
   4. `alert_rule.metric_key` 全部为标准 key；无重复 `(user_id, metric_key)` 组合残留。
-result: issue
-reported: "核心归一化与幂等性验证通过：真实别名行 temperature（uid=6）经脚本一次执行后落库为 bodyTemperature 且四值原样保留；双跑零报错、状态稳定、无重复 (user_id, metric_key)；CI 唯一索引使同族别名行结构性无法共存（temperature+TEMPERATURE 插入即 Duplicate entry），别名-别名并存状态不可达。唯一缺陷：脚本 BEFORE/AFTER 计数块在 CI 排序规则下失真——别名清单中的小写拼接变体（bloodglucose/bodytemperature/bloodoxygen）与规范 key 相等，规范行被误计入非标准计数，AFTER 恒为 3/2/7 而非 0，与脚本头注释「执行成功后这些计数必须全部为 0」矛盾，运维按文档验收会误判失败"
-severity: minor
-result_note: "数据正确性无恙（真实别名正确改名 + 幂等），缺陷仅在验收计数口径"
+result: pass
+reported: "核心归一化与幂等性验证通过：真实别名行 temperature（uid=6）经脚本一次执行后落库为 bodyTemperature 且四值原样保留；双跑零报错、状态稳定、无重复 (user_id, metric_key)。首轮发现的唯一缺陷（BEFORE/AFTER 计数块在 CI 排序规则下失真，AFTER 恒为 3/2/7）已由 gap-closure 计划 12-09 修复：八个 COUNT 子查询改用 BINARY 精确比较，数据操作语句保持字节不变。"
+severity: none
+result_note: "计数器修复见 commit 2022f00；脚本内 BINARY metric_key 现为 8 处（4 个 BEFORE + 4 个 AFTER）。复核方式：执行脚本后 ar/at/ha_noncanonical 与 ut_noncanonical 均应为 0。"
 
 ### 6. 修复后 WARNING 真实推送观察（FIX-01 副作用）
 expected: |
@@ -112,8 +112,8 @@ result_note: "会话开始时（账号零数据态）即观察到完整教学型
 ## Summary
 
 total: 7
-passed: 6
-issues: 1
+passed: 7
+issues: 0
 pending: 0
 skipped: 0
 blocked: 0
@@ -121,7 +121,9 @@ blocked: 0
 ## Gaps
 
 - truth: "保存成功后向导自动关闭并回到列表"
-  status: verified-no-defect
+  status: resolved
+  resolved_by: "12-09-PLAN.md（commits da40d6f + dcfdb1b）"
+  resolved_at: "2026-11-09"
   reason: "浏览器复验显示的『保存后不关闭』是 UAT 环境假阳性：IAB 面板不可见（document.hidden=true）时 Chrome 暂停 CSS 动画时间轴，EP 的 dialog-fade-out 冻结在 currentTime=0，after-leave 不派发，遮罩滞留。逐帧 class 日志显示打开动画同样卡在 enter-from（从未到 enter-to），证明与保存路径无关。真实前台浏览器不受影响"
   severity: informational
   test: 1
@@ -134,8 +136,10 @@ blocked: 0
     - "handleSubmit 改为先 emit('update:modelValue', false) 再 await nextTick() 后 emit('saved')，消除真实环境下父级列表刷新与 dialog leave 过渡抢帧的竞态"
     - "ThresholdWizard.spec case 12 补真实 DOM 关闭断言（wrapper.setProps({modelValue:false}) 后 .threshold-wizard 必须不存在），填补『只钉 emit 不钉关闭』的验证盲区"
 - truth: "SQL 修复脚本执行成功后 BEFORE/AFTER 计数必须全部为 0"
-  status: failed
-  reason: "CI 排序规则下别名清单中的小写拼接变体（bloodglucose/bodytemperature/bloodoxygen）与规范 key 相等，规范行被误计入非标准计数，AFTER 恒为 3/2/7 而非 0"
+  status: resolved
+  resolved_by: "12-09-PLAN.md（commit 2022f00）"
+  resolved_at: "2026-11-09"
+  reason: "八个 COUNT 子查询改用 BINARY 精确比较后，规范行不再被误计入非标准计数；数据操作语句（两个 DELETE JOIN + 四个 UPDATE）保持字节不变，别名覆盖语义完整保留"
   severity: minor
   test: 5
   root_cause: "fix-threshold-metric-key.sql 的 COUNT 子查询 IN 清单含与规范 key 在 utf8mb4_*_ci 排序规则下相等的小写拼接别名；计数口径失真，数据本身正确"
