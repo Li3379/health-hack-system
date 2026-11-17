@@ -8,6 +8,7 @@ import com.hhs.mapper.HealthProfileMapper;
 import com.hhs.mapper.RiskAssessmentMapper;
 import com.hhs.service.RiskAssessmentService;
 import com.hhs.service.domain.AssumptionCollector;
+import com.hhs.service.domain.MetricKeyNormalizer;
 import com.hhs.service.domain.ProfileCompletenessCalculator;
 import com.hhs.service.domain.ProfileFieldCatalog;
 import com.hhs.vo.RiskAssessmentVO;
@@ -16,8 +17,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.Period;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 @Service
 public class RiskAssessmentServiceImpl implements RiskAssessmentService {
@@ -181,7 +184,7 @@ public class RiskAssessmentServiceImpl implements RiskAssessmentService {
                     age = 35;
                     collector.add(MISSING_BIRTH_DATE_ASSUMPTION);
                 } else {
-                    age = LocalDate.now().getYear() - profile.getBirthDate().getYear();
+                    age = ageAt(profile.getBirthDate(), LocalDate.now());
                 }
                 BigDecimal bmi;
                 if (profile.getBmi() == null) {
@@ -197,13 +200,13 @@ public class RiskAssessmentServiceImpl implements RiskAssessmentService {
                     collector.add(ProfileFieldCatalog.FAMILY_HISTORY_SUPPLIED_NO_DIABETES);
                 }
                 boolean familyDiabetes = ProfileFieldCatalog.mentionsDiabetes(familyHistory);
-                BigDecimal latestBloodSugar = getLatestMetric(recentMetrics, "血糖");
+                BigDecimal latestBloodSugar = getLatestMetric(recentMetrics, "bloodGlucose");
                 int diabetesScore = (age > 45 ? 20 : 10) + (bmi.compareTo(BigDecimal.valueOf(24)) > 0 ? 25 : 10)
                         + (familyDiabetes ? 25 : 0) + (latestBloodSugar != null && latestBloodSugar.compareTo(BigDecimal.valueOf(6.1)) > 0 ? 30 : 0);
                 result.add(create(userId, profileId, "糖尿病", diabetesScore));
 
-                BigDecimal systolic = getLatestMetric(recentMetrics, "收缩压");
-                BigDecimal diastolic = getLatestMetric(recentMetrics, "舒张压");
+                BigDecimal systolic = getLatestMetric(recentMetrics, "systolicBP");
+                BigDecimal diastolic = getLatestMetric(recentMetrics, "diastolicBP");
                 int bpScore = (age > 50 ? 15 : 5) + (systolic != null && systolic.compareTo(BigDecimal.valueOf(130)) > 0 ? 35 : 0)
                         + (diastolic != null && diastolic.compareTo(BigDecimal.valueOf(85)) > 0 ? 30 : 0);
                 result.add(create(userId, profileId, "高血压", bpScore));
@@ -219,8 +222,43 @@ public class RiskAssessmentServiceImpl implements RiskAssessmentService {
             return result;
         }
 
-        private static BigDecimal getLatestMetric(List<HealthMetric> metrics, String type) {
-            return metrics.stream().filter(m -> type.equals(m.getMetricKey())).findFirst().map(HealthMetric::getValue).orElse(null);
+        /**
+         * Read the most recent value for a canonical metric key, accepting every alias.
+         *
+         * <p>{@code metric_key} is stored canonical (camelCase English) since the v1.1 SSOT
+         * work, so matching on a Chinese display name — as this method used to — matched
+         * nothing and every risk score silently lost its metric contribution. The input list
+         * is already ordered {@code record_date DESC}, so the first alias match is the latest.
+         *
+         * <p>Aliases are still accepted so rows written before the FIX-02 canonicalization
+         * (e.g. {@code glucose}) keep contributing.
+         *
+         * @param metrics    recent metrics, newest first
+         * @param canonicalKey canonical key such as {@code bloodGlucose}
+         * @return latest value, or {@code null} when the user has none
+         */
+        private static BigDecimal getLatestMetric(List<HealthMetric> metrics, String canonicalKey) {
+            Set<String> aliases = MetricKeyNormalizer.getAliases(canonicalKey);
+            return metrics.stream()
+                    .filter(m -> m.getMetricKey() != null && aliases.contains(m.getMetricKey()))
+                    .findFirst()
+                    .map(HealthMetric::getValue)
+                    .orElse(null);
+        }
+
+        /**
+         * Whole years between a birth date and a reference date.
+         *
+         * <p>Year subtraction (the previous implementation) counts a birthday as passed as
+         * soon as the year turns over, so anyone born late in the year is one year older than
+         * they are — enough to cross the 45- and 50-year thresholds this engine branches on.
+         *
+         * @param birthDate date of birth
+         * @param on        reference date, normally today
+         * @return completed years of age
+         */
+        private static int ageAt(LocalDate birthDate, LocalDate on) {
+            return Period.between(birthDate, on).getYears();
         }
 
         private static RiskAssessment create(Long userId, Long profileId, String diseaseName, int score) {

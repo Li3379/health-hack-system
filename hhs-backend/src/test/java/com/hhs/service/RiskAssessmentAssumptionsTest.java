@@ -361,6 +361,23 @@ class RiskAssessmentAssumptionsTest {
                 .thenReturn(List.<HealthMetric>of());
     }
 
+    /**
+     * Stub recent metrics with canonical keys, newest first (the mapper's own ordering).
+     *
+     * @param keysAndValues alternating canonical key / value pairs
+     */
+    private void stubMetrics(Object... keysAndValues) {
+        List<HealthMetric> rows = new java.util.ArrayList<>();
+        for (int i = 0; i < keysAndValues.length; i += 2) {
+            HealthMetric m = new HealthMetric();
+            m.setMetricKey((String) keysAndValues[i]);
+            m.setValue(new BigDecimal((Integer) keysAndValues[i + 1]));
+            m.setRecordDate(LocalDate.now());
+            rows.add(m);
+        }
+        when(healthMetricMapper.selectList(any(LambdaQueryWrapper.class))).thenReturn(rows);
+    }
+
     private void stubProfile(HealthProfile profile) {
         when(healthProfileMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(profile);
     }
@@ -368,5 +385,98 @@ class RiskAssessmentAssumptionsTest {
     private void stubAssessmentRows(RiskAssessment... rows) {
         when(riskAssessmentMapper.selectList(any(LambdaQueryWrapper.class)))
                 .thenReturn(List.of(rows));
+    }
+
+    // ------------------------------------------------------------------
+    // Canonical-key metric reads (regression guard)
+    // ------------------------------------------------------------------
+
+    @Test
+    @DisplayName("规范 key 的血压/血糖被计入评分（中文 displayName 匹配会全部落空）")
+    void canonicalMetricKeysContributeToScores() {
+        // The engine used to match on Chinese display names ("收缩压"), but metric_key is
+        // stored canonical (systolicBP) since the v1.1 SSOT work, so every lookup returned
+        // null and each score silently lost its metric contribution — a user with a
+        // hypertensive reading was told they were low risk. These exact numbers are the
+        // hand-computed expectation for the values below with a 40-year-old, BMI 22,
+        // no family history profile.
+        HealthProfile profile = new HealthProfile();
+        profile.setId(9L);
+        profile.setBirthDate(LocalDate.now().minusYears(40));
+        profile.setBmi(BigDecimal.valueOf(22));
+        profile.setFamilyHistory("无");
+        stubProfile(profile);
+        stubMetrics("systolicBP", 168, "diastolicBP", 80, "bloodGlucose", 14);
+
+        List<RiskAssessmentVO> vos = service.createAssessment(1L);
+
+        int diabetes = scoreOf(vos, "糖尿病");
+        int hypertension = scoreOf(vos, "高血压");
+
+        // bloodGlucose 14 > 6.1 contributes 30 on top of the 10 baseline.
+        assertEquals(50, diabetes, "bloodGlucose must reach the diabetes band");
+        // systolicBP 168 > 130 contributes 35 on top of the 5 baseline; diastolic 80 is under 85.
+        assertEquals(40, hypertension, "systolicBP must reach the hypertension band");
+        assertEquals("MEDIUM", vos.stream()
+                .filter(v -> v.diseaseName().equals("高血压")).findFirst().orElseThrow().riskLevel(),
+                "a 168 mmHg reading must not read as LOW risk");
+    }
+
+    @Test
+    @DisplayName("非规范别名（如 glucose）仍被计入评分")
+    void legacyAliasKeysStillContribute() {
+        HealthProfile profile = new HealthProfile();
+        profile.setId(9L);
+        profile.setBirthDate(LocalDate.now().minusYears(40));
+        profile.setBmi(BigDecimal.valueOf(22));
+        profile.setFamilyHistory("无");
+        stubProfile(profile);
+        stubMetrics("glucose", 14);
+
+        List<RiskAssessmentVO> vos = service.createAssessment(1L);
+
+        assertEquals(50, scoreOf(vos, "糖尿病"),
+                "rows written before canonicalization must keep contributing");
+    }
+
+    @Test
+    @DisplayName("年龄按周年计，生日未到不多算一岁")
+    void ageUsesCompletedYears() {
+        // A birthday that has not yet arrived this year. Built relative to today so the
+        // precondition holds on any run date: take 46 years ago, then move to Dec 31 of that
+        // year. From any date before Dec 31, year-subtraction reports 46 while completed
+        // years is still 45 — which one crosses the >45 baseline, and only the correct
+        // algorithm keeps the score at the 10-branch.
+        LocalDate fortySixYearsAgo = LocalDate.now().minusYears(46);
+        LocalDate birthDate = LocalDate.of(fortySixYearsAgo.getYear(), 12, 31);
+        if (!birthDate.isBefore(LocalDate.now())) {
+            // Running on Dec 31: pick the same calendar day one year later instead, so the
+            // birthday is still in the future and the year gap is unchanged.
+            birthDate = birthDate.plusYears(1);
+        }
+        assertEquals(45, java.time.Period.between(birthDate, LocalDate.now()).getYears(),
+                "precondition: completed years must be 45 while the year gap is 46");
+        assertEquals(46, LocalDate.now().getYear() - birthDate.getYear(),
+                "precondition: year subtraction must be one higher than completed years");
+
+        HealthProfile profile = new HealthProfile();
+        profile.setId(9L);
+        profile.setBirthDate(birthDate);
+        profile.setBmi(BigDecimal.valueOf(22));
+        profile.setFamilyHistory("无");
+        stubProfile(profile);
+        stubNoMetrics();
+
+        List<RiskAssessmentVO> vos = service.createAssessment(1L);
+
+        // age > 45 ? 20 : 10 — at 45 completed years the baseline is 10, total 10 + 10 = 20.
+        // Year subtraction would report 46 and take the 20 branch, giving 30.
+        assertEquals(20, scoreOf(vos, "糖尿病"),
+                "a birthday that has not arrived yet must not trigger the >45 baseline");
+    }
+
+    private int scoreOf(List<RiskAssessmentVO> vos, String disease) {
+        return vos.stream().filter(v -> v.diseaseName().equals(disease))
+                .findFirst().orElseThrow().riskScore();
     }
 }
