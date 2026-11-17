@@ -20,6 +20,7 @@ import java.util.List;
  * @param profileCompleteness current profile completeness in 0..100
  * @param createTime         row creation timestamp
  * @param assumptions        defaults substituted for this assessment; never {@code null}
+ * @param contributors       scored inputs whose points sum to {@code riskScore}; never {@code null}
  */
 public record RiskAssessmentVO(
         Long id,
@@ -31,6 +32,7 @@ public record RiskAssessmentVO(
         String suggestion,
         Integer profileCompleteness,
         LocalDateTime createTime,
-        List<String> assumptions
+        List<String> assumptions,
+        List<RiskContributorVO> contributors
 ) {
 }

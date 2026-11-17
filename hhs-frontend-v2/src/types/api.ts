@@ -292,6 +292,27 @@ export interface ProfileCompletenessVO {
   fields: ProfileFieldStatusVO[]
 }
 
+/**
+ * One scored input behind a risk assessment.
+ *
+ * `state` separates three situations that used to render identically:
+ * - `CONTRIBUTED` — the user's own value, and it crossed the threshold
+ * - `NORMAL`      — the user's own value, under the threshold
+ * - `ASSUMED`     — no value, a documented default was substituted and scored
+ * - `MISSING`     — no value, nothing was scored; the result is less reliable
+ */
+export interface RiskContributorVO {
+  key: string
+  label: string
+  state: 'CONTRIBUTED' | 'NORMAL' | 'ASSUMED' | 'MISSING'
+  /** The value used, formatted for display; null when there was none. */
+  value?: string | null
+  /** The reference value it was compared against, when applicable. */
+  threshold?: string | null
+  points: number
+  explanation: string
+}
+
 export interface RiskAssessmentVO {
   id: number
   userId: number
@@ -304,6 +325,11 @@ export interface RiskAssessmentVO {
   profileCompleteness?: number | null
   /** 本次评估依赖的默认假设句（读时按当前档案重算）。 */
   assumptions?: string[]
+  /**
+   * 逐项评分构成，各 points 之和等于 riskScore。
+   * 空数组表示后端无法重建（历史分数与当前数据已对不上），此时不得渲染明细。
+   */
+  contributors?: RiskContributorVO[]
   createTime: string
 }
 
