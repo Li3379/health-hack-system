@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { resolve, relative, sep } from 'node:path'
 
 /**
@@ -537,10 +537,23 @@ describe('检查 ④ — 无局部 form-item 错误样式（错误描边只在 t
 // 台账对账 —— 87 行且每行七列完整
 // ---------------------------------------------------------------------------
 
-const LEDGER_PATH = resolve(
-  process.cwd(),
-  '../.planning/phases/14-error-rollout/14-MIGRATION-LEDGER.md'
-)
+// Phase 14 was archived into `.planning/milestones/v1.3-phases/` when v1.3 shipped.
+// Resolve against the live layout first, then the archived layout, so the ledger
+// reconciliation keeps working across milestone archive moves.
+const LEDGER_DIR = [
+  '../.planning/phases/14-error-rollout',
+  '../.planning/milestones/v1.3-phases/14-error-rollout'
+]
+  .map(dir => resolve(process.cwd(), dir))
+  .find(dir => existsSync(resolve(dir, '14-MIGRATION-LEDGER.md')))
+
+if (!LEDGER_DIR) {
+  throw new Error(
+    '找不到 Phase 14 台账目录：既不在 .planning/phases/14-error-rollout，也不在 .planning/milestones/v1.3-phases/14-error-rollout'
+  )
+}
+
+const LEDGER_PATH = resolve(LEDGER_DIR, '14-MIGRATION-LEDGER.md')
 const PRE_MIGRATION_COUNT = 87
 const LEDGER_FRAGMENT_PLANS = ['04', '05', '06', '07', '08', '09', '10', '11', '12'] as const
 
@@ -616,10 +629,7 @@ describe('台账对账 — 87 行、每行七列非空', () => {
 
   it('③ 九份片段全部存在且被合并（缺一份要大声失败，不能只合并在场的那几份）', () => {
     for (const plan of LEDGER_FRAGMENT_PLANS) {
-      const fragment = resolve(
-        process.cwd(),
-        `../.planning/phases/14-error-rollout/14-LEDGER-${plan}.md`
-      )
+      const fragment = resolve(LEDGER_DIR, `14-LEDGER-${plan}.md`)
       expect(() => readFileSync(fragment, 'utf8'), `缺少片段 14-LEDGER-${plan}.md`).not.toThrow()
     }
     expect(LEDGER_FRAGMENT_PLANS).toHaveLength(9)

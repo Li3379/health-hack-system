@@ -158,18 +158,32 @@ test.describe('Quick Input Flow', () => {
     // Wait for dialog
     await page.waitForSelector('.el-dialog', { timeout: 5000 });
 
-    // Fill invalid value (out of range)
+    // Fill invalid value (out of range). Heart rate hard limit is 20 ~ 300.
     const valueInput = page.locator('.el-input-number input').first();
-    await valueInput.fill('500'); // Heart rate max is 300
+    await valueInput.fill('500');
 
-    // Move focus to trigger validation
-    await page.locator('.el-date-editor input').click();
+    // The `value` rule uses trigger: 'change', so blur commits the value and runs
+    // the validator. (Playwright's fill() leaves focus in the field.)
+    await valueInput.blur();
 
-    // Check if input shows error or is clamped
-    // The input should either show validation error or clamp the value
+    // The product rule (utils/metricValidation.ts Tier 4, "禁止保存，保留原值")
+    // is non-destructive: the out-of-range value is NOT silently clamped — it is
+    // kept so the user can see what they typed, and an inline error explains the
+    // valid physiological range. Save must be blocked.
+    await page.waitForSelector('.el-dialog .el-form-item__error', { timeout: 3000 });
+    const errorMessage = await page.locator('.el-dialog .el-form-item__error').first().textContent();
+    expect(errorMessage).toContain('有效生理区间为');
+    expect(errorMessage).toContain('20');
+    expect(errorMessage).toContain('300');
+
+    // Value preserved, not clamped
     const actualValue = await valueInput.inputValue();
-    // Value should be clamped or show error
-    expect(parseInt(actualValue)).toBeLessThanOrEqual(300);
+    expect(parseInt(actualValue)).toBe(500);
+
+    // Saving is blocked while the value is out of range
+    await page.click('.el-dialog button:has-text("保存")');
+    await expect(page.locator('.el-dialog')).toBeVisible();
+    await expect(page.locator('.el-message--success')).not.toBeVisible();
   });
 
   test('should cancel input dialog without saving', async ({ page }) => {
