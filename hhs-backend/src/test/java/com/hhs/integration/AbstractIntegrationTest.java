@@ -22,8 +22,24 @@ import org.testcontainers.utility.DockerImageName;
 @Tag("integration")
 public abstract class AbstractIntegrationTest {
 
+    /**
+     * Schema applied to the throwaway MySQL container before any test runs.
+     *
+     * <p>This is a generated twin of {@code src/main/resources/sql/schema.sql} with the
+     * two maintenance stored procedures removed: Testcontainers' {@code ScriptUtils}
+     * does not understand the mysql client's {@code DELIMITER} directive, and the
+     * procedures are unreachable from application code. A parity test keeps the two
+     * files in sync.</p>
+     */
+    private static final String TEST_SCHEMA_SCRIPT = "sql/schema-test.sql";
+
     private static final Logger log = LoggerFactory.getLogger(AbstractIntegrationTest.class);
-    private static final boolean DOCKER_AVAILABLE = checkDockerAvailable();
+    private static final boolean DOCKER_AVAILABLE;
+
+    static {
+        ensureDockerApiVersion();
+        DOCKER_AVAILABLE = checkDockerAvailable();
+    }
 
     // MySQL container for integration tests
     static final MySQLContainer<?> MYSQL_CONTAINER;
@@ -31,6 +47,26 @@ public abstract class AbstractIntegrationTest {
     // Redis container for integration tests (using GenericContainer)
     @SuppressWarnings("rawtypes")
     static final GenericContainer REDIS_CONTAINER;
+
+    /**
+     * Minimum Docker Engine API version this build must talk.
+     *
+     * <p>docker-java 3.3.4 (pinned by Testcontainers 1.19.3) defaults to API 1.32.
+     * Docker Engine 29.x raised its minimum to 1.40 and answers any older request
+     * with {@code 400 Bad Request}, which Testcontainers reports as
+     * "Could not find a valid Docker environment". Setting this before the first
+     * client is created fixes the negotiation without upgrading dependencies.</p>
+     *
+     * <p>An explicit {@code api.version} system property (or {@code DOCKER_API_VERSION})
+     * always wins, so a CI image with an older Engine can still override it.</p>
+     */
+    private static void ensureDockerApiVersion() {
+        if (System.getProperty("api.version") == null && System.getenv("DOCKER_API_VERSION") == null) {
+            System.setProperty("api.version", "1.44");
+            log.info("Defaulted Docker API version to 1.44 (docker-java 3.3.4 defaults to 1.32, "
+                + "which Docker Engine 29.x rejects with HTTP 400)");
+        }
+    }
 
     static {
         if (DOCKER_AVAILABLE) {
@@ -41,7 +77,10 @@ public abstract class AbstractIntegrationTest {
                 .withDatabaseName("hhs_test")
                 .withUsername("test")
                 .withPassword("test")
-                .withExposedPorts(3306);
+                .withExposedPorts(3306)
+                // Without this the container starts empty and every integration test
+                // fails at Spring context load with "Table 'hhs_test.<x>' doesn't exist".
+                .withInitScript(TEST_SCHEMA_SCRIPT);
 
             REDIS_CONTAINER = new GenericContainer(
                 DockerImageName.parse("redis:7-alpine")
