@@ -125,12 +125,16 @@ skipped: 0
 
 **无功能缺陷。** 16 项检查全部通过。
 
-1. **附-14-02② — textarea 的 inset box-shadow**
-   - truth: textarea 出错时用 inset box-shadow 描红
-   - status: accepted-as-designed
-   - reason: 规则已就位（`theme.css:1421-1424`），但全站所有 textarea 均为**可选**描述字段，永不进入 `is-error` 状态。这是当前产品的字段设计，不是缺陷。
-   - artifact: `hhs-frontend-v2/src/assets/styles/theme.css:1421-1424`
-   - follow-up: 若将来出现必填 textarea，需补一条真实 `is-error` 的视觉验证
+- truth: "textarea 出错时用 inset box-shadow 描红"
+  status: accepted-as-designed
+  severity: informational
+  test: "附-14-02"
+  reason: "规则已就位（theme.css:1421-1424），但全站所有 textarea 均为可选描述字段，永不进入 is-error 状态。这是当前产品的字段设计，不是缺陷"
+  artifacts:
+    - path: "hhs-frontend-v2/src/assets/styles/theme.css"
+      issue: "规则②已就位，等待第一个必填 textarea 出现即可生效"
+  missing:
+    - "若将来出现必填 textarea，需补一条真实 is-error 的视觉验证"
 
 ## 环境限制说明（非缺陷，供后续复验者参考）
 
