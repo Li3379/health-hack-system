@@ -11,6 +11,7 @@ import com.hhs.service.domain.ProfileCompletenessCalculator;
 import com.hhs.service.domain.ProfileFieldCatalog;
 import com.hhs.service.impl.RiskAssessmentServiceImpl;
 import com.hhs.vo.RiskAssessmentVO;
+import com.hhs.vo.RiskContributorVO;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -473,6 +474,151 @@ class RiskAssessmentAssumptionsTest {
         // Year subtraction would report 46 and take the 20 branch, giving 30.
         assertEquals(20, scoreOf(vos, "糖尿病"),
                 "a birthday that has not arrived yet must not trigger the >45 baseline");
+    }
+
+    // ------------------------------------------------------------------
+    // Score attribution (contributors)
+    // ------------------------------------------------------------------
+
+    @Test
+    @DisplayName("归因逐项相加等于分数（三种病都必须对得上）")
+    void contributorsSumToScore() {
+        HealthProfile profile = new HealthProfile();
+        profile.setId(9L);
+        profile.setBirthDate(LocalDate.now().minusYears(60));
+        profile.setBmi(BigDecimal.valueOf(30));
+        profile.setFamilyHistory("父亲有糖尿病");
+        stubProfile(profile);
+        stubMetrics("systolicBP", 168, "diastolicBP", 95, "bloodGlucose", 14);
+
+        List<RiskAssessmentVO> vos = service.createAssessment(1L);
+
+        for (RiskAssessmentVO vo : vos) {
+            int sum = vo.contributors().stream().mapToInt(RiskContributorVO::points).sum();
+            assertEquals(vo.riskScore(), sum,
+                    vo.diseaseName() + " 的归因合计必须等于分数，否则用户看到的明细解释不了总分");
+            assertFalse(vo.contributors().isEmpty(),
+                    vo.diseaseName() + " 必须带归因，不能只给一个数字");
+        }
+    }
+
+    @Test
+    @DisplayName("无血压数据标 MISSING，绝不与「血压正常」混为一谈")
+    void missingMetricIsMarkedMissingNotNormal() {
+        HealthProfile profile = new HealthProfile();
+        profile.setId(9L);
+        profile.setBirthDate(LocalDate.now().minusYears(40));
+        profile.setBmi(BigDecimal.valueOf(22));
+        profile.setFamilyHistory("无");
+        stubProfile(profile);
+        // 完全没有血压记录
+        stubNoMetrics();
+
+        List<RiskAssessmentVO> bp = service.createAssessment(1L).stream()
+                .filter(v -> v.diseaseName().equals("高血压")).toList();
+        assertEquals(1, bp.size());
+
+        RiskContributorVO systolic = bp.get(0).contributors().stream()
+                .filter(c -> c.key().equals("systolicBP")).findFirst().orElseThrow();
+        RiskContributorVO diastolic = bp.get(0).contributors().stream()
+                .filter(c -> c.key().equals("diastolicBP")).findFirst().orElseThrow();
+
+        assertEquals(RiskContributorVO.STATE_MISSING, systolic.state(),
+                "没有血压数据时必须标 MISSING —— 否则「没测」会被读成「正常」");
+        assertEquals(0, systolic.points(), "缺失项不得加分");
+        assertNull(systolic.value(), "缺失项不得伪造取值");
+        assertEquals(RiskContributorVO.STATE_MISSING, diastolic.state());
+        assertTrue(systolic.explanation().contains("缺少"),
+                "文案必须明确说明缺少数据，实际为: " + systolic.explanation());
+    }
+
+    @Test
+    @DisplayName("有血压且未超阈值标 NORMAL，与 MISSING 状态不同")
+    void normalMetricIsMarkedNormal() {
+        HealthProfile profile = new HealthProfile();
+        profile.setId(9L);
+        profile.setBirthDate(LocalDate.now().minusYears(40));
+        profile.setBmi(BigDecimal.valueOf(22));
+        profile.setFamilyHistory("无");
+        stubProfile(profile);
+        stubMetrics("systolicBP", 120, "diastolicBP", 78);
+
+        RiskContributorVO systolic = service.createAssessment(1L).stream()
+                .filter(v -> v.diseaseName().equals("高血压")).findFirst().orElseThrow()
+                .contributors().stream()
+                .filter(c -> c.key().equals("systolicBP")).findFirst().orElseThrow();
+
+        assertEquals(RiskContributorVO.STATE_NORMAL, systolic.state(),
+                "有数据且未超标必须标 NORMAL，而不是 MISSING");
+        assertNotNull(systolic.value(), "NORMAL 必须带上实际取值，用户要看到自己的读数");
+        assertTrue(systolic.value().contains("120"), "取值应可见，实际为: " + systolic.value());
+    }
+
+    @Test
+    @DisplayName("默认值代入标 ASSUMED，可被用户识别为「可补填」")
+    void assumedValueIsMarkedAssumed() {
+        HealthProfile profile = new HealthProfile();
+        profile.setId(9L);
+        profile.setBirthDate(LocalDate.now().minusYears(40));
+        profile.setBmi(null); // BMI 缺失 → 按 22.0 估算
+        profile.setFamilyHistory("无");
+        stubProfile(profile);
+        stubNoMetrics();
+
+        RiskContributorVO bmi = service.createAssessment(1L).stream()
+                .filter(v -> v.diseaseName().equals("糖尿病")).findFirst().orElseThrow()
+                .contributors().stream()
+                .filter(c -> c.key().equals("bmi")).findFirst().orElseThrow();
+
+        assertEquals(RiskContributorVO.STATE_ASSUMED, bmi.state(),
+                "估算值必须标 ASSUMED —— 既不是用户真实数据，也不是「完全没计入」");
+        assertTrue(bmi.explanation().contains("估算"),
+                "文案必须说明这是估算，实际为: " + bmi.explanation());
+    }
+
+    @Test
+    @DisplayName("超阈值的项标 CONTRIBUTED 并说明超出多少")
+    void crossingThresholdIsExplained() {
+        HealthProfile profile = new HealthProfile();
+        profile.setId(9L);
+        profile.setBirthDate(LocalDate.now().minusYears(40));
+        profile.setBmi(BigDecimal.valueOf(22));
+        profile.setFamilyHistory("无");
+        stubProfile(profile);
+        stubMetrics("systolicBP", 168);
+
+        RiskContributorVO systolic = service.createAssessment(1L).stream()
+                .filter(v -> v.diseaseName().equals("高血压")).findFirst().orElseThrow()
+                .contributors().stream()
+                .filter(c -> c.key().equals("systolicBP")).findFirst().orElseThrow();
+
+        assertEquals(RiskContributorVO.STATE_CONTRIBUTED, systolic.state());
+        assertEquals(35, systolic.points());
+        assertTrue(systolic.explanation().contains("168"), "必须点名实际读数");
+        assertTrue(systolic.explanation().contains("130"), "必须点名参考值");
+    }
+
+    @Test
+    @DisplayName("缺血糖时归因标 MISSING 且不加分，绝不伪造 0 值当正常")
+    void missingBloodGlucoseIsMissingNotZero() {
+        HealthProfile profile = new HealthProfile();
+        profile.setId(9L);
+        profile.setBirthDate(LocalDate.now().minusYears(40));
+        profile.setBmi(BigDecimal.valueOf(22));
+        profile.setFamilyHistory("无");
+        stubProfile(profile);
+        // 只有血压，没有血糖
+        stubMetrics("systolicBP", 120);
+
+        RiskContributorVO sugar = service.createAssessment(1L).stream()
+                .filter(v -> v.diseaseName().equals("糖尿病")).findFirst().orElseThrow()
+                .contributors().stream()
+                .filter(c -> c.key().equals("bloodGlucose")).findFirst().orElseThrow();
+
+        assertEquals(RiskContributorVO.STATE_MISSING, sugar.state(),
+                "缺血糖必须标 MISSING —— 伪造一个 0 值会让「没测」变成「正常」");
+        assertNull(sugar.value(), "缺失项的值必须为 null，不能填 0");
+        assertEquals(0, sugar.points(), "缺失项不得加分");
     }
 
     private int scoreOf(List<RiskAssessmentVO> vos, String disease) {

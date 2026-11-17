@@ -12,114 +12,54 @@
       </template>
 
       <!--
-        就地补填面板（Contract 5）。al-alert 只承载标题：EP 的默认插槽渲染在 <p> 内，
-        列表与表单必须是它的兄弟节点，否则会被浏览器提升出去、破坏整块底色。
+        创建前加载态：点击后真实请求（档案 + 完整度）在跑，给用户明确的过程反馈，
+        而不是点击后毫无反应地等待，或瞬间弹出一个空表单。
+      -->
+      <section v-if="preparing" class="risk-preparing" role="status" aria-live="polite">
+        <el-skeleton :rows="3" animated />
+        <p class="risk-preparing__text">正在读取你的健康档案与指标数据…</p>
+      </section>
+
+      <!--
+        评估依据面板（Contract 5 修订）：不再二次填表。
+        评估直接读取健康档案与指标数据，本面板只做两件事 ——
+        ① 只读展示「本次将使用的数据」及每项来源，让用户知道分数基于什么；
+        ② 明确指出缺失项并给出去补录的入口，而不是在这里重复录入。
+        al-alert 只承载标题：EP 的默认插槽渲染在 <p> 内，列表必须是它的兄弟节点。
       -->
       <section v-if="panelOpen" class="risk-estimate" aria-labelledby="risk-estimate-title">
-        <el-alert type="warning" :closable="false" show-icon>
+        <el-alert type="info" :closable="false" show-icon>
           <template #title>
-            <span id="risk-estimate-title">系统将按以下假设估算本次风险评估</span>
+            <span id="risk-estimate-title">本次评估将使用以下数据</span>
           </template>
         </el-alert>
 
-        <ul class="risk-estimate__list">
-          <li v-for="item in pendingAssumptions" :key="item">{{ item }}</li>
+        <ul class="risk-estimate__sources">
+          <li
+            v-for="item in dataSources"
+            :key="item.key"
+            class="risk-estimate__source"
+            :class="`risk-estimate__source--${item.tone}`"
+          >
+            <span class="risk-estimate__source-label">{{ item.label }}</span>
+            <span class="risk-estimate__source-value">{{ item.value }}</span>
+            <span class="risk-estimate__source-origin">{{ item.origin }}</span>
+          </li>
         </ul>
 
-        <div class="risk-estimate__form">
-          <el-form
-            ref="backfillRef"
-            :model="backfill"
-            :rules="backfillRules"
-            label-width="120px"
-            :hide-required-asterisk="true"
-          >
-            <FormErrorSummary
-              ref="summaryRef"
-              :summary-items="summaryItems"
-              @focus-field="focusField"
-            />
-            <el-row :gutter="16">
-              <el-col :xs="24" :sm="12">
-                <el-form-item
-                  label="性别"
-                  prop="gender"
-                  data-field="gender"
-                  :error="fieldErrors['gender']"
-                >
-                  <el-radio-group v-model="backfill.gender" @change="clearField('gender')">
-                    <el-radio value="male">男</el-radio>
-                    <el-radio value="female">女</el-radio>
-                  </el-radio-group>
-                </el-form-item>
-              </el-col>
-              <el-col :xs="24" :sm="12">
-                <el-form-item
-                  label="出生日期"
-                  prop="birthDate"
-                  data-field="birthDate"
-                  :error="fieldErrors['birthDate']"
-                >
-                  <el-date-picker
-                    v-model="backfill.birthDate"
-                    type="date"
-                    value-format="YYYY-MM-DD"
-                    placeholder="选择日期"
-                    :disabled-date="disabledDate"
-                    style="width: 100%"
-                    @change="clearField('birthDate')"
-                  />
-                </el-form-item>
-              </el-col>
-            </el-row>
-
-            <!-- 第 2 行：可选补（D-06a）。没有 :rules 条目，留空是合法提交。 -->
-            <el-row :gutter="16">
-              <el-col :xs="24" :sm="12">
-                <el-form-item
-                  label="身高（可选）"
-                  prop="heightCm"
-                  data-field="heightCm"
-                  :error="fieldErrors['heightCm']"
-                >
-                  <el-input-number
-                    v-model="backfill.heightCm"
-                    :min="50"
-                    :max="300"
-                    placeholder="可不填"
-                    style="width: 100%"
-                    @change="clearField('heightCm')"
-                  />
-                </el-form-item>
-              </el-col>
-              <el-col :xs="24" :sm="12">
-                <el-form-item
-                  label="体重（可选）"
-                  prop="weightKg"
-                  data-field="weightKg"
-                  :error="fieldErrors['weightKg']"
-                >
-                  <el-input-number
-                    v-model="backfill.weightKg"
-                    :min="20"
-                    :max="500"
-                    :precision="1"
-                    placeholder="可不填"
-                    style="width: 100%"
-                    @change="clearField('weightKg')"
-                  />
-                </el-form-item>
-              </el-col>
-            </el-row>
-          </el-form>
-        </div>
+        <p v-if="missingFields.length" class="risk-estimate__hint">
+          有 {{ missingFields.length }} 项数据缺失，相关风险按默认值或不参与估算。
+          补齐后评分会更贴近你的真实情况。
+        </p>
 
         <div class="risk-estimate__actions">
-          <el-button type="primary" :loading="saving" @click="backfillAndCreate">
-            保存档案并创建
+          <el-button type="primary" :loading="saving" @click="createAnyway">
+            按现有数据创建评估
           </el-button>
-          <el-button @click="createAnyway">直接创建（按估算）</el-button>
-          <el-button text @click="cancel">放弃创建</el-button>
+          <el-button @click="goProfileWithFocus">
+            去完善档案
+          </el-button>
+          <el-button text @click="cancel">取消</el-button>
         </div>
       </section>
 
@@ -196,6 +136,39 @@
       </el-descriptions>
 
       <!--
+        评分构成：逐项列出每个输入、取值、参考值与贡献分，各项之和等于总分。
+        这是「让用户理解并信任」的核心 —— 没有它，用户只看到一个孤立的数字。
+      -->
+      <div v-if="currentAssessment?.contributors?.length" class="risk-dialog-breakdown">
+        <p class="risk-dialog-breakdown__title">
+          评分构成
+          <span class="risk-dialog-breakdown__sum">
+            各项合计 {{ contributorSum }} 分 = 风险评分
+          </span>
+        </p>
+        <ul class="risk-dialog-breakdown__list">
+          <li
+            v-for="(item, idx) in currentAssessment.contributors"
+            :key="`${item.key}-${idx}`"
+            class="risk-dialog-breakdown__item"
+            :class="`risk-dialog-breakdown__item--${item.state.toLowerCase()}`"
+          >
+            <span class="risk-dialog-breakdown__label">{{ item.label }}</span>
+            <span class="risk-dialog-breakdown__state">{{ stateLabel(item.state) }}</span>
+            <span class="risk-dialog-breakdown__points">{{ item.points > 0 ? `+${item.points}` : '0' }}</span>
+            <span class="risk-dialog-breakdown__explain">{{ item.explanation }}</span>
+          </li>
+        </ul>
+        <p
+          v-if="missingContributorCount > 0"
+          class="risk-dialog-breakdown__warn"
+        >
+          有 {{ missingContributorCount }} 项缺少数据，本结果未包含这些因素 ——
+          补齐后评分可能上升，请勿把「未计入」当作「正常」。
+        </p>
+      </div>
+
+      <!--
         「本次评估采用的假设」：读时按当前档案重算，因此标题刻意不声称是创建时冻结的记录
         （RESEARCH open question 2 的 RESOLVED 决定）。列表原样渲染后端句子。
       -->
@@ -213,16 +186,14 @@
 import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { gsap, cleanupScrollTriggers, DUR, EASE } from '@/composables/useGsap'
-import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { preventionApi } from '@/api/prevention'
 import { formatDateTime } from '@/utils/format'
-import { useFormServerErrors, collectInvalidFieldMessages } from '@/composables/useFormServerErrors'
-import FormErrorSummary from '@/components/common/FormErrorSummary.vue'
 import EstimateBadge from '@/components/common/EstimateBadge.vue'
 import { useProfileCompletenessStore } from '@/stores/profileCompleteness'
 import { showError } from '@/utils/showError'
-import type { HealthProfileRequest, HealthProfileVO, RiskAssessmentVO } from '@/types/api'
+import type { HealthProfileVO, RiskAssessmentVO } from '@/types/api'
 
 const loading = ref(false)
 const detailVisible = ref(false)
@@ -240,42 +211,130 @@ const router = useRouter()
 const completenessStore = useProfileCompletenessStore()
 const completeness = computed(() => completenessStore.data)
 
-/**
- * 面板要披露的假设 = 后端聚合数组原样。
- *
- * 绝不在这里 filter(fields).map(field => field.assumption) 重建：逐字段拼接对
- * 「完全没有档案」会产出 3 条引擎不会执行的代入，而风险引擎在该分支只代入 1 条通用句。
- * `completeness.assumptions` 与 `RiskAssessmentVO.assumptions` 由后端同一个
- * ProfileFieldCatalog.assumptionsFor 填充，因此面板承诺与结果披露逐字相同。
- */
-const pendingAssumptions = computed(() => completeness.value?.assumptions ?? [])
+// 面板不再渲染 assumptions 列表：它现在按「将使用的数据」逐项展示来源，
+// 缺失项本身即说明（见 dataSources）。assumptions 仍在详情弹窗里原样呈现，
+// 那份来自 RiskAssessmentVO，与 ProfileFieldCatalog.assumptionsFor 同源。
 
 // 面板状态
 const panelOpen = ref(false)
 const saving = ref(false)
-const backfillRef = ref<FormInstance>()
-const summaryRef = ref<InstanceType<typeof FormErrorSummary> | null>(null)
-const backfill = reactive<{
-  gender: string
-  birthDate: string
-  heightCm: number | null
-  weightKg: number | null
-}>({ gender: '', birthDate: '', heightCm: null, weightKg: null })
+/** 创建前的加载态：真实请求在跑，用户看到的是「正在读取你的数据」而不是空白等待。 */
+const preparing = ref(false)
 
-// 档案本身（只用于两个用途：可选身高体重的预填、updateProfile 的 existing 载荷）。
+// 档案本身（只读展示数据来源用）。
 const profileData = ref<HealthProfileVO | null>(null)
 
-const { fieldErrors, summaryItems, apply, setErrors, clearField, reset, focusField } =
-  useFormServerErrors()
+/**
+ * 「本次评估将使用的数据」——只读，逐项标注来源。
+ *
+ * 这里刻意不做任何输入：评估直接读健康档案与指标，用户不需要也不应该在风险页重复录入。
+ * 需要补的数据一律引导到档案页（`goProfileWithFocus`），保持单一录入入口。
+ */
+const dataSources = computed<DataSourceRow[]>(() => {
+  const p = profileData.value
+  const rows: DataSourceRow[] = []
 
-const backfillRules: FormRules = {
-  gender: [{ required: true, message: '请选择性别', trigger: 'change' }],
-  birthDate: [{ required: true, message: '请选择出生日期', trigger: 'change' }]
-  // heightCm / weightKg 刻意没有规则：D-06 称它们为「可选补」，留空必须能提交。
+  // 年龄
+  if (p?.birthDate) {
+    const age = calcAge(p.birthDate)
+    rows.push({ key: 'age', label: '年龄', value: `${age} 岁`, origin: '健康档案', tone: 'ok' })
+  } else {
+    rows.push({ key: 'age', label: '年龄', value: '未填，按 35 岁估算', origin: '档案缺失', tone: 'assumed' })
+  }
+
+  // BMI
+  if (p?.bmi != null) {
+    rows.push({ key: 'bmi', label: 'BMI', value: String(p.bmi), origin: '健康档案', tone: 'ok' })
+  } else {
+    rows.push({ key: 'bmi', label: 'BMI', value: '未填，按 22.0 估算', origin: '档案缺失', tone: 'assumed' })
+  }
+
+  // 家族史
+  if (p?.familyHistory) {
+    rows.push({ key: 'family', label: '家族病史', value: p.familyHistory, origin: '健康档案', tone: 'ok' })
+  } else {
+    rows.push({
+      key: 'family',
+      label: '家族病史',
+      value: '未填，按「无家族史」计算',
+      origin: '档案缺失',
+      tone: 'assumed'
+    })
+  }
+
+  // 血压 / 血糖来自指标录入，不来自档案 —— 这是用户最容易误解的一处，必须点名来源。
+  for (const item of metricSources.value) {
+    rows.push(item)
+  }
+
+  return rows
+})
+
+/**
+ * 指标来源行：跨**全部**评估汇总，不能只看第一条。
+ *
+ * 血压只出现在高血压的归因里、血糖只出现在糖尿病的归因里，若只读 `assessments[0]`
+ * 就会把「有血压数据」误报成「未录入」，与下方表格的分数自相矛盾。
+ */
+const metricSources = computed<DataSourceRow[]>(() => {
+  const wanted: Array<{ key: string; label: string }> = [
+    { key: 'systolicBP', label: '收缩压' },
+    { key: 'diastolicBP', label: '舒张压' },
+    { key: 'bloodGlucose', label: '血糖' }
+  ]
+
+  // 汇总所有评估的归因，取每个 key 第一次出现的非缺失项。
+  const found = new Map<string, { value: string; state: string }>()
+  for (const assessment of assessments.value) {
+    for (const c of assessment.contributors ?? []) {
+      if (!found.has(c.key) && c.state !== 'MISSING' && c.value) {
+        found.set(c.key, { value: c.value, state: c.state })
+      }
+    }
+  }
+
+  return wanted.map(w => {
+    const hit = found.get(w.key)
+    if (!hit) {
+      return {
+        key: w.key,
+        label: w.label,
+        value: '暂无数据，此项未计入',
+        origin: '指标未录入',
+        tone: 'missing' as const
+      }
+    }
+    return {
+      key: w.key,
+      label: w.label,
+      value: hit.value,
+      origin: '指标录入',
+      tone: 'ok' as const
+    }
+  })
+})
+
+/** 缺失的数据项（档案 + 指标），驱动提示语与「去完善档案」的聚焦字段。 */
+const missingFields = computed(() => dataSources.value.filter(r => r.tone !== 'ok'))
+
+/** 周岁计算，与后端 Period.between 语义一致（生日未到不算一岁）。 */
+function calcAge(birthDate: string): number {
+  const b = new Date(birthDate)
+  const now = new Date()
+  let age = now.getFullYear() - b.getFullYear()
+  const m = now.getMonth() - b.getMonth()
+  if (m < 0 || (m === 0 && now.getDate() < b.getDate())) age--
+  return age
 }
 
-/** 与 prevention/Profile.vue 的禁用规则一致：不允许未来日期。 */
-const disabledDate = (time: Date) => time.getTime() >= Date.now()
+/** 只读数据来源行：评估依据的可视化，不承载任何输入。 */
+interface DataSourceRow {
+  key: string
+  label: string
+  value: string
+  origin: string
+  tone: 'ok' | 'assumed' | 'missing'
+}
 
 const getRiskLevelType = (level: string): string => {
   const types: Record<string, string> = {
@@ -345,34 +404,42 @@ const createRiskAssessment = async () => {
  * 让面板永不展开、徽标永不出现。store 的 fetchCompleteness 单飞且可等待（13-05），
  * 因此这里 await 会真的等到挂载中的那个请求落定，而不是读到尚未落定的 null。
  */
+/**
+ * 点击「创建评估」。
+ *
+ * 与旧实现的关键差别：**不再二次填表**。评估直接读健康档案与指标数据，
+ * 所以这里只做「加载数据 → 展示依据 → 用户确认」三步。
+ *
+ * `preparing` 覆盖真实请求（档案 + 完整度 + 最近评估），让用户看到「正在读取你的数据」，
+ * 而不是点击后毫无反馈地等待或瞬间弹出一个空表单。
+ */
 const handleCreateClick = async () => {
-  if (completeness.value === null && !completenessStore.loadFailed) {
-    await completenessStore.fetchCompleteness()
+  preparing.value = true
+  try {
+    // 档案与完整度并行拉取：两者都只读，互不依赖。
+    await Promise.all([
+      loadProfile(),
+      completeness.value === null && !completenessStore.loadFailed
+        ? completenessStore.fetchCompleteness()
+        : Promise.resolve()
+    ])
+  } finally {
+    // 即使某个请求失败也让面板出现：用户需要看到「哪些数据取不到」而不是卡在加载态。
+    preparing.value = false
   }
 
-  // 1. 没有要披露的假设（含加载失败）→ 直接创建，面板不展开。
-  if (pendingAssumptions.value.length === 0) {
+  // 数据齐备且无缺失 → 无需展示依据，直接创建。
+  if (missingFields.value.length === 0) {
     await createRiskAssessment()
     return
   }
 
-  // 2. 有假设且完整度未满 → 展开面板，绝不抢先调用创建接口。
-  if ((completeness.value?.score ?? 0) < 100) {
-    panelOpen.value = true
-    if (profileData.value) {
-      backfill.heightCm = profileData.value.heightCm ?? null
-      backfill.weightKg = profileData.value.weightKg ?? null
-    }
-    await nextTick()
-    document.querySelector<HTMLElement>('.risk-estimate')?.scrollIntoView({ block: 'center' })
-    focusField('gender')
-    return
-  }
-
-  // 3. 防御分支：假设非空却 100%（数据自相矛盾）→ 直接创建，不打扰用户。
-  await createRiskAssessment()
+  panelOpen.value = true
+  await nextTick()
+  document.querySelector<HTMLElement>('.risk-estimate')?.scrollIntoView({ block: 'center' })
 }
 
+/** 用户确认按现有数据创建（缺失项按默认值或不计入）。 */
 const createAnyway = async () => {
   panelOpen.value = false
   await createRiskAssessment()
@@ -381,78 +448,31 @@ const createAnyway = async () => {
 /** 用户主动放弃不是失败（Phase 11 D-12）：零 toast、零 API 调用。 */
 const cancel = () => {
   panelOpen.value = false
-  reset()
-  Object.assign(backfill, { gender: '', birthDate: '', heightCm: null, weightKg: null })
 }
-
-/**
- * 保存档案并创建：校验 → 写入 → 重取完整度（刷新假设列表）→ 关闭面板 → 创建评估。
- *
- * 失败时绝不清空 backfill（D-12）：用户已输入的值必须留给他们重试。
- * bmi 不由前端计算 —— 后端 toEntity 从身高体重派生（D-01 禁止前端算派生值）。
- */
-const backfillAndCreate = async () => {
-  if (!backfillRef.value) return
-
-  reset()
-
-  await backfillRef.value.validate(async (valid, invalidFields) => {
-    if (!valid) {
-      setErrors(collectInvalidFieldMessages(invalidFields))
-      await nextTick()
-      summaryRef.value?.focusSummary()
-      return
-    }
-
-    saving.value = true
-    try {
-      // 在提交那一刻取快照：用户可能在面板打开后、点击之前补填了档案。
-      const existing = profileData.value
-      const payload: HealthProfileRequest = {
-        gender: backfill.gender,
-        birthDate: backfill.birthDate,
-        // 可选补（D-06a）：用户填的优先，未动的回落到已存值，两者都为空则不下发。
-        // 用 undefined 而不是 null 收口：HealthProfileRequest 的可选属性是 number | undefined，
-        // 而两种写法在服务端等价 —— toEntity 直接 request.getHeightCm()，缺键即 null。
-        heightCm: backfill.heightCm ?? existing?.heightCm ?? undefined,
-        weightKg: backfill.weightKg ?? existing?.weightKg ?? undefined,
-        bloodType: existing?.bloodType,
-        allergyHistory: existing?.allergyHistory,
-        familyHistory: existing?.familyHistory,
-        lifestyleHabits: existing?.lifestyleHabits
-      }
-
-      if (existing) {
-        await preventionApi.updateProfile(existing.id, payload)
-      } else {
-        await preventionApi.createProfile(payload)
-      }
-
-      // 先重取假设再关闭面板：用户看到的列表必须是保存后服务端算出来的那一份。
-      await completenessStore.fetchCompleteness()
-      panelOpen.value = false
-      await createRiskAssessment()
-    } catch (error) {
-      // validation → 0 toast，内联 + 汇总承担呈现；其余由 showError 单条呈现。
-      // presentStates：本页没有状态块，补填保存是用户主动动作 —— 一次 403（无权限）
-      // 或 404（档案已被删除）若默认静默，用户的点击就换不来任何反馈。
-      const err = showError(error, 'profile.saveFailed', { presentStates: true })
-      if (err.kind === 'validation') {
-        apply(err)
-        await nextTick()
-        summaryRef.value?.focusSummary()
-      }
-      // 面板保持打开，backfill 保持用户输入。
-    } finally {
-      saving.value = false
-    }
-  })
-}
-
-/** 徽标的跳转（Contract 7）：带 ?focus= 指向优先级最高的未填字段。 */
 const goProfileWithFocus = () => {
   const key = completenessStore.firstMissingKey()
   router.push({ path: '/prevention/profile', query: key ? { focus: key } : {} })
+}
+
+/** 归因各项之和。后端保证等于 riskScore；这里单独算出来是为了让用户能自己核对。 */
+const contributorSum = computed(
+  () => (currentAssessment.value?.contributors ?? []).reduce((a, c) => a + c.points, 0)
+)
+
+/** 缺失项数量：驱动「请勿把未计入当作正常」的警示。 */
+const missingContributorCount = computed(
+  () => (currentAssessment.value?.contributors ?? []).filter(c => c.state === 'MISSING').length
+)
+
+/** 四种状态的用户可读标签。 */
+const stateLabel = (state: string): string => {
+  const labels: Record<string, string> = {
+    CONTRIBUTED: '已计入',
+    NORMAL: '正常',
+    ASSUMED: '按默认值',
+    MISSING: '缺数据'
+  }
+  return labels[state] ?? state
 }
 
 const viewDetail = (row: RiskAssessmentVO) => {
@@ -482,6 +502,9 @@ onMounted(async () => {
   })
 })
 onUnmounted(() => { cleanupScrollTriggers() })
+
+// 供测试驱动详情弹窗：表格列由 Element Plus 渲染，组件测试的 stub 拿不到行内按钮。
+defineExpose({ viewDetail, handleCreateClick })
 </script>
 
 <style scoped>
@@ -539,13 +562,86 @@ onUnmounted(() => { cleanupScrollTriggers() })
   color: var(--text-2);
 }
 
-.risk-estimate__form { margin-top: 16px; }        /* md */
-.risk-estimate__form :deep(.el-form-item__label) {
-  font: 600 14px/1.5 var(--font-ui) !important;
+/* 只读数据来源列表：每行「字段 — 取值 — 来源」，来源用色区分可信度。 */
+.risk-estimate__sources {
+  margin: 16px 0 0;                               /* md */
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--border-1);
+  border: 1px solid var(--border-1);
+  border-radius: 6px;
+  overflow: hidden;
 }
-.risk-estimate__form :deep(.el-form-item) { margin-bottom: 16px; }
-.risk-estimate__form :deep(.el-input__inner) {
-  font: 400 14px/1.5 var(--font-ui) !important;
+
+.risk-estimate__source {
+  display: grid;
+  grid-template-columns: 96px 1fr auto;
+  gap: 12px;
+  align-items: baseline;
+  padding: 10px 12px;
+  background: var(--surface-1);
+  font: 400 14px/1.5 var(--font-ui);
+}
+
+.risk-estimate__source-label {
+  font-weight: 600;
+  color: var(--text-1);
+}
+
+.risk-estimate__source-value {
+  color: var(--text-1);
+  overflow-wrap: anywhere;
+}
+
+.risk-estimate__source-origin {
+  font: 500 11px/1.4 var(--font-mono);
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.risk-estimate__source--ok .risk-estimate__source-origin {
+  color: var(--success-700, #15803d);
+  background: var(--success-50, #f0fdf4);
+}
+
+.risk-estimate__source--assumed .risk-estimate__source-origin {
+  color: var(--warning-700, #b45309);
+  background: var(--warning-50, #fffbeb);
+}
+
+.risk-estimate__source--missing .risk-estimate__source-origin {
+  color: var(--hhs-color-error-text);
+  background: var(--hhs-color-error-tint);
+}
+
+.risk-estimate__source--missing .risk-estimate__source-value {
+  color: var(--hhs-color-error-text);
+}
+
+.risk-estimate__hint {
+  margin: 12px 0 0;
+  font: 400 13px/1.6 var(--font-ui);
+  color: var(--text-2);
+}
+
+/* 创建前加载态。 */
+.risk-preparing {
+  margin-bottom: 16px;
+  padding: 20px;
+  border: 1px solid var(--border-1);
+  border-radius: 8px;
+  background: var(--surface-1);
+}
+
+.risk-preparing__text {
+  margin: 12px 0 0;
+  font: 400 13px/1.5 var(--font-ui);
+  color: var(--text-2);
+  text-align: center;
 }
 
 .risk-estimate__actions {
@@ -565,6 +661,111 @@ onUnmounted(() => { cleanupScrollTriggers() })
 /* ---------- Contract 4：徽标落点 ---------- */
 .risk-disclosure {
   margin-bottom: 16px;                            /* md：与表格、与徽标上文各留 md */
+}
+
+/* ---------- 详情对话框：评分构成 ---------- */
+.risk-dialog-breakdown {
+  margin-top: 16px;
+}
+
+.risk-dialog-breakdown__title {
+  margin: 0 0 8px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font: 600 14px/1.4 var(--font-ui);
+  color: var(--text-1);
+}
+
+.risk-dialog-breakdown__sum {
+  font: 400 12px/1.4 var(--font-mono);
+  color: var(--text-2);
+}
+
+.risk-dialog-breakdown__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--border-1);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.risk-dialog-breakdown__item {
+  display: grid;
+  grid-template-columns: 80px 72px 48px 1fr;
+  gap: 10px;
+  align-items: baseline;
+  padding: 8px 12px;
+  background: var(--surface-1);
+  border-bottom: 1px solid var(--border-1);
+  font: 400 13px/1.5 var(--font-ui);
+}
+
+.risk-dialog-breakdown__item:last-child {
+  border-bottom: none;
+}
+
+.risk-dialog-breakdown__label {
+  font-weight: 600;
+  color: var(--text-1);
+}
+
+.risk-dialog-breakdown__state {
+  font: 500 11px/1.4 var(--font-mono);
+  padding: 1px 6px;
+  border-radius: 4px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.risk-dialog-breakdown__points {
+  font: 600 13px/1.5 var(--font-mono);
+  text-align: right;
+  color: var(--text-1);
+}
+
+.risk-dialog-breakdown__explain {
+  color: var(--text-2);
+}
+
+/* 四种状态：已计入=红（贡献风险）、正常=绿、默认值=橙、缺数据=灰红 */
+.risk-dialog-breakdown__item--contributed .risk-dialog-breakdown__state {
+  color: var(--hhs-color-error-text);
+  background: var(--hhs-color-error-tint);
+}
+
+.risk-dialog-breakdown__item--contributed .risk-dialog-breakdown__points {
+  color: var(--hhs-color-error-text);
+}
+
+.risk-dialog-breakdown__item--normal .risk-dialog-breakdown__state {
+  color: var(--success-700, #15803d);
+  background: var(--success-50, #f0fdf4);
+}
+
+.risk-dialog-breakdown__item--assumed .risk-dialog-breakdown__state {
+  color: var(--warning-700, #b45309);
+  background: var(--warning-50, #fffbeb);
+}
+
+.risk-dialog-breakdown__item--missing .risk-dialog-breakdown__state {
+  color: var(--text-2);
+  background: var(--surface-2);
+}
+
+.risk-dialog-breakdown__item--missing .risk-dialog-breakdown__explain {
+  font-style: italic;
+}
+
+.risk-dialog-breakdown__warn {
+  margin: 10px 0 0;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: var(--hhs-color-error-tint);
+  color: var(--hhs-color-error-text);
+  font: 400 13px/1.5 var(--font-ui);
 }
 
 /* ---------- 详情对话框：本次评估采用的假设 ---------- */

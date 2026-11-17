@@ -464,10 +464,15 @@ describe('prevention — 源码级契约（零裸 toast / presentStates 全覆�
     expect(source).not.toContain("'risk.saveFailed'")
   })
 
-  it('风险页的 useFormServerErrors 接线仍然在（plan 13 交付，本 plan 只验证）', () => {
+  it('风险页不再二次填表：评估直接读档案，面板只读', () => {
     const source = read('src/views/prevention/Risk.vue')
-    expect(source).toContain('useFormServerErrors(')
-    expect(source).toContain('FormErrorSummary')
-    expect(source).toContain('collectInvalidFieldMessages')
+    // 补填表单已移除 —— 评估读取健康档案与指标，不要求用户重复录入。
+    expect(source).not.toContain('useFormServerErrors(')
+    expect(source).not.toContain('FormErrorSummary')
+    expect(source).not.toContain('collectInvalidFieldMessages')
+    // 取而代之的是只读数据来源面板、加载态与逐项归因。
+    expect(source).toContain('dataSources')
+    expect(source).toContain('risk-preparing')
+    expect(source).toContain('contributors')
   })
 })
