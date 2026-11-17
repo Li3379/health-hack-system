@@ -1,35 +1,35 @@
 ---
 gsd_state_version: "1.0"
-milestone: none
-milestone_name: (awaiting next milestone)
-current_phase: null
-status: completed
-stopped_at: v1.3 shipped and audited; ready for /gsd:new-milestone
-last_updated: "2026-11-16T17:32:52.291Z"
+milestone: v1.4
+milestone_name: 风险评估可信化与引擎收敛
+current_phase: 15
+status: planning
+stopped_at: Phase 15 context written; ready for /gsd:plan-phase 15
+last_updated: "2026-11-17T11:30:00.000Z"
 last_activity: 2026-11-17
-last_activity_desc: Milestone v1.3 completed and archived
+last_activity_desc: v1.4 milestone created; Phase 15 context written
 state_head: 14a5982c8b7cc4db4f8cc4408905eb1f281f0b41
 progress:
   total_phases: 11
   completed_phases: 11
   total_plans: 41
   completed_plans: 41
-current_phase_name: null
+current_phase_name: 风险历史按批次折叠与趋势
 ---
 
 # State: Health Hack System
 
 **Created:** 2026-05-28
-**Current Milestone:** none — v1.3 shipped
-**Current Phase:** —
-**Status:** v1.3 milestone complete
+**Current Milestone:** v1.4 风险评估可信化与引擎收敛
+**Current Phase:** 15
+**Status:** Planning Phase 15
 
 ## Project Reference
 
 See: `.planning/PROJECT.md`
 
 **Core value:** 平台核心价值是提供可靠、准确的健康评分和趋势分析 — 评分数据必须完整持久化（包括维度评分），历史趋势图必须正确展示，部署过程必须稳定可靠。
-**Current focus:** define the next milestone — run `/gsd:new-milestone`
+**Current focus:** Phase 15 — 风险历史按批次折叠与趋势
 
 ## Milestone Progress
 
@@ -39,6 +39,7 @@ See: `.planning/PROJECT.md`
 | v1.1 智能健康指标填报引导与友好校验 | done | 4/4 | 2026-11-05 |
 | v1.2 全站健康与保健指标录入标准化与体验对齐 | done | 3/3 | 2026-11-05 |
 | v1.3 引导式配置与友好错误反馈 | done | 4/4 | 2026-11-11 |
+| v1.4 风险评估可信化与引擎收敛 | in progress | 0/4 | — |
 
 ## Phase Progress
 

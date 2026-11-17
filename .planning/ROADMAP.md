@@ -6,6 +6,7 @@
 - ✅ **v1.1 智能健康指标填报引导与友好校验** — Phases 4-7 (completed 2026-11-05)
 - ✅ **v1.2 全站健康与保健指标录入标准化与体验对齐** — Phases 8-10 ([archive](milestones/v1.2-ROADMAP.md)) (completed 2026-11-05)
 - ✅ **v1.3 引导式配置与友好错误反馈** — Phases 11-14 ([archive](milestones/v1.3-ROADMAP.md)) (completed 2026-11-17)
+- 🚧 **v1.4 风险评估可信化与引擎收敛** — Phases 15-18 (in progress)
 
 ## Phases
 
@@ -52,6 +53,23 @@ Audit: [milestones/v1.3-MILESTONE-AUDIT.md](milestones/v1.3-MILESTONE-AUDIT.md) 
 
 </details>
 
+<details>
+<summary>🚧 v1.4 风险评估可信化与引擎收敛 (Phases 15-18) — IN PROGRESS</summary>
+
+- [ ] **Phase 15: 风险历史按批次折叠与趋势** — 把已写入的 `batchId` 用起来：历史按「一次评估」折叠，显示各项相对上次的分数变化
+- [ ] **Phase 16: 风险评估引擎输入重组** — 用现有 23 项指标重新设计三种疾病的评估（心血管用血脂/血压/BMI/年龄，不再只是前两项折半），不新增疾病
+- [ ] **Phase 17: 告警语义收敛** — 消除 `IntelligentAlertService` 内 4 处独立区间比较，统一到 `ThresholdRangeChecker`，避免接线时分叉出 FIX-01 缺陷
+- [ ] **Phase 18: 技术债清理与收尾** — 删除无引用的 `RiskAnalyzer`、`RiskScorer` 改读归因快照、修复 `FileUploadController` 英文泄漏、清理未消费字典键
+
+**Success criteria**
+
+1. 风险历史按批次可折叠，每个批次显示时间与三条疾病，并标注相对上一批次的分数变化（上升/下降/持平）
+2. 三种疾病的评估都使用其临床相关的全部已有指标，且每项输入的贡献在详情里可核对（各项之和 = 总分）
+3. 全站只有一套阈值区间语义：`ThresholdRangeChecker.classify` 是唯一判定源，无第二份比较实现
+4. 无无引用类、无用户可见英文异常原文、无未消费字典键；后端与前端门禁全绿
+
+</details>
+
 ## Progress
 
 | Milestone | Phases | Plans | Status | Completed |
@@ -60,3 +78,4 @@ Audit: [milestones/v1.3-MILESTONE-AUDIT.md](milestones/v1.3-MILESTONE-AUDIT.md) 
 | v1.1 智能健康指标填报引导与友好校验 | 4/4 | 9/9 | Complete | 2026-11-05 |
 | v1.2 全站健康与保健指标录入标准化与体验对齐 | 3/3 | 6/6 | Complete | 2026-11-05 |
 | v1.3 引导式配置与友好错误反馈 | 4/4 | 41/41 | Complete | 2026-11-17 |
+| v1.4 风险评估可信化与引擎收敛 | 0/4 | 0/0 | In progress | — |
