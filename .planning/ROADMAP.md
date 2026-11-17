@@ -70,6 +70,33 @@ Audit: [milestones/v1.3-MILESTONE-AUDIT.md](milestones/v1.3-MILESTONE-AUDIT.md) 
 
 </details>
 
+## Phase Details
+
+### Phase 15: 风险历史按批次折叠与趋势
+
+**Goal**: 把已写入的 `batchId` 真正呈现给用户 —— 风险评估历史按「一次评估」折叠成批次卡片，并显示各项相对上一批次的分数与等级变化，让用户看得见自己的风险在变好还是变差
+
+**Depends on**: Nothing（`batchId` 与 `contributors` 快照已在 v1.3 收尾改动中写入数据库与 API，本阶段为纯前端呈现）
+
+**Requirements**: 无独立 REQ-ID（v1.4 未新建 REQUIREMENTS.md，本阶段范围由 `15-CONTEXT.md` 的验收标准界定）
+
+**Success Criteria** (what must be TRUE):
+
+  1. 风险页历史区域按 `batchId` 折叠，每个批次一个可展开面板；最近批次默认展开，其余默认折叠
+  2. 每项疾病显示与上一批次同疾病的分数差（↑ / ↓ / 持平 / 首次评估），不出现「↑0」这类噪音
+  3. 跨等级阈值时额外显示等级变化（如「低风险 → 中风险」），与分数箭头分开呈现
+  4. `legacy-*` 批次正常渲染，`contributors` 为空时不渲染明细且给出说明
+  5. 只有 1 个批次时全部显示「首次评估」
+  6. 前端门禁全绿（`test:run` + `build`），后端零改动
+
+**UI hint**: yes
+
+**Plans:** 2 plans
+
+Plans:
+- [ ] 15-01-PLAN.md — 批次折叠端到端贯通（tracer）：batchId 分组、可折叠面板、legacy 兼容、两 spec 补齐 collapse stub
+- [ ] 15-02-PLAN.md — 相邻批次分差与等级变化徽标、批次卡片样式、趋势测试锚点
+
 ## Progress
 
 | Milestone | Phases | Plans | Status | Completed |
