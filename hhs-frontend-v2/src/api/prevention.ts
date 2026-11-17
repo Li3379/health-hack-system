@@ -7,7 +7,8 @@ import type {
   HealthMetricVO,
   HealthMetricTrendVO,
   ProfileCompletenessVO,
-  RiskAssessmentVO
+  RiskAssessmentVO,
+  MetricCoverageVO
 } from '@/types/api'
 
 export const preventionApi = {
@@ -60,6 +61,11 @@ export const preventionApi = {
 
   listRiskAssessments() {
     return request.get<RiskAssessmentVO[]>('/api/prevention/risk-assessment')
+  },
+
+  // 指标覆盖情况：逐项返回每个指标的取值、参考范围与达标状态。
+  getMetricCoverage() {
+    return request.get<MetricCoverageVO[]>('/api/prevention/risk-assessment/metric-coverage')
   },
 
   // 别名，兼容前端调用

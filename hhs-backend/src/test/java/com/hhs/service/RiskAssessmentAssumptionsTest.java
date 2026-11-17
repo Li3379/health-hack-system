@@ -7,6 +7,8 @@ import com.hhs.entity.RiskAssessment;
 import com.hhs.mapper.HealthMetricMapper;
 import com.hhs.mapper.HealthProfileMapper;
 import com.hhs.mapper.RiskAssessmentMapper;
+import com.hhs.service.domain.HealthMetricMetaRegistry;
+import com.hhs.service.domain.MetricCoverageAssembler;
 import com.hhs.service.domain.ProfileCompletenessCalculator;
 import com.hhs.service.domain.ProfileFieldCatalog;
 import com.hhs.service.impl.RiskAssessmentServiceImpl;
@@ -58,7 +60,8 @@ class RiskAssessmentAssumptionsTest {
     @BeforeEach
     void setUp() {
         service = new RiskAssessmentServiceImpl(riskAssessmentMapper, healthProfileMapper,
-                healthMetricMapper, new ProfileCompletenessCalculator(new ProfileFieldCatalog()));
+                healthMetricMapper, new ProfileCompletenessCalculator(new ProfileFieldCatalog()),
+                new MetricCoverageAssembler(new HealthMetricMetaRegistry()));
     }
 
     @Test

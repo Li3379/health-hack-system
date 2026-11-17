@@ -11,6 +11,7 @@ import com.hhs.vo.HealthProfileVO;
 import com.hhs.vo.HealthMetricVO;
 import com.hhs.vo.HealthMetricTrendVO;
 import com.hhs.vo.ProfileCompletenessVO;
+import com.hhs.vo.MetricCoverageVO;
 import com.hhs.vo.RiskAssessmentVO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -200,5 +201,15 @@ public class PreventionController {
     public Result<List<RiskAssessmentVO>> getRiskAssessment() {
         Long userId = SecurityUtils.getCurrentUserId();
         return Result.success(riskAssessmentService.listByUserId(userId));
+    }
+
+    @Operation(summary = "获取指标覆盖情况",
+            description = "逐项返回每个指标的取值、参考范围与达标状态，并标注哪些指标参与风险评估。"
+                    + "缺失项标 MISSING，不与「正常」混淆")
+    @GetMapping("/risk-assessment/metric-coverage")
+    @PreAuthorize("isAuthenticated()")
+    public Result<List<MetricCoverageVO>> getMetricCoverage() {
+        Long userId = SecurityUtils.getCurrentUserId();
+        return Result.success(riskAssessmentService.getMetricCoverage(userId));
     }
 }

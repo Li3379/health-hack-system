@@ -1,5 +1,8 @@
 package com.hhs.service.impl;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hhs.entity.HealthMetric;
 import com.hhs.entity.HealthProfile;
 import com.hhs.entity.RiskAssessment;
@@ -8,25 +11,39 @@ import com.hhs.mapper.HealthProfileMapper;
 import com.hhs.mapper.RiskAssessmentMapper;
 import com.hhs.service.RiskAssessmentService;
 import com.hhs.service.domain.AssumptionCollector;
+import com.hhs.service.domain.MetricCoverageAssembler;
 import com.hhs.service.domain.MetricKeyNormalizer;
 import com.hhs.service.domain.ProfileCompletenessCalculator;
 import com.hhs.service.domain.ProfileFieldCatalog;
+import com.hhs.vo.MetricCoverageVO;
 import com.hhs.vo.RiskAssessmentVO;
 import com.hhs.vo.RiskContributorVO;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.time.Period;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ThreadLocalRandom;
 
+@Slf4j
 @Service
 public class RiskAssessmentServiceImpl implements RiskAssessmentService {
+
+    /** 归因快照的 JSON 编解码器；只处理本类自己的 record 列表，无共享可变状态。 */
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+
+    /** 批次号的时间前缀格式；秒级精度足以排序，随机后缀消解同秒碰撞。 */
+    private static final DateTimeFormatter BATCH_TIME_FORMAT =
+            DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
 
     /**
      * Age-default sentence, recorded in the branch that assigns the default (D-03).
@@ -45,6 +62,7 @@ public class RiskAssessmentServiceImpl implements RiskAssessmentService {
     private final HealthProfileMapper healthProfileMapper;
     private final HealthMetricMapper healthMetricMapper;
     private final ProfileCompletenessCalculator profileCompletenessCalculator;
+    private final MetricCoverageAssembler metricCoverageAssembler;
 
     /**
      * Construct the service with its mappers and the completeness calculator.
@@ -57,16 +75,21 @@ public class RiskAssessmentServiceImpl implements RiskAssessmentService {
     public RiskAssessmentServiceImpl(RiskAssessmentMapper riskAssessmentMapper,
                                      HealthProfileMapper healthProfileMapper,
                                      HealthMetricMapper healthMetricMapper,
-                                     ProfileCompletenessCalculator profileCompletenessCalculator) {
+                                     ProfileCompletenessCalculator profileCompletenessCalculator,
+                                     MetricCoverageAssembler metricCoverageAssembler) {
         this.riskAssessmentMapper = riskAssessmentMapper;
         this.healthProfileMapper = healthProfileMapper;
         this.healthMetricMapper = healthMetricMapper;
         this.profileCompletenessCalculator = profileCompletenessCalculator;
+        this.metricCoverageAssembler = metricCoverageAssembler;
     }
 
     /**
      * Execute risk assessment and persist results, returning multiple assessment records.
-     * This method will delete existing assessments for the user before creating new ones (update mode).
+     *
+     * <p>Rows are appended, never overwritten: the previous implementation deleted the user's
+     * entire history on every run, which made the risk trend — the single most useful thing an
+     * assessment produces — impossible to see. Rows from one run share a {@code batchId}.</p>
      *
      * @param userId User ID
      * @return List of risk assessment results (diabetes, hypertension, cardiovascular)
@@ -75,23 +98,71 @@ public class RiskAssessmentServiceImpl implements RiskAssessmentService {
     @Override
     @Transactional
     public List<RiskAssessmentVO> createAssessment(Long userId) {
-        // Delete existing assessments for this user (update mode)
-        riskAssessmentMapper.delete(
-                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<RiskAssessment>()
-                        .eq(RiskAssessment::getUserId, userId));
-
         HealthProfile profile = getProfileByUserId(userId);
         AssumptionCollector collector = new AssumptionCollector();
         List<ScoredAssessment> scored = RiskRuleEngine.evaluateDetailed(userId, profile,
                 getRecentMetrics(userId), collector);
+
+        // 追加而不是覆盖：删除会让风险趋势无法追踪，而趋势恰恰是风险评估最有价值的部分。
+        // 同一次运行的三条记录共享一个 batchId，列表据此折叠成「一次评估」。
+        String batchId = newBatchId();
         for (ScoredAssessment item : scored) {
-            riskAssessmentMapper.insert(item.assessment());
+            RiskAssessment row = item.assessment();
+            row.setBatchId(batchId);
+            // 冻结当时的归因：读取时原样返回，不重算，历史记录才永远是「当时的真实依据」。
+            row.setContributors(serializeContributors(item.contributors()));
+            riskAssessmentMapper.insert(row);
         }
+
         int completeness = profileCompletenessCalculator.calculate(profile).score();
         List<String> assumptions = collector.toList();
         return scored.stream()
                 .map(item -> toVO(item.assessment(), completeness, assumptions, item.contributors()))
                 .toList();
+    }
+
+    /**
+     * 生成批次号。
+     *
+     * <p>时间前缀让批次天然有序（列表按批次倒序即时间倒序），随机后缀避免同毫秒并发碰撞。</p>
+     *
+     * @return 32 字符以内的批次标识
+     */
+    private static String newBatchId() {
+        return "b" + LocalDateTime.now().format(BATCH_TIME_FORMAT) + "-" + ThreadLocalRandom.current().nextLong(0x7FFFFFFF);
+    }
+
+    /**
+     * 把归因序列化为 JSON 快照。
+     *
+     * @param contributors 归因列表
+     * @return JSON 字符串；序列化失败时返回 {@code null}（宁可没有明细，也不写坏数据）
+     */
+    private String serializeContributors(List<RiskContributorVO> contributors) {
+        try {
+            return OBJECT_MAPPER.writeValueAsString(contributors);
+        } catch (JsonProcessingException e) {
+            log.warn("Failed to serialize risk contributors, storing null: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * 从 JSON 快照反序列化归因。
+     *
+     * @param json 快照，可能为 {@code null}（存量行或序列化失败）
+     * @return 归因列表；无法解析时返回空列表，由前端说明「该记录未保存明细」
+     */
+    private List<RiskContributorVO> deserializeContributors(String json) {
+        if (json == null || json.isBlank()) {
+            return List.of();
+        }
+        try {
+            return OBJECT_MAPPER.readValue(json, new TypeReference<List<RiskContributorVO>>() { });
+        } catch (JsonProcessingException e) {
+            log.warn("Failed to parse stored risk contributors: {}", e.getMessage());
+            return List.of();
+        }
     }
 
     /**
@@ -107,7 +178,7 @@ public class RiskAssessmentServiceImpl implements RiskAssessmentService {
         if (r == null || !r.getUserId().equals(userId)) return null;
         HealthProfile profile = getProfileByUserId(r.getUserId());
         return toVO(r, profileCompletenessCalculator.calculate(profile).score(),
-                disclosedAssumptions(profile), rebuildContributors(userId, profile, r));
+                disclosedAssumptions(profile), deserializeContributors(r.getContributors()));
     }
 
     /**
@@ -129,72 +200,26 @@ public class RiskAssessmentServiceImpl implements RiskAssessmentService {
         int completeness = profileCompletenessCalculator.calculate(profile).score();
         List<String> assumptions = disclosedAssumptions(profile);
 
-        // Recompute once for the whole page: the inputs are the user's current data, not a
-        // per-row snapshot, so this is one evaluation shared by every row.
-        Map<String, List<RiskContributorVO>> recomputed = recomputedByDisease(userId, profile);
-
+        // 归因直接读快照：每行都带着它创建时的真实依据，与分数必然一致。
+        // 存量行的快照为 null，返回空列表 —— 前端据此说明「该记录创建时未保存明细」，
+        // 而不是拿当前数据重算出一份与旧分数对不上的明细。
         return assessments.stream()
                 .map(r -> toVO(r, completeness, assumptions,
-                        consistentContributors(recomputed, r)))
+                        deserializeContributors(r.getContributors())))
                 .toList();
     }
 
     /**
-     * Contributors for a single historical row, or an empty list when they cannot be rebuilt.
+     * {@inheritDoc}
      *
-     * <p>The stored row holds only its score, never its inputs, so the breakdown has to be
-     * recomputed from the user's <em>current</em> profile and metrics. That is only honest
-     * while it still reproduces the stored score: if the user has since edited their profile,
-     * the recomputed points would explain a number the row does not contain. In that case the
-     * breakdown is withheld rather than shown alongside a mismatched total.</p>
-     *
-     * @param userId  owner
-     * @param profile current profile
-     * @param row     the stored assessment
-     * @return matching contributors, or an empty list when they no longer add up
+     * <p>Reads the same three-month window the rule engine uses, so the coverage view describes
+     * exactly the data the assessment was allowed to see.</p>
      */
-    private List<RiskContributorVO> rebuildContributors(Long userId, HealthProfile profile,
-                                                        RiskAssessment row) {
-        return consistentContributors(recomputedByDisease(userId, profile), row);
+    @Override
+    public List<MetricCoverageVO> getMetricCoverage(Long userId) {
+        return metricCoverageAssembler.assemble(getRecentMetrics(userId));
     }
 
-    /**
-     * Recompute contributors for every disease from the current data.
-     *
-     * @param userId  owner
-     * @param profile current profile
-     * @return disease name to contributor list
-     */
-    private Map<String, List<RiskContributorVO>> recomputedByDisease(Long userId, HealthProfile profile) {
-        List<ScoredAssessment> scored = RiskRuleEngine.evaluateDetailed(userId, profile,
-                getRecentMetrics(userId), AssumptionCollector.noop());
-        Map<String, List<RiskContributorVO>> byDisease = new HashMap<>();
-        for (ScoredAssessment item : scored) {
-            byDisease.put(item.assessment().getDiseaseName(), item.contributors());
-        }
-        return byDisease;
-    }
-
-    /**
-     * Keep a recomputed breakdown only when its points still sum to the stored score.
-     *
-     * @param byDisease recomputed contributors keyed by disease
-     * @param row       the stored assessment
-     * @return the contributors, or an empty list when they no longer reproduce the score
-     */
-    private List<RiskContributorVO> consistentContributors(Map<String, List<RiskContributorVO>> byDisease,
-                                                           RiskAssessment row) {
-        List<RiskContributorVO> candidates = byDisease.get(row.getDiseaseName());
-        if (candidates == null || row.getRiskScore() == null) {
-            return List.of();
-        }
-        int sum = candidates.stream().mapToInt(RiskContributorVO::points).sum();
-        // The cardio score is capped at 100, so a capped row cannot be reconstructed by summing.
-        if (sum != row.getRiskScore() && row.getRiskScore() != 100) {
-            return List.of();
-        }
-        return List.copyOf(candidates);
-    }
 
     private HealthProfile getProfileByUserId(Long userId) {
         return healthProfileMapper.selectOne(
@@ -231,9 +256,9 @@ public class RiskAssessmentServiceImpl implements RiskAssessmentService {
 
     private RiskAssessmentVO toVO(RiskAssessment r, int profileCompleteness, List<String> assumptions,
                                   List<RiskContributorVO> contributors) {
-        return new RiskAssessmentVO(r.getId(), r.getUserId(), r.getProfileId(), r.getDiseaseName(),
-                r.getRiskLevel(), r.getRiskScore(), r.getSuggestion(), profileCompleteness,
-                r.getCreateTime(), assumptions, contributors);
+        return new RiskAssessmentVO(r.getId(), r.getUserId(), r.getProfileId(), r.getBatchId(),
+                r.getDiseaseName(), r.getRiskLevel(), r.getRiskScore(), r.getSuggestion(),
+                profileCompleteness, r.getCreateTime(), assumptions, contributors);
     }
 
     /**

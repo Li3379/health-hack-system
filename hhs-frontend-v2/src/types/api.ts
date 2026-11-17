@@ -317,6 +317,8 @@ export interface RiskAssessmentVO {
   id: number
   userId: number
   profileId?: number
+  /** 批次号：同一次评估产生的多条疾病记录共享，列表据此折叠成「一次评估」。 */
+  batchId?: string | null
   diseaseName: string
   riskLevel: string
   riskScore?: number
@@ -327,10 +329,31 @@ export interface RiskAssessmentVO {
   assumptions?: string[]
   /**
    * 逐项评分构成，各 points 之和等于 riskScore。
-   * 空数组表示后端无法重建（历史分数与当前数据已对不上），此时不得渲染明细。
+   * 这是创建时冻结的快照；空数组表示该记录创建时未保存明细（存量数据），
+   * 此时不得渲染明细，也不得用当前数据重算 —— 那会得出与旧分数对不上的解释。
    */
   contributors?: RiskContributorVO[]
   createTime: string
+}
+
+/**
+ * 单个指标的覆盖情况：取值、参考范围、达标状态，以及它是否参与风险评估。
+ *
+ * `state` 把「测了且正常」与「没测」区分开 —— 只给一个风险总分时，这两种情况
+ * 在界面上长得一模一样。
+ */
+export interface MetricCoverageVO {
+  key: string
+  label: string
+  unit: string
+  category: string
+  state: 'HIGH' | 'LOW' | 'NORMAL' | 'MISSING'
+  /** 最新取值；缺失时为 null。 */
+  value?: string | null
+  /** 参考范围，如 `3.9–6.1`；注册表未定义范围时为 null。 */
+  normalRange?: string | null
+  /** 该指标参与哪个风险评估、能加多少分；不参与时为 null。 */
+  riskNote?: string | null
 }
 
 // 体检报告
