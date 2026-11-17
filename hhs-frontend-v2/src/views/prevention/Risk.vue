@@ -154,34 +154,93 @@
         </template>
       </section>
 
-      <el-table v-loading="loading" :data="assessments" stripe>
-        <el-table-column prop="diseaseName" label="疾病名称" width="150" />
-        <el-table-column prop="riskLevel" label="风险等级" width="120">
-          <template #default="{ row }">
-            <el-tag :type="getRiskLevelType(row.riskLevel)">
-              {{ getRiskLevelLabel(row.riskLevel) }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="riskScore" label="风险评分" width="120">
-          <template #default="{ row }">
-            {{ row.riskScore || '-' }}
-          </template>
-        </el-table-column>
-        <el-table-column prop="suggestion" label="建议措施" min-width="300" show-overflow-tooltip />
-        <el-table-column prop="createTime" label="评估时间" width="180">
-          <template #default="{ row }">
-            {{ formatDateTime(row.createTime) }}
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" width="100" fixed="right">
-          <template #default="{ row }">
-            <el-button link type="primary" @click="viewDetail(row)">详情</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
+      <!--
+        历史按「一次评估」折叠：`batchId` 是后端在同一次评估里写给三条疾病的
+        同一个批次号。平铺表格让用户分不清哪三行属于同一次评估，也看不出这次
+        比上次是好是坏 —— 这两件事正是本区域存在的理由。
 
-      <!-- 分页 -->
+        用 el-collapse（数组模型，非 accordion）让多个批次可同时展开；最近一个
+        批次默认展开，其余折叠。只有 1 个批次时也显示「首次评估」，不造出「↑0」。
+      -->
+      <div v-loading="loading" class="risk-batches">
+        <el-collapse v-if="pagedBatches.length" v-model="activeBatchNames">
+          <el-collapse-item
+            v-for="batch in pagedBatches"
+            :key="batch.batchId"
+            :name="batch.batchId"
+            class="risk-batch"
+          >
+            <template #title>
+              <div class="risk-batch__header">
+                <span class="risk-batch__time">{{ formatDateTime(batch.createTime) }}</span>
+                <el-tag :type="getRiskLevelType(batch.worstLevel)" size="small">
+                  最高风险：{{ getRiskLevelLabel(batch.worstLevel) }}
+                </el-tag>
+                <span v-if="batch.isLegacy" class="risk-batch__legacy-badge">存量记录</span>
+              </div>
+            </template>
+
+            <div class="risk-batch__rows">
+              <p v-if="!batch.hasDetail" class="risk-batch__legacy">
+                该记录创建时未保存评分明细
+              </p>
+
+              <div
+                v-for="row in batch.rows"
+                :key="row.assessment.id"
+                class="risk-batch__row"
+              >
+                <span class="risk-batch__disease">{{ row.assessment.diseaseName }}</span>
+
+                <el-tag :type="getRiskLevelType(row.assessment.riskLevel)" size="small">
+                  {{ getRiskLevelLabel(row.assessment.riskLevel) }}
+                </el-tag>
+
+                <span class="risk-batch__score">
+                  {{ row.assessment.riskScore || '-' }}
+                  <!--
+                    分差用绝对分 + 方向，不用百分比：风险评分不是比率，40→44 是
+                    4 分而不是 +10%。持平单独说「持平」，避免出现「↑0」噪音。
+                  -->
+                  <span
+                    v-if="row.isFirst"
+                    class="risk-batch__delta risk-batch__delta--first"
+                  >首次评估</span>
+                  <span
+                    v-else-if="row.delta === 0"
+                    class="risk-batch__delta risk-batch__delta--flat"
+                  >持平</span>
+                  <span
+                    v-else
+                    class="risk-batch__delta"
+                    :class="row.delta! > 0 ? 'risk-batch__delta--up' : 'risk-batch__delta--down'"
+                  >{{ row.delta! > 0 ? `↑${row.delta}` : `↓${Math.abs(row.delta!)}` }}</span>
+                </span>
+
+                <!--
+                  等级变化与分数箭头分开呈现：44 → 46 只涨 2 分，但跨过阈值就是
+                  低→中，这才是用户真正需要知道的那件事。
+                -->
+                <span
+                  v-if="row.levelChanged"
+                  class="risk-batch__level-change"
+                >{{ getRiskLevelLabel(row.previousLevel!) }} → {{ getRiskLevelLabel(row.assessment.riskLevel) }}</span>
+
+                <span class="risk-batch__suggestion">{{ row.assessment.suggestion || '暂无建议' }}</span>
+
+                <el-button link type="primary" @click="viewDetail(row.assessment)">详情</el-button>
+              </div>
+            </div>
+          </el-collapse-item>
+        </el-collapse>
+
+        <p v-else-if="!loading" class="risk-batches__empty">暂无风险评估记录</p>
+      </div>
+
+      <!--
+        分页是纯客户端的：后端一次返回全部记录，不吃 page/size。所以翻页不重新
+        请求，只重算 pagedBatches 并让展开态跟随新页面的最新批次。
+      -->
       <div class="pagination">
         <el-pagination
           v-model:current-page="pagination.page"
@@ -189,8 +248,8 @@
           :total="pagination.total"
           :page-sizes="[10, 20, 50]"
           layout="total, sizes, prev, pager, next"
-          @size-change="fetchAssessments"
-          @current-change="fetchAssessments"
+          @size-change="handlePageChange"
+          @current-change="handlePageChange"
         />
       </div>
     </el-card>
@@ -418,6 +477,219 @@ interface DataSourceRow {
   tone: 'ok' | 'assumed' | 'missing'
 }
 
+/** 一条疾病在某个批次里的呈现：原记录 + 与紧邻上一批次的比较结果。 */
+interface BatchRow {
+  assessment: RiskAssessmentVO
+  /** 无对照组（最早一批 / 上一批没有同名疾病）时为 true，显示「首次评估」。 */
+  isFirst: boolean
+  /** 与上一批次同疾病的绝对分差；无对照组时为 null。 */
+  delta: number | null
+  /** 上一批次同疾病的等级，用于渲染「中风险 → 高风险」。 */
+  previousLevel: string | null
+  levelChanged: boolean
+}
+
+/** 一个批次 = 一次评估，内含该次产出的全部疾病。 */
+interface BatchGroup {
+  batchId: string
+  createTime: string
+  /** 本批次内最高的风险等级，用于头部摘要。 */
+  worstLevel: string
+  /** 归因快照是否可用；存量记录为 false，不渲染明细。 */
+  hasDetail: boolean
+  /** 无 batchId 的存量记录，归入 legacy-<createTime> 批次。 */
+  isLegacy: boolean
+  rows: BatchRow[]
+}
+
+/**
+ * 等级强弱排序。刻意只做「谁更严重」的比较，不重复后端的 60/35 分数阈值：
+ * 等级是后端算好的结论，前端只负责排序与展示。
+ */
+const LEVEL_RANK: Record<string, number> = { HIGH: 3, MEDIUM: 2, LOW: 1 }
+
+const rankLevel = (level: string): number => LEVEL_RANK[level] ?? 0
+
+const worstLevelOf = (rows: RiskAssessmentVO[]): string => {
+  let worst = rows[0]?.riskLevel ?? 'LOW'
+  for (const r of rows) {
+    if (rankLevel(r.riskLevel) > rankLevel(worst)) worst = r.riskLevel
+  }
+  return worst
+}
+
+/**
+ * 把平铺的评估记录折叠成批次。
+ *
+ * `assessments` 由后端按 createTime DESC 返回，因此 Map 的插入序天然就是
+ * 批次的时间倒序 —— 这里刻意不排序，避免与后端顺序产生分歧。
+ *
+ * 分差只与**紧邻的上一个批次**比（D-02）：用户关心「这次比上次怎么样」，
+ * 不是「这次比三个月前怎么样」。上一批缺少同名疾病时不伪造比较，按首次处理。
+ *
+ * 存量记录（无 `batchId`）不能按 `createTime` **精确相等**分组：该列是
+ * `DATETIME DEFAULT CURRENT_TIMESTAMP`，秒精度。同一次旧评估的三条记录如果在
+ * 秒边界两侧写入，会被精确相等切成两张卡片（2 条 + 1 条），把「一次评估」
+ * 展成「两次评估」，比分差还更容易误导人。
+ *
+ * 因此存量记录按**时间邻近**聚类：与当前簇首条的间隔在 LEGACY_CLUSTER_MS 之内
+ * 就并入同一簇。阈值取 2 秒 —— 三条记录的写入间隔在毫秒级，2 秒足以吸收秒边界
+ * 与轻微时钟抖动，又远小于「两次评估」之间真实存在的间隔（用户手动触发）。
+ */
+const LEGACY_CLUSTER_MS = 2000
+
+const parseTime = (value: string): number => {
+  // `2026-10-01 08:00:00` 在 Safari/部分环境下 new Date() 解析不稳定，
+  // 统一替换成 ISO 分隔符，失败则返回 NaN 由调用方退化为「不聚类」。
+  const ms = Date.parse(value.replace(' ', 'T'))
+  return Number.isFinite(ms) ? ms : NaN
+}
+
+const batches = computed<BatchGroup[]>(() => {
+  const map = new Map<string, RiskAssessmentVO[]>()
+  // 存量簇的时间锚点：clusterKey → 该簇首条记录的毫秒时间戳。
+  const clusterAnchor = new Map<string, number>()
+  let clusterSeq = 0
+
+  for (const a of assessments.value) {
+    let key: string
+    if (a.batchId) {
+      key = a.batchId
+    } else {
+      const t = parseTime(a.createTime)
+      // 找最近的一个仍在时间邻近窗口内的存量簇。
+      let joined: string | null = null
+      if (Number.isFinite(t)) {
+        for (const [candidate, anchor] of clusterAnchor) {
+          if (Math.abs(anchor - t) <= LEGACY_CLUSTER_MS) {
+            joined = candidate
+            break
+          }
+        }
+      }
+      if (joined) {
+        key = joined
+      } else {
+        key = `legacy-${a.createTime}${Number.isFinite(t) ? `-${clusterSeq++}` : ''}`
+        if (Number.isFinite(t)) clusterAnchor.set(key, t)
+      }
+    }
+    if (!map.has(key)) map.set(key, [])
+    map.get(key)!.push(a)
+  }
+
+  const groups = [...map.entries()].map(([batchId, rows]) => ({
+    batchId,
+    createTime: rows[0]?.createTime ?? '',
+    worstLevel: worstLevelOf(rows),
+    hasDetail: rows.some(r => (r.contributors?.length ?? 0) > 0),
+    isLegacy: batchId.startsWith('legacy-'),
+    rows
+  }))
+
+  // 第 N 个批次的对照组是第 N+1 个（时间上更早的那个）。
+  return groups.map((group, index) => {
+    const previous = groups[index + 1]
+    const previousByDisease = new Map(
+      (previous?.rows ?? []).map(r => [r.diseaseName, r])
+    )
+
+    const rows: BatchRow[] = group.rows.map(assessment => {
+      const prev = previousByDisease.get(assessment.diseaseName)
+      // 评分缺失或没有对照组时，不编造分差。
+      if (!prev || assessment.riskScore == null || prev.riskScore == null) {
+        return {
+          assessment,
+          isFirst: true,
+          delta: null,
+          previousLevel: null,
+          levelChanged: false
+        }
+      }
+      return {
+        assessment,
+        isFirst: false,
+        delta: assessment.riskScore - prev.riskScore,
+        previousLevel: prev.riskLevel,
+        levelChanged: prev.riskLevel !== assessment.riskLevel
+      }
+    })
+
+    return { ...group, rows }
+  })
+})
+
+/**
+ * 分页按**批次**而不是按行。
+ *
+ * 后端 `GET /api/prevention/risk-assessment` 一次返回该用户全部记录，不吃
+ * page/size（见 PreventionController#getRiskAssessment）。因此这里是客户端切分。
+ *
+ * 必须按批次切：一次评估产出三条记录，若按行分页，一个批次会被劈到两页之间，
+ * 卡片只剩一到两项疾病，且「与上一批次对比」的对照组落到另一页上。按行分页
+ * 还会让分页器显示 12 条而屏幕上只有 4 张卡片 —— 用户被告知有第二页，点进去
+ * 却什么都没有。
+ */
+const pagedBatches = computed<BatchGroup[]>(() => {
+  const start = (pagination.page - 1) * pagination.size
+  return batches.value.slice(start, start + pagination.size)
+})
+
+/** 分页器的总数单位与展示单位一致：都是「批次」。 */
+const syncPaginationTotal = () => {
+  pagination.total = batches.value.length
+}
+
+/**
+ * 当前页默认展开哪个批次：**本页最新**的那一个。
+ *
+ * 不能锚定全局最新批次：翻到第 2 页时全局最新批次不在屏幕上，`activeBatchNames`
+ * 指向一个不可见的 name，本页唯一那张卡片就渲染成折叠状态 —— 用户翻页后看到
+ * 一张点开才有内容的空壳。展开态必须跟着可见页面走。
+ */
+const defaultActiveBatch = computed<string[]>(() => {
+  const newest = pagedBatches.value[0]
+  return newest ? [newest.batchId] : []
+})
+
+/**
+ * 用户手动开合过的批次名。null 表示「用户还没动过」，此时跟随默认值。
+ *
+ * 用 watch 把用户操作与默认值分开：否则每次翻页都会覆盖用户刚打开的批次。
+ */
+const manualActiveBatch = ref<string[] | null>(null)
+
+const activeBatchNames = computed<string[]>({
+  get: () => manualActiveBatch.value ?? defaultActiveBatch.value,
+  set: value => {
+    manualActiveBatch.value = value
+  }
+})
+
+/** 翻页 / 重新加载后丢弃用户的手动展开态，重新跟随「本页最新」。 */
+const resetActiveBatches = () => {
+  manualActiveBatch.value = null
+}
+
+/**
+ * 翻页：数据早已在客户端，不需要重新请求 —— 重新请求只会拿到同一份全量列表，
+ * 白白多一次往返。只需丢弃手动展开态，让展开跟随新页面。
+ *
+ * 改 page-size 可能让当前页越界（例如从 50 条/页改到 10 条/页且正停在第 3 页），
+ * 越界会渲染出空页，因此夹回最后一页。
+ */
+const handlePageChange = () => {
+  const lastPage = Math.max(1, Math.ceil(pagination.total / pagination.size))
+  if (pagination.page > lastPage) pagination.page = lastPage
+  resetActiveBatches()
+}
+
+/** 跳到第一页并展开最新批次 —— 让用户**看见**刚创建的那次评估。 */
+const goToNewestBatch = () => {
+  pagination.page = 1
+  resetActiveBatches()
+}
+
 const getRiskLevelType = (level: string): string => {
   const types: Record<string, string> = {
     LOW: 'success',
@@ -446,7 +718,10 @@ const fetchAssessments = async () => {
     // 后端返回数组，不是分页对象
     const data = Array.isArray(res.data) ? res.data : []
     assessments.value = data
-    pagination.total = data.length
+    // 分页单位是批次，不是行：12 条记录可能是 4 个批次（见 pagedBatches）。
+    syncPaginationTotal()
+    // 重新加载后回到「本页最新批次展开」：创建评估后新批次才会自动展开。
+    resetActiveBatches()
   } catch (error) {
     // 表格保留原有行（UI Considerations · error E7）：失败时不清空 assessments。
     // 键复用 profile.*：这是健康档案的「风险」页，两者共享同一个后端聚合（见台账理由）。
@@ -473,7 +748,10 @@ const createRiskAssessment = async () => {
   try {
     await preventionApi.createRiskAssessment()
     ElMessage.success('评估创建成功')
-    fetchAssessments()
+    // 新批次是最新的一个，必然排在第 1 页开头。若用户当时停在第 3 页，
+    // 不跳回第 1 页就会出现「提示创建成功、却找不到新卡片」—— 用户会以为失败了。
+    goToNewestBatch()
+    await fetchAssessments()
     loadCoverage()
   } catch (error) {
     showError(error, 'profile.saveFailed', { presentStates: true })
@@ -654,6 +932,113 @@ defineExpose({ viewDetail, handleCreateClick })
   margin-top: 20px;
   display: flex;
   justify-content: flex-end;
+}
+
+/* ---------- 风险历史：按批次折叠 ---------- */
+.risk-batches {
+  min-height: 80px;
+}
+
+.risk-batch__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.risk-batch__time {
+  font-weight: 600;
+  color: var(--text-1);
+}
+
+.risk-batch__legacy-badge {
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.risk-batch {
+  margin-bottom: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+  overflow: hidden;
+}
+
+.risk-batch__rows {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+}
+
+.risk-batch__row {
+  display: grid;
+  grid-template-columns: 110px auto 150px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.risk-batch__disease {
+  font-weight: 600;
+}
+
+.risk-batch__score {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.risk-batch__delta {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.risk-batch__delta--up {
+  color: var(--error);
+}
+
+.risk-batch__delta--down {
+  color: var(--success);
+}
+
+.risk-batch__delta--flat,
+.risk-batch__delta--first {
+  color: var(--text-3);
+  font-weight: 400;
+}
+
+/* 等级变化与分数箭头分开：跨阈值是用户真正需要知道的事。 */
+.risk-batch__level-change {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--hhs-color-warning-tint);
+  color: var(--warning-700, #b45309);
+  white-space: nowrap;
+}
+
+.risk-batch__suggestion {
+  color: var(--text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.risk-batch__legacy {
+  margin: 0;
+  color: var(--text-3);
+  font-size: 13px;
+}
+
+.risk-batches__empty {
+  padding: 32px 0;
+  text-align: center;
+  color: var(--text-3);
 }
 
 /* ---------- Contract 5：就地补填面板 ---------- */
