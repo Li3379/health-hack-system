@@ -126,6 +126,28 @@ const globalStubs = {
   'el-descriptions-item': {
     template: '<div class="el-descriptions-item"><slot /></div>',
     props: ['label']
+  },
+  /**
+   * 批次折叠的重型 stub：**必须渲染 #title 插槽**。
+   *
+   * 未 stub 的 <el-collapse> 会渲染成未知元素并丢弃默认插槽 —— 批次内容静默
+   * 消失，而所有既有断言照旧通过（green tests, absent feature）。这里连
+   * aria-expanded 一并对齐真实 EP，让「默认只展开最近批次」可断言。
+   */
+  'el-collapse': {
+    template: '<div class="el-collapse"><slot /></div>',
+    props: ['modelValue']
+  },
+  'el-collapse-item': {
+    template:
+      '<div class="el-collapse-item">' +
+      '<div class="el-collapse-item__header"><slot name="title" /></div>' +
+      '<div class="el-collapse-item__content"><slot /></div></div>',
+    props: ['name', 'title']
+  },
+  'el-empty': {
+    template: '<div class="el-empty">{{ description }}</div>',
+    props: ['description']
   }
 }
 
@@ -411,6 +433,396 @@ describe('Risk.vue — 评估直接读取档案，不二次填表', () => {
       await flushPromises()
 
       expect(wrapper.find('.risk-dialog-breakdown').exists()).toBe(false)
+    })
+  })
+
+  /**
+   * 历史按「一次评估」折叠（Phase 15）。`batchId` 是后端在同一次评估里写给
+   * 三条疾病的同一个批次号；平铺表格让用户分不清哪三行属于同一次评估，也看
+   * 不出这次比上次是好是坏。
+   *
+   * 这些断言依赖 globalStubs 里能渲染 #title 的 el-collapse(-item)：没有那个
+   * stub，批次内容会静默消失而这些断言全部失败 —— 这正是我们想要的护栏。
+   */
+  describe('历史批次折叠与趋势', () => {
+    /** 一个批次的全部疾病行。 */
+    const batchOf = (
+      batchId: string | null,
+      createTime: string,
+      rows: Array<[string, string, number]>
+    ): RiskAssessmentVO[] =>
+      rows.map(([diseaseName, riskLevel, riskScore], i) => ({
+        ...diabetesAssessment,
+        id: `${batchId ?? createTime}-${i}` as unknown as number,
+        batchId,
+        diseaseName,
+        riskLevel,
+        riskScore,
+        createTime,
+        contributors: []
+      }))
+
+    // 最新批：糖尿病 58→62 并跨入高风险；高血压 40→42；心血管 46→46 持平。
+    const latest = batchOf('b3', '2026-11-17 10:00:00', [
+      ['糖尿病', 'HIGH', 62],
+      ['高血压', 'MEDIUM', 42],
+      ['心血管疾病', 'MEDIUM', 46]
+    ])
+    const previous = batchOf('b2', '2026-11-10 09:00:00', [
+      ['糖尿病', 'MEDIUM', 58],
+      ['高血压', 'MEDIUM', 40],
+      ['心血管疾病', 'MEDIUM', 46]
+    ])
+    const legacy = batchOf(null, '2026-10-01 08:00:00', [
+      ['糖尿病', 'MEDIUM', 50],
+      ['高血压', 'MEDIUM', 40],
+      ['心血管疾病', 'MEDIUM', 44]
+    ])
+
+    const renderBatches = async (data: RiskAssessmentVO[]) => {
+      getRiskAssessments.mockResolvedValue({ data })
+      const wrapper = mountRisk()
+      await flushPromises()
+      return wrapper
+    }
+
+    it('每个批次渲染成一张卡片，时间与最高风险在头部', async () => {
+      const wrapper = await renderBatches([...latest, ...previous, ...legacy])
+      const cards = wrapper.findAll('.risk-batch')
+      expect(cards.length).toBe(3)
+
+      const head = cards[0].find('.risk-batch__header')
+      expect(head.text()).toContain('2026-11-17')
+      expect(head.text()).toContain('高风险')
+    })
+
+    it('相对上一批次的绝对分差与方向，不用百分比', async () => {
+      const wrapper = await renderBatches([...latest, ...previous, ...legacy])
+      const latestCard = wrapper.findAll('.risk-batch')[0]
+      expect(latestCard.text()).toContain('↑4')
+      expect(latestCard.text()).toContain('↑2')
+      expect(latestCard.text()).not.toContain('%')
+    })
+
+    /**
+     * D-02 的正面锚定：三个批次的数字刻意互不相同，使两种错误实现当场失败。
+     *
+     * - 若把每个批次都锚定在**最旧**批次上，panels[0] 会变成 ↑20/↓18/↑30，
+     *   与 ↑4/↓4/↑10 不符；
+     * - 若把对照组写成 batches[i-1]（锚定**更新**的批次），panels[1] 糖尿病
+     *   会变成 46-50=↓4 而不是 ↑16。
+     *
+     * 只有两批时这两种错误都算得出相同数字而全绿，所以必须是三批。
+     */
+    it('分差只锚定紧邻上一批次（三批次互不相同的数字钉死 D-02）', async () => {
+      const mkBatch = (
+        batchId: string,
+        createTime: string,
+        rows: Array<[string, string, number]>
+      ): RiskAssessmentVO[] =>
+        rows.map(([diseaseName, riskLevel, riskScore], i) => ({
+          ...diabetesAssessment,
+          id: `${batchId}-${i}` as unknown as number,
+          batchId,
+          diseaseName,
+          riskLevel,
+          riskScore,
+          createTime,
+          contributors: []
+        }))
+
+      const threeBatches = [
+        ...mkBatch('b20261117100000-1', '2026-11-17 10:00:00', [
+          ['糖尿病', 'MEDIUM', 50],
+          ['高血压', 'MEDIUM', 44],
+          ['心血管疾病', 'MEDIUM', 40]
+        ]),
+        ...mkBatch('b20261116090000-2', '2026-11-16 09:00:00', [
+          ['糖尿病', 'MEDIUM', 46],
+          ['高血压', 'MEDIUM', 48],
+          ['心血管疾病', 'LOW', 30]
+        ]),
+        ...mkBatch('b20261115090000-3', '2026-11-15 09:00:00', [
+          ['糖尿病', 'LOW', 30],
+          ['高血压', 'HIGH', 62],
+          ['心血管疾病', 'LOW', 10]
+        ])
+      ]
+
+      const wrapper = await renderBatches(threeBatches)
+      const panels = wrapper.findAll('.risk-batch')
+      expect(panels.length).toBe(3)
+
+      /** 面板内 疾病名 → 分差文本，保证配对在同一行内。 */
+      const deltasOf = (index: number): Record<string, string> => {
+        const out: Record<string, string> = {}
+        for (const row of panels[index].findAll('.risk-batch__row')) {
+          const disease = row.find('.risk-batch__disease').text()
+          const delta = row.find('.risk-batch__delta')
+          out[disease] = delta.exists() ? delta.text() : ''
+        }
+        return out
+      }
+
+      // 最新 vs 中间
+      expect(deltasOf(0)).toMatchObject({
+        糖尿病: '↑4',
+        高血压: '↓4',
+        心血管疾病: '↑10'
+      })
+      // 中间 vs 最旧 —— 正是这一组让「锚定最旧」与「锚定更新」都被证伪
+      expect(deltasOf(1)).toMatchObject({
+        糖尿病: '↑16',
+        高血压: '↓14',
+        心血管疾病: '↑20'
+      })
+      // 最旧无对照组
+      expect(panels[2].findAll('.risk-batch__delta--first').length).toBe(3)
+
+      expect(panels[0].text()).not.toContain('%')
+      expect(panels[1].text()).not.toContain('%')
+    })
+
+    it('三批次时默认只展开最近一个批次', async () => {
+      const mkOne = (batchId: string, createTime: string) =>
+        ['糖尿病', '高血压', '心血管疾病'].map((diseaseName, i) => ({
+          ...diabetesAssessment,
+          id: `${batchId}-${i}` as unknown as number,
+          batchId,
+          diseaseName,
+          createTime,
+          contributors: []
+        }))
+      const wrapper = await renderBatches([
+        ...mkOne('b-newest', '2026-11-17 10:00:00'),
+        ...mkOne('b-middle', '2026-11-16 09:00:00'),
+        ...mkOne('b-oldest', '2026-11-15 09:00:00')
+      ])
+
+      // defineExpose 只暴露 { viewDetail, handleCreateClick }，读 setup 状态需 cast。
+      // 单批次 fixture 下「全展开」也能通过，只有三批次能把全展开实现判为失败。
+      const vm = wrapper.vm as unknown as { activeBatchNames: string[] }
+      expect(vm.activeBatchNames).toEqual(['b-newest'])
+    })
+
+    it('分差为 0 显示「持平」，全页不出现「↑0」', async () => {
+      const wrapper = await renderBatches([...latest, ...previous, ...legacy])
+      expect(wrapper.findAll('.risk-batch')[0].text()).toContain('持平')
+      expect(wrapper.text()).not.toContain('↑0')
+    })
+
+    it('跨等级阈值时单独显示等级变化', async () => {
+      const wrapper = await renderBatches([...latest, ...previous, ...legacy])
+      const change = wrapper.findAll('.risk-batch')[0].find('.risk-batch__level-change')
+      expect(change.exists()).toBe(true)
+      expect(change.text()).toContain('中风险')
+      expect(change.text()).toContain('高风险')
+    })
+
+    it('最早批次无对照组时全部显示「首次评估」', async () => {
+      const wrapper = await renderBatches([...latest, ...previous, ...legacy])
+      const oldest = wrapper.findAll('.risk-batch')[2]
+      expect(oldest.findAll('.risk-batch__delta--first').length).toBe(3)
+    })
+
+    it('只有 1 个批次时全部是「首次评估」', async () => {
+      const wrapper = await renderBatches([...latest])
+      const card = wrapper.findAll('.risk-batch')[0]
+      expect(card.findAll('.risk-batch__delta--first').length).toBe(3)
+      expect(wrapper.text()).not.toContain('↑0')
+    })
+
+    it('无 batchId 的存量记录正常渲染，且说明未保存明细', async () => {
+      const wrapper = await renderBatches([...legacy])
+      const cards = wrapper.findAll('.risk-batch')
+      expect(cards.length).toBe(1)
+      // legacy- 批次共享同一个 createTime，因此折叠成一个批次。
+      expect(cards[0].find('.risk-batch__legacy').text()).toContain('该记录创建时未保存评分明细')
+      expect(wrapper.text()).not.toContain('undefined')
+    })
+
+    /**
+     * 存量记录不能按 `createTime` 精确相等分组。
+     *
+     * `create_time` 是 `DATETIME DEFAULT CURRENT_TIMESTAMP`（秒精度）。同一次旧评估
+     * 的三条记录落在秒边界两侧时，精确相等会把「一次评估」展成两张卡片
+     * （2 条 + 1 条），比分差更容易误导人。
+     */
+    it('跨秒边界的同一批存量记录仍折叠成一张卡片', async () => {
+      const mkLegacy = (createTime: string, diseaseName: string, score: number) => ({
+        ...diabetesAssessment,
+        id: `${createTime}-${diseaseName}` as unknown as number,
+        batchId: null,
+        diseaseName,
+        riskScore: score,
+        createTime,
+        contributors: []
+      })
+      const wrapper = await renderBatches([
+        mkLegacy('2026-10-01 08:00:00', '糖尿病', 50),
+        mkLegacy('2026-10-01 08:00:00', '高血压', 40),
+        // 这一条写入时跨过了秒边界
+        mkLegacy('2026-10-01 08:00:01', '心血管疾病', 44)
+      ])
+
+      const cards = wrapper.findAll('.risk-batch')
+      expect(cards.length).toBe(1)
+      expect(cards[0].findAll('.risk-batch__row').length).toBe(3)
+    })
+
+    /**
+     * 反过来：时间上真正分开的两次旧评估**不得**被合并，否则会把两次评估
+     * 说成一次，趋势也失去意义。
+     */
+    it('相隔较远的两次存量评估不会被合并', async () => {
+      const mkLegacy = (createTime: string, diseaseName: string) => ({
+        ...diabetesAssessment,
+        id: `${createTime}-${diseaseName}` as unknown as number,
+        batchId: null,
+        diseaseName,
+        createTime,
+        contributors: []
+      })
+      const wrapper = await renderBatches([
+        // 两次评估相隔约 30 分钟：真实存在，但足够近以暴露过大的聚类窗口。
+        mkLegacy('2026-10-01 09:30:00', '糖尿病'),
+        mkLegacy('2026-10-01 09:30:00', '高血压'),
+        mkLegacy('2026-10-01 09:30:00', '心血管疾病'),
+        mkLegacy('2026-10-01 09:00:00', '糖尿病'),
+        mkLegacy('2026-10-01 09:00:00', '高血压'),
+        mkLegacy('2026-10-01 09:00:00', '心血管疾病')
+      ])
+
+      const cards = wrapper.findAll('.risk-batch')
+      expect(cards.length).toBe(2)
+      expect(cards[0].findAll('.risk-batch__row').length).toBe(3)
+      expect(cards[1].findAll('.risk-batch__row').length).toBe(3)
+    })
+
+    it('无任何记录时显示空态，不残留空表格', async () => {
+      const wrapper = await renderBatches([])
+      expect(wrapper.findAll('.risk-batch').length).toBe(0)
+      expect(wrapper.find('.risk-batches__empty').text()).toContain('暂无风险评估记录')
+    })
+
+    /**
+     * 分页单位必须与展示单位一致。
+     *
+     * 后端一次返回全部记录，不吃 page/size，所以切分在客户端。若按「行」分页，
+     * 12 条记录会让分页器显示 12 —— 而屏幕上只有 4 张批次卡片，用户被告知还有
+     * 第二页，点进去却什么也没有（后端根本没有第二页）。
+     */
+    it('分页总数按批次计，与屏幕上的卡片数一致', async () => {
+      const mkBatch = (id: string, time: string) =>
+        ['糖尿病', '高血压', '心血管疾病'].map((diseaseName, i) => ({
+          ...diabetesAssessment,
+          id: `${id}-${i}` as unknown as number,
+          batchId: id,
+          diseaseName,
+          createTime: time,
+          contributors: []
+        }))
+      // 4 个批次 = 12 条记录
+      const wrapper = await renderBatches([
+        ...mkBatch('b4', '2026-11-17 10:00:00'),
+        ...mkBatch('b3', '2026-11-16 10:00:00'),
+        ...mkBatch('b2', '2026-11-15 10:00:00'),
+        ...mkBatch('b1', '2026-11-14 10:00:00')
+      ])
+
+      expect(wrapper.findAll('.risk-batch').length).toBe(4)
+      // 总数以批次为单位：4，而不是 12 条记录。
+      const vm = wrapper.vm as unknown as { pagination: { total: number; size: number } }
+      expect(vm.pagination.total).toBe(4)
+      expect(vm.pagination.size).toBeGreaterThanOrEqual(4)
+    })
+
+    /**
+     * 展开态必须跟着可见页面走。
+     *
+     * 若 `activeBatchNames` 锚定**全局**最新批次，翻到第 2 页后它指向一个不在
+     * 屏幕上的批次名，本页唯一那张卡片就渲染成折叠状态 —— 用户翻页后看到一张
+     * 点开才有内容的空壳。
+     */
+    it('翻页后展开态跟随本页最新批次，不会指向屏外批次', async () => {
+      const mkBatch = (id: string, time: string) =>
+        ['糖尿病', '高血压', '心血管疾病'].map((diseaseName, i) => ({
+          ...diabetesAssessment,
+          id: `${id}-${i}` as unknown as number,
+          batchId: id,
+          diseaseName,
+          createTime: time,
+          contributors: []
+        }))
+      const wrapper = await renderBatches([
+        ...mkBatch('b3', '2026-11-17 10:00:00'),
+        ...mkBatch('b2', '2026-11-16 10:00:00'),
+        ...mkBatch('b1', '2026-11-15 10:00:00')
+      ])
+      const vm = wrapper.vm as unknown as {
+        pagination: { page: number; size: number; total: number }
+        activeBatchNames: string[]
+      }
+
+      // 第 1 页：3 个批次里展开最新的 b3。
+      expect(vm.activeBatchNames).toEqual(['b3'])
+
+      // 每页 2 个 → 第 2 页只剩 b1。
+      vm.pagination.size = 2
+      vm.pagination.page = 2
+      await flushPromises()
+      await new Promise(r => setTimeout(r, 30))
+      await flushPromises()
+
+      const cards = wrapper.findAll('.risk-batch')
+      expect(cards.length).toBe(1)
+      // 关键断言：展开的是本页那一个，不是屏外的 b3。
+      expect(vm.activeBatchNames).toEqual(['b1'])
+    })
+
+    /**
+     * 在第 3 页点「创建评估」后，用户必须看得见新建的那一次评估。
+     *
+     * 新批次永远是最新的一个，排在第 1 页开头。若留在第 3 页，会弹出
+     * 「评估创建成功」而屏幕上一张新卡片都没有 —— 用户会以为创建失败了。
+     */
+    it('在后面的页创建评估会跳回第一页，让新批次可见', async () => {
+      const mkBatch = (id: string, time: string) =>
+        ['糖尿病', '高血压', '心血管疾病'].map((diseaseName, i) => ({
+          ...diabetesAssessment,
+          id: `${id}-${i}` as unknown as number,
+          batchId: id,
+          diseaseName,
+          createTime: time,
+          contributors: []
+        }))
+      const wrapper = await renderBatches([
+        ...mkBatch('b6', '2026-11-17 10:00:00'),
+        ...mkBatch('b5', '2026-11-16 10:00:00'),
+        ...mkBatch('b4', '2026-11-15 10:00:00'),
+        ...mkBatch('b3', '2026-11-14 10:00:00'),
+        ...mkBatch('b2', '2026-11-13 10:00:00'),
+        ...mkBatch('b1', '2026-11-12 10:00:00')
+      ])
+      const vm = wrapper.vm as unknown as {
+        pagination: { page: number; size: number }
+        activeBatchNames: string[]
+        createRiskAssessment: () => Promise<void>
+      }
+      vm.pagination.size = 2
+      vm.pagination.page = 3
+      await flushPromises()
+
+      // 直接驱动创建成功后的收尾逻辑：这里关心的是「创建完成后分页与展开态
+      // 是否把新批次带到眼前」，不是「点一次按钮走哪条分支」（缺指标时按钮
+      // 会先展开只读依据面板，那是另一条已被覆盖的路径）。
+      await vm.createRiskAssessment()
+      await flushPromises()
+
+      expect(vm.pagination.page).toBe(1)
+      // 回到第 1 页后，最新的 b6 在屏幕上并且是展开的。
+      expect(vm.activeBatchNames).toEqual(['b6'])
+      expect(wrapper.findAll('.risk-batch').length).toBeGreaterThan(0)
     })
   })
 })

@@ -218,8 +218,20 @@ const baseStubs = {
   'el-skeleton': { template: '<div class="el-skeleton"><slot /></div>', props: ['loading', 'animated'] },
   'el-skeleton-item': { template: '<div class="el-skeleton-item" />', props: ['variant'] },
   'el-tooltip': { template: '<span class="el-tooltip"><slot /></span>', props: ['content', 'placement'] },
-  'el-empty': { template: '<div class="el-empty" />', props: ['description'] },
+  'el-empty': { template: '<div class="el-empty">{{ description }}</div>', props: ['description'] },
   'el-text': { template: '<span class="el-text"><slot /></span>', props: ['type'] },
+  /**
+   * 批次折叠 stub：**必须渲染 #title 插槽**。未 stub 的 <el-collapse> 会丢弃
+   * 默认插槽 —— 批次内容静默消失，而所有既有断言照旧通过。
+   */
+  'el-collapse': { template: '<div class="el-collapse"><slot /></div>', props: ['modelValue'] },
+  'el-collapse-item': {
+    template:
+      '<div class="el-collapse-item">' +
+      '<div class="el-collapse-item__header"><slot name="title" /></div>' +
+      '<div class="el-collapse-item__content"><slot /></div></div>',
+    props: ['name', 'title']
+  },
   Plus: { template: '<span class="icon-plus" />' },
   EstimateBadge: { template: '<span class="estimate-badge" />', props: ['completeness', 'assumptions'] },
   UniversalMetricDialog: { template: '<div class="universal-metric-dialog" />', props: ['modelValue', 'category', 'title', 'initialData'] },
