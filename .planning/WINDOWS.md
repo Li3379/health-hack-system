@@ -1,8 +1,8 @@
 ---
 schema_version: 1
 open_count: 0
-waived_count: 1
-fixed_count: 7
+waived_count: 0
+fixed_count: 8
 total_count: 8
 last_updated: 2026-11-17T05:17:36.106Z
 ---
@@ -17,7 +17,7 @@ last_updated: 2026-11-17T05:17:36.106Z
 |----|-------|------|------|------|-------------|--------|--------|-------------|-------------|
 | 1 | 12 | deviation | hhs-frontend-v2/src/assets/styles/theme.css |  | UI-SPEC Contract 9 global dialog button-weight rules (.el-dialog .el-button--primary 600/400 + line-height 1.5) deferred: 12-07 scoped them to the page plan; 12-08 applied only the page-level portion within its files_modified — the wizard teleports to body so its buttons still render at theme.css 500 14px/1 until a theme.css-scoped change lands | fixed |  | 2026-11-08T11:24:35.513Z | 2026-11-08T11:29:01.155Z |
 | 2 | 12 | deviation | hhs-frontend-v2/src/assets/styles/theme.css |  | UI-SPEC Contract 9 global dialog button-weight rules (.el-dialog .el-button--primary 600/400 + line-height 1.5) deferred: 12-07 scoped them to the page plan; 12-08 applied only the page-level portion within its files_modified - the wizard teleports to body so its buttons still render at theme.css 500 14px/1 until a theme.css-scoped change lands | fixed |  | 2026-11-08T11:24:44.767Z | 2026-11-08T11:25:43.437Z |
-| 3 | 13 | unrun-verify | hhs-backend/src/test/java/com/hhs/integration/PreventionIntegrationTest.java |  | PreventionIntegrationTest not run: Testcontainers cannot reach the Docker daemon in this environment (Failsafe excludes it from Surefire); pre-existing, also fails for HealthScoreIntegrationTest | waived | 根因已从『Docker 不可达』修正为两个独立缺陷：(1) docker-java 3.3.4 默认 API 1.32，Docker 29.8.1 最低 API 1.40 → 400 Bad Request，实测 1.40+ 走 npipe 可通（已用 DOCKER_API_VERSION=1.44 绕过）；(2) 绕过版本后容器成功启动，但 AbstractIntegrationTest 从不执行 schema.sql，hhs_test 库为空 → Table 'hhs_test.device_platform_config' doesn't exist。修复 (2) 需要改测试基建（withInitScript 或 sql.init.mode），超出 v1.3 收尾范围，转下一个里程碑处理 | 2026-11-09T12:07:34.828Z | 2026-11-17T05:17:27.802Z |
+| 3 | 13 | unrun-verify | hhs-backend/src/test/java/com/hhs/integration/PreventionIntegrationTest.java |  | Integration tests never ran: three stacked defects — docker-java 3.3.4 defaults to API 1.32 which Docker Engine 29.x rejects with HTTP 400; the MySQL container was started with no schema applied; and schema.sql's DELIMITER block is unparseable by Testcontainers ScriptUtils. All three fixed in 6a5dde6 (api.version default 1.44, withInitScript on a generated test schema, SchemaTestScriptParityTest drift guard). Verified: 78 integration/performance tests run, 0 failures, 0 errors. | fixed | 根因已从『Docker 不可达』修正为两个独立缺陷：(1) docker-java 3.3.4 默认 API 1.32，Docker 29.8.1 最低 API 1.40 → 400 Bad Request，实测 1.40+ 走 npipe 可通（已用 DOCKER_API_VERSION=1.44 绕过）；(2) 绕过版本后容器成功启动，但 AbstractIntegrationTest 从不执行 schema.sql，hhs_test 库为空 → Table 'hhs_test.device_platform_config' doesn't exist。修复 (2) 需要改测试基建（withInitScript 或 sql.init.mode），超出 v1.3 收尾范围，转下一个里程碑处理 | 2026-11-17T14:10:00.000Z | 2026-11-17T05:17:27.802Z |
 | 4 | 13 | unrun-verify | hhs-frontend-v2/src/components/common/EstimateBadge.vue |  | Backstop: verify the estimate badge label does not wrap at a 320px viewport | fixed |  | 2026-11-09T13:09:53.236Z | 2026-11-17T05:14:33.455Z |
 | 5 | 13 | unrun-verify | hhs-frontend-v2/src/components/common/ProfileReminderBanner.vue |  | Backstop: verify the banner's two buttons plus close control do not collide at 640px or 768px | fixed |  | 2026-11-09T13:10:01.346Z | 2026-11-17T05:14:34.086Z |
 | 6 | 13 | unrun-verify | hhs-frontend-v2/src/views/prevention/Profile.vue |  | Hint wrapping and the 639px label-position flip cannot be measured in happy-dom; CSS rules implemented, visual review pending at 320-639px | fixed |  | 2026-11-09T13:27:01.200Z | 2026-11-17T05:14:34.654Z |
@@ -58,11 +58,11 @@ last_updated: 2026-11-17T05:17:36.106Z
     "phase": "13",
     "file": "hhs-backend/src/test/java/com/hhs/integration/PreventionIntegrationTest.java",
     "line": null,
-    "description": "PreventionIntegrationTest not run: Testcontainers cannot reach the Docker daemon in this environment (Failsafe excludes it from Surefire); pre-existing, also fails for HealthScoreIntegrationTest",
-    "status": "waived",
-    "reason": "根因已从『Docker 不可达』修正为两个独立缺陷：(1) docker-java 3.3.4 默认 API 1.32，Docker 29.8.1 最低 API 1.40 → 400 Bad Request，实测 1.40+ 走 npipe 可通（已用 DOCKER_API_VERSION=1.44 绕过）；(2) 绕过版本后容器成功启动，但 AbstractIntegrationTest 从不执行 schema.sql，hhs_test 库为空 → Table 'hhs_test.device_platform_config' doesn't exist。修复 (2) 需要改测试基建（withInitScript 或 sql.init.mode），超出 v1.3 收尾范围，转下一个里程碑处理",
+    "description": "Integration tests never ran: three stacked defects — docker-java 3.3.4 defaults to API 1.32 which Docker Engine 29.x rejects with HTTP 400; the MySQL container was started with no schema applied; and schema.sql's DELIMITER block is unparseable by Testcontainers ScriptUtils. All three fixed in 6a5dde6 (api.version default 1.44, withInitScript on a generated test schema, SchemaTestScriptParityTest drift guard). Verified: 78 integration/performance tests run, 0 failures, 0 errors.",
+    "status": "fixed",
+    "reason": "superseded waiver: root cause found and fixed in 6a5dde6",
     "recorded_at": "2026-11-09T12:07:34.828Z",
-    "resolved_at": "2026-11-17T05:17:27.802Z",
+    "resolved_at": "2026-11-17T14:10:00.000Z",
     "milestone": "v1.3"
   },
   {
