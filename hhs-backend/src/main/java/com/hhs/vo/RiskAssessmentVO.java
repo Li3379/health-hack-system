@@ -26,6 +26,7 @@ public record RiskAssessmentVO(
         Long id,
         Long userId,
         Long profileId,
+        String batchId,
         String diseaseName,
         String riskLevel,
         Integer riskScore,

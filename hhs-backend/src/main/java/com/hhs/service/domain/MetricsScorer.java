@@ -67,14 +67,25 @@ public class MetricsScorer {
     }
 
     /**
-     * Get penalty for metric value outside normal range
+     * Get penalty for metric value outside normal range.
+     *
+     * <p>The key is canonicalized first: rows may be stored under a legacy alias (for example
+     * {@code glucose} instead of {@code bloodGlucose}), and a raw {@code switch} on the stored
+     * string silently skipped every such row. The blood-glucose case previously matched the
+     * alias {@code "glucose"} only, so a canonical {@code bloodGlucose} reading never incurred
+     * a penalty at all.</p>
+     *
+     * @param rawKey metric key as stored, possibly a legacy alias
+     * @param value  the reading
+     * @return penalty points, 0 when the metric is healthy or unrecognized
      */
-    private int getMetricPenalty(String key, BigDecimal value) {
+    private int getMetricPenalty(String rawKey, BigDecimal value) {
+        String key = MetricKeyNormalizer.toCanonicalKey(rawKey);
         return switch (key) {
             case "heartRate" -> (value.compareTo(new BigDecimal("60")) < 0 || value.compareTo(new BigDecimal("100")) > 0) ? 10 : 0;
             case "systolicBP" -> (value.compareTo(new BigDecimal("90")) < 0 || value.compareTo(new BigDecimal("140")) > 0) ? 15 : 0;
             case "diastolicBP" -> (value.compareTo(new BigDecimal("60")) < 0 || value.compareTo(new BigDecimal("90")) > 0) ? 15 : 0;
-            case "glucose" -> (value.compareTo(new BigDecimal("3.9")) < 0 || value.compareTo(new BigDecimal("7.0")) > 0) ? 20 : 0;
+            case "bloodGlucose" -> (value.compareTo(new BigDecimal("3.9")) < 0 || value.compareTo(new BigDecimal("7.0")) > 0) ? 20 : 0;
             case "bmi" -> (value.compareTo(new BigDecimal("18.5")) < 0 || value.compareTo(new BigDecimal("28")) > 0) ? 10 : 0;
             default -> 0;
         };

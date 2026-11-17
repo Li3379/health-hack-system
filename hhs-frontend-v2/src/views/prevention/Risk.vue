@@ -72,6 +72,88 @@
         />
       </div>
 
+      <!--
+        指标覆盖面板：逐项回答「我的哪项参数被看了、它说了什么」。
+        只给一个风险总分时，「测了且正常」与「根本没测」在界面上无法区分，
+        这张表把两者分开，并标出哪些指标真正参与评估。
+      -->
+      <section class="risk-coverage" aria-labelledby="risk-coverage-title">
+        <header class="risk-coverage__head">
+          <h4 id="risk-coverage-title" class="risk-coverage__title">我的指标覆盖情况</h4>
+          <span class="risk-coverage__summary">
+            已测 {{ coverageSummary.measured }} / {{ coverageSummary.total }} 项
+            <template v-if="coverageSummary.abnormal > 0">
+              · <span class="risk-coverage__abnormal">{{ coverageSummary.abnormal }} 项超出参考范围</span>
+            </template>
+            <template v-if="coverageSummary.used > 0">
+              · {{ coverageSummary.used }} 项参与风险评估
+            </template>
+          </span>
+        </header>
+
+        <div v-if="coverageLoading" class="risk-coverage__loading">
+          <el-skeleton :rows="2" animated />
+        </div>
+
+        <template v-else>
+          <!-- 参与评估的指标单独置顶：这是用户最该看清的一组。 -->
+          <div v-if="usedMetrics.length" class="risk-coverage__group">
+            <p class="risk-coverage__group-title">参与风险评估的指标</p>
+            <ul class="risk-coverage__list">
+              <li
+                v-for="m in usedMetrics"
+                :key="m.key"
+                class="risk-coverage__item"
+                :class="`risk-coverage__item--${m.state.toLowerCase()}`"
+              >
+                <span class="risk-coverage__label">{{ m.label }}</span>
+                <span class="risk-coverage__value">{{ m.value ?? '未测' }}</span>
+                <span class="risk-coverage__range">{{ m.normalRange ?? '—' }}</span>
+                <span class="risk-coverage__state">{{ coverageStateLabel(m.state) }}</span>
+                <span class="risk-coverage__note">{{ m.riskNote }}</span>
+              </li>
+            </ul>
+          </div>
+
+          <div class="risk-coverage__group">
+            <p class="risk-coverage__group-title">
+              其他已测指标
+              <span class="risk-coverage__hint">（有数据，但不参与本次风险评估）</span>
+            </p>
+            <ul v-if="otherMeasured.length" class="risk-coverage__list">
+              <li
+                v-for="m in otherMeasured"
+                :key="m.key"
+                class="risk-coverage__item"
+                :class="`risk-coverage__item--${m.state.toLowerCase()}`"
+              >
+                <span class="risk-coverage__label">{{ m.label }}</span>
+                <span class="risk-coverage__value">{{ m.value }}</span>
+                <span class="risk-coverage__range">{{ m.normalRange ?? '—' }}</span>
+                <span class="risk-coverage__state">{{ coverageStateLabel(m.state) }}</span>
+              </li>
+            </ul>
+            <p v-else class="risk-coverage__empty">暂无其他已测指标</p>
+          </div>
+
+          <div v-if="missingMetrics.length" class="risk-coverage__group">
+            <p class="risk-coverage__group-title">
+              尚未采集
+              <span class="risk-coverage__hint">
+                （{{ missingMetrics.length }} 项；这些不是「正常」，是「不知道」）
+              </span>
+            </p>
+            <ul class="risk-coverage__list risk-coverage__list--missing">
+              <li v-for="m in missingMetrics" :key="m.key" class="risk-coverage__item risk-coverage__item--missing">
+                <span class="risk-coverage__label">{{ m.label }}</span>
+                <span class="risk-coverage__state">未测</span>
+                <span v-if="m.riskNote" class="risk-coverage__note">{{ m.riskNote }}</span>
+              </li>
+            </ul>
+          </div>
+        </template>
+      </section>
+
       <el-table v-loading="loading" :data="assessments" stripe>
         <el-table-column prop="diseaseName" label="疾病名称" width="150" />
         <el-table-column prop="riskLevel" label="风险等级" width="120">
@@ -193,7 +275,7 @@ import { formatDateTime } from '@/utils/format'
 import EstimateBadge from '@/components/common/EstimateBadge.vue'
 import { useProfileCompletenessStore } from '@/stores/profileCompleteness'
 import { showError } from '@/utils/showError'
-import type { HealthProfileVO, RiskAssessmentVO } from '@/types/api'
+import type { HealthProfileVO, MetricCoverageVO, RiskAssessmentVO } from '@/types/api'
 
 const loading = ref(false)
 const detailVisible = ref(false)
@@ -392,6 +474,7 @@ const createRiskAssessment = async () => {
     await preventionApi.createRiskAssessment()
     ElMessage.success('评估创建成功')
     fetchAssessments()
+    loadCoverage()
   } catch (error) {
     showError(error, 'profile.saveFailed', { presentStates: true })
   }
@@ -475,6 +558,54 @@ const stateLabel = (state: string): string => {
   return labels[state] ?? state
 }
 
+// ---------- 指标覆盖面板 ----------
+
+const coverage = ref<MetricCoverageVO[]>([])
+const coverageLoading = ref(false)
+
+/** 参与风险评估的指标（有 riskNote 的），缺失项也要列出来 —— 那正是用户最需要知道的。 */
+const usedMetrics = computed(() => coverage.value.filter(m => !!m.riskNote))
+
+/** 有数据但不参与评估的指标。 */
+const otherMeasured = computed(() =>
+  coverage.value.filter(m => !m.riskNote && m.state !== 'MISSING')
+)
+
+/** 尚未采集的指标。 */
+const missingMetrics = computed(() => coverage.value.filter(m => m.state === 'MISSING'))
+
+/** 顶部摘要：已测 / 异常 / 参与评估 三个数字。 */
+const coverageSummary = computed(() => ({
+  total: coverage.value.length,
+  measured: coverage.value.filter(m => m.state !== 'MISSING').length,
+  abnormal: coverage.value.filter(m => m.state === 'HIGH' || m.state === 'LOW').length,
+  used: usedMetrics.value.length
+}))
+
+/** 覆盖面板的状态标签；与风险归因的四态刻意用不同措辞，避免混淆两个概念。 */
+const coverageStateLabel = (state: string): string => {
+  const labels: Record<string, string> = {
+    HIGH: '偏高',
+    LOW: '偏低',
+    NORMAL: '正常',
+    MISSING: '未测'
+  }
+  return labels[state] ?? state
+}
+
+/** 加载指标覆盖情况。失败不打扰用户：面板留空即可，风险结果本身仍然可用。 */
+const loadCoverage = async () => {
+  coverageLoading.value = true
+  try {
+    const res = await preventionApi.getMetricCoverage()
+    coverage.value = Array.isArray(res.data) ? res.data : []
+  } catch {
+    coverage.value = []
+  } finally {
+    coverageLoading.value = false
+  }
+}
+
 const viewDetail = (row: RiskAssessmentVO) => {
   currentAssessment.value = row
   detailVisible.value = true
@@ -488,6 +619,7 @@ onMounted(async () => {
   await completenessStore.fetchCompleteness()
 
   fetchAssessments()
+  loadCoverage()
 
   nextTick(() => {
     const tl = gsap.timeline({ defaults: { ease: EASE.out } })
@@ -661,6 +793,164 @@ defineExpose({ viewDetail, handleCreateClick })
 /* ---------- Contract 4：徽标落点 ---------- */
 .risk-disclosure {
   margin-bottom: 16px;                            /* md：与表格、与徽标上文各留 md */
+}
+
+/* ---------- 指标覆盖面板 ---------- */
+.risk-coverage {
+  margin-bottom: 16px;
+  padding: 16px;
+  border: 1px solid var(--border-1);
+  border-radius: 8px;
+  background: var(--surface-1);
+}
+
+.risk-coverage__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.risk-coverage__title {
+  margin: 0;
+  font: 600 14px/1.4 var(--font-ui);
+  color: var(--text-1);
+}
+
+.risk-coverage__summary {
+  font: 400 12px/1.4 var(--font-mono);
+  color: var(--text-2);
+}
+
+.risk-coverage__abnormal {
+  color: var(--hhs-color-error-text);
+  font-weight: 600;
+}
+
+.risk-coverage__group + .risk-coverage__group {
+  margin-top: 14px;
+}
+
+.risk-coverage__group-title {
+  margin: 0 0 6px;
+  font: 600 12px/1.4 var(--font-ui);
+  color: var(--text-2);
+}
+
+.risk-coverage__hint {
+  font-weight: 400;
+  color: var(--text-3);
+}
+
+.risk-coverage__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--border-1);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.risk-coverage__item {
+  display: grid;
+  grid-template-columns: 96px 88px 96px 56px 1fr;
+  gap: 10px;
+  align-items: baseline;
+  padding: 7px 12px;
+  background: var(--surface-1);
+  border-bottom: 1px solid var(--border-1);
+  font: 400 13px/1.5 var(--font-ui);
+}
+
+.risk-coverage__item:last-child {
+  border-bottom: none;
+}
+
+/* 未测分组没有取值/范围列，用更窄的栅格。 */
+.risk-coverage__list--missing .risk-coverage__item {
+  grid-template-columns: 96px 56px 1fr;
+}
+
+.risk-coverage__label {
+  font-weight: 600;
+  color: var(--text-1);
+}
+
+.risk-coverage__value {
+  font-family: var(--font-mono);
+  color: var(--text-1);
+}
+
+.risk-coverage__range {
+  font: 400 12px/1.5 var(--font-mono);
+  color: var(--text-3);
+}
+
+.risk-coverage__state {
+  font: 500 11px/1.4 var(--font-mono);
+  padding: 1px 6px;
+  border-radius: 4px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.risk-coverage__note {
+  font: 400 12px/1.5 var(--font-ui);
+  color: var(--text-2);
+}
+
+.risk-coverage__item--high .risk-coverage__state {
+  color: var(--hhs-color-error-text);
+  background: var(--hhs-color-error-tint);
+}
+
+.risk-coverage__item--high .risk-coverage__value {
+  color: var(--hhs-color-error-text);
+  font-weight: 600;
+}
+
+.risk-coverage__item--low .risk-coverage__state {
+  color: var(--warning-700, #b45309);
+  background: var(--warning-50, #fffbeb);
+}
+
+.risk-coverage__item--low .risk-coverage__value {
+  color: var(--warning-700, #b45309);
+  font-weight: 600;
+}
+
+.risk-coverage__item--normal .risk-coverage__state {
+  color: var(--success-700, #15803d);
+  background: var(--success-50, #f0fdf4);
+}
+
+.risk-coverage__item--missing .risk-coverage__state {
+  color: var(--text-2);
+  background: var(--surface-2);
+}
+
+.risk-coverage__empty {
+  margin: 0;
+  padding: 8px 12px;
+  font: 400 12px/1.5 var(--font-ui);
+  color: var(--text-3);
+}
+
+.risk-coverage__loading {
+  padding: 8px 0;
+}
+
+@media (max-width: 767px) {
+  .risk-coverage__item {
+    grid-template-columns: 1fr auto;
+    row-gap: 2px;
+  }
+  .risk-coverage__range,
+  .risk-coverage__note {
+    grid-column: 1 / -1;
+  }
 }
 
 /* ---------- 详情对话框：评分构成 ---------- */

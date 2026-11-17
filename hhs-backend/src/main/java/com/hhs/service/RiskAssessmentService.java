@@ -1,5 +1,6 @@
 package com.hhs.service;
 
+import com.hhs.vo.MetricCoverageVO;
 import com.hhs.vo.RiskAssessmentVO;
 
 import java.util.List;
@@ -35,4 +36,17 @@ public interface RiskAssessmentService {
      * @return List of risk assessments sorted by creation time (descending)
      */
     List<RiskAssessmentVO> listByUserId(Long userId);
+
+    /**
+     * Get the per-metric coverage view for a user.
+     *
+     * <p>Answers "which of my parameters did the system actually look at, and what did each
+     * one say" — the question a bare risk score cannot answer. Every metric the registry knows
+     * appears exactly once, including the ones with no reading, so a missing measurement is
+     * never mistaken for a normal one.</p>
+     *
+     * @param userId User ID
+     * @return one row per registry metric, HEALTH first then WELLNESS
+     */
+    List<MetricCoverageVO> getMetricCoverage(Long userId);
 }
