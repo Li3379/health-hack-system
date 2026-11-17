@@ -94,7 +94,12 @@ Audit: [milestones/v1.3-MILESTONE-AUDIT.md](milestones/v1.3-MILESTONE-AUDIT.md) 
 **Plans:** 2 plans
 
 Plans:
+**Wave 1**
+
 - [ ] 15-01-PLAN.md — 批次折叠端到端贯通（tracer）：batchId 分组、可折叠面板、legacy 兼容、两 spec 补齐 collapse stub
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 15-02-PLAN.md — 相邻批次分差与等级变化徽标、批次卡片样式、趋势测试锚点
 
 ## Progress
