@@ -1368,7 +1368,7 @@ defineExpose({ viewDetail, handleCreateClick })
   margin: 0;
   padding: 0;
   list-style: none;
-  border: 1px solid var(--border-1);
+  border: 1px solid var(--border);
   border-radius: 6px;
   overflow: hidden;
 }
@@ -1380,7 +1380,7 @@ defineExpose({ viewDetail, handleCreateClick })
   align-items: baseline;
   padding: 8px 12px;
   background: var(--surface-1);
-  border-bottom: 1px solid var(--border-1);
+  border-bottom: 1px solid var(--border);
   font: 400 13px/1.5 var(--font-ui);
 }
 
