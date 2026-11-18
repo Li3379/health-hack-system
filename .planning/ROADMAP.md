@@ -56,7 +56,7 @@ Audit: [milestones/v1.3-MILESTONE-AUDIT.md](milestones/v1.3-MILESTONE-AUDIT.md) 
 <details>
 <summary>🚧 v1.4 风险评估可信化与引擎收敛 (Phases 15-18) — IN PROGRESS</summary>
 
-- [ ] **Phase 15: 风险历史按批次折叠与趋势** — 把已写入的 `batchId` 用起来：历史按「一次评估」折叠，显示各项相对上次的分数变化
+- [x] **Phase 15: 风险历史按批次折叠与趋势** — 把已写入的 `batchId` 用起来：历史按「一次评估」折叠，显示各项相对上次的分数变化
 - [ ] **Phase 16: 风险评估引擎输入重组** — 用现有 23 项指标重新设计三种疾病的评估（心血管用血脂/血压/BMI/年龄，不再只是前两项折半），不新增疾病
 - [ ] **Phase 17: 告警语义收敛** — 消除 `IntelligentAlertService` 内 4 处独立区间比较，统一到 `ThresholdRangeChecker`，避免接线时分叉出 FIX-01 缺陷
 - [ ] **Phase 18: 技术债清理与收尾** — 删除无引用的 `RiskAnalyzer`、`RiskScorer` 改读归因快照、修复 `FileUploadController` 英文泄漏、清理未消费字典键
@@ -110,4 +110,4 @@ Plans:
 | v1.1 智能健康指标填报引导与友好校验 | 4/4 | 9/9 | Complete | 2026-11-05 |
 | v1.2 全站健康与保健指标录入标准化与体验对齐 | 3/3 | 6/6 | Complete | 2026-11-05 |
 | v1.3 引导式配置与友好错误反馈 | 4/4 | 41/41 | Complete | 2026-11-17 |
-| v1.4 风险评估可信化与引擎收敛 | 0/4 | 0/0 | In progress | — |
+| v1.4 风险评估可信化与引擎收敛 | 1/4 | 2/2 | In progress | — |

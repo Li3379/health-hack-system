@@ -4,12 +4,12 @@ milestone: v1.4
 milestone_name: 风险评估可信化与引擎收敛
 current_phase: 15
 current_phase_name: 风险历史按批次折叠与趋势
-status: verifying
-stopped_at: Phase 15 executed (2/2 plans, 638 tests green); browser UAT blocked — Docker Desktop not running
-last_updated: "2026-11-18T01:05:00.000Z"
+status: idle
+stopped_at: Phase 15 complete — 15/15 UAT pass, verification passed, 640 tests green
+last_updated: "2026-11-18T04:16:39.612Z"
 last_activity: 2026-11-18
-last_activity_desc: Phase 15 executed from autoresearch worktree; source + summaries merged, planning docs preserved
-state_head: 98e686a9e84a311ddd6cb6766639b54be15c09c4
+last_activity_desc: Phase 15 verified — 15/15 UAT, one layout defect found and fixed, one truth overridden
+state_head: 342a68c0ed40c52842df1fcf8bfb34abbe7c5b84
 progress:
   total_phases: 1
   completed_phases: 11
@@ -68,9 +68,9 @@ See: `.planning/PROJECT.md`
 ## Current Position
 
 Phase: 15 (风险历史按批次折叠与趋势) — READY TO EXECUTE
-Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-11-17 — Milestone v1.3 completed and archived
+Plan: 2 of 2
+Status: Ready to execute
+Last activity: 2026-11-18 — Phase 15 verified (15/15 UAT, one layout defect fixed)
 
 ## Accumulated Context
 
