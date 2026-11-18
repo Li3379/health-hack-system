@@ -21,13 +21,13 @@
     {
       "number": "18",
       "name": "技术债清理与收尾",
-      "status": "in_progress"
+      "status": "complete"
     }
   ],
   "next": {
-    "command": "/gsd:discuss-phase 18",
-    "label": "Plan phase 18",
-    "reason": "Phase 18 of 4 — 技术债清理与收尾"
+    "command": "/gsd:audit-milestone",
+    "label": "Audit v1.4",
+    "reason": "All 4 phases complete — audit before archiving"
   },
   "updated_at": "2026-11-18T16:20:32.815Z"
 }

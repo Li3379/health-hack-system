@@ -2,17 +2,17 @@
 gsd_state_version: "1.0"
 milestone: v1.4
 milestone_name: 风险评估可信化与引擎收敛
-current_phase: 18 — 技术债清理与收尾
+current_phase: 18 — 技术债清理与收尾（已完成，v1.4 待归档）
 current_phase_name: 技术债清理与收尾
 status: planning
-stopped_at: Phase 17 complete (via autoresearch loop), ready to plan Phase 18
+stopped_at: v1.4 all 4 phases complete — ready for milestone audit/archive
 last_updated: "2026-11-18T16:20:32.712Z"
 last_activity: 2026-11-19
-last_activity_desc: Phase 17 complete (autoresearch threshold-single-source), transitioned to Phase 18
+last_activity_desc: Phase 18 complete (dead code zeroed); v1.4 ready to archive
 state_head: b320f297f36fd22aa157047c2cc9661cb7ff25c9
 progress:
   total_phases: 4
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 7
   completed_plans: 7
 ---
@@ -21,7 +21,7 @@ progress:
 
 **Created:** 2026-05-28
 **Current Milestone:** v1.4 风险评估可信化与引擎收敛
-**Current Phase:** 18 — 技术债清理与收尾
+**Current Phase:** v1.4 完成，待归档
 **Status:** Ready to plan
 
 ## Project Reference
