@@ -826,3 +826,84 @@ describe('Risk.vue — 评估直接读取档案，不二次填表', () => {
     })
   })
 })
+
+/**
+ * 布局契约：批次行的网格列数必须等于模板渲染的子元素数。
+ *
+ * 这条测试的存在理由是一次真实缺陷：模板在跨等级时渲染 6 个子元素
+ * （疾病 / 等级标签 / 分数+分差 / 等级变化 / 建议 / 详情），而 CSS 只声明了 5 列，
+ * 于是最该看清的那一行把详情按钮折到了第二行，普通行却正常。
+ *
+ * 之前的 13 项 UAT 全绿却没抓到 —— 它们只查类名与文本，没有一项看几何。
+ * happy-dom 不做布局，所以这里改为源码级契约：列数对不上就红。
+ */
+describe('Risk.vue — 批次行网格列数与子元素数一致', () => {
+  it('grid-template-columns 的列数等于模板中该行的直接子元素数', async () => {
+    const fs = await import('node:fs')
+    const path = await import('node:path')
+    const src = fs.readFileSync(
+      path.resolve(__dirname, '../../views/prevention/Risk.vue'),
+      'utf8'
+    )
+
+    // 1. 取 .risk-batch__row 的 grid-template-columns 列数
+    const cssBlock = src.match(/\.risk-batch__row\s*\{[\s\S]*?\}/)
+    expect(cssBlock, '未找到 .risk-batch__row 样式块').not.toBeNull()
+    const colsLine = cssBlock![0].match(/grid-template-columns:\s*([^;]+);/)
+    expect(colsLine, '.risk-batch__row 未声明 grid-template-columns').not.toBeNull()
+
+    // 按空白切分并排除 minmax(...) 内部的空格
+    const colSpec = colsLine![1].trim()
+    let depth = 0
+    let colCount = 1
+    for (const ch of colSpec) {
+      if (ch === '(') depth++
+      else if (ch === ')') depth--
+      else if (/\s/.test(ch) && depth === 0) colCount++
+    }
+    // 连续空格只算一次
+    colCount = colSpec.split(/\s+(?![^()]*\))/).filter(Boolean).length
+
+    // 2. 数模板中 .risk-batch__row 内的直接子元素
+    //    子元素标记：span.risk-batch__disease / el-tag / span.risk-batch__score /
+    //    span.risk-batch__level-change / span.risk-batch__suggestion / el-button
+    const rowTemplate = src.match(/class="risk-batch__row"[\s\S]*?<\/div>\s*<\/div>\s*<\/el-collapse-item>/)
+    expect(rowTemplate, '未找到批次行模板').not.toBeNull()
+
+    const childMarkers = [
+      /class="risk-batch__disease"/,
+      /<el-tag[\s\S]*?<\/el-tag>/,
+      /class="risk-batch__score"/,
+      /class="risk-batch__level-change"/,
+      /class="risk-batch__suggestion"/,
+      /<el-button[^>]*>详情<\/el-button>/,
+    ]
+    const childCount = childMarkers.filter(m => m.test(rowTemplate![0])).length
+
+    expect(childCount).toBe(6) // 模板前提：六个子元素都在
+    expect(colCount).toBe(childCount)
+  })
+
+  it('存在 767px 媒体查询，把批次行折成两列以免窄屏横向溢出', async () => {
+    const fs = await import('node:fs')
+    const path = await import('node:path')
+    const src = fs.readFileSync(
+      path.resolve(__dirname, '../../views/prevention/Risk.vue'),
+      'utf8'
+    )
+
+    // 实测 375px 下六列横排会 scrollWidth 444 > clientWidth 375。
+    //
+    // 文件里有两个 767px 媒体查询（另一个属于 .risk-coverage），所以必须定位到
+    // 「里面真的含有 .risk-batch__row 折列规则」的那一个，而不是第一个匹配。
+    // 取所有 767px 块，逐个检查其后的规则体。
+    const blocks = src.split(/@media\s*\(max-width:\s*767px\)\s*\{/)
+    expect(blocks.length, '缺少 767px 媒体查询').toBeGreaterThan(1)
+
+    const hasRowRule = blocks.slice(1).some(block => {
+      const rule = block.match(/\.risk-batch__row\s*\{[\s\S]*?\}/)
+      return !!rule && rule[0].includes('grid-template-columns')
+    })
+    expect(hasRowRule, '没有任何 767px 媒体查询为 .risk-batch__row 声明 grid-template-columns').toBe(true)
+  })
+})
