@@ -75,7 +75,6 @@ describe('router — 路由级 404 catch-all', () => {
   it('既有路由未被遮蔽：嵌套布局子路由仍解析到自身', () => {
     expect(router.resolve('/health/metrics').name).toBe('HealthMetrics')
     expect(router.resolve('/prevention/profile').name).toBe('PreventionProfile')
-    expect(router.resolve('/settings/device-platform').name).toBe('DevicePlatformConfig')
   })
 
   it('既有路由未被遮蔽：参数化路由仍解析到自身并带上参数', () => {
@@ -91,6 +90,6 @@ describe('router — 路由级 404 catch-all', () => {
 
   it('既有路由未被遮蔽：布局外路由仍解析到自身', () => {
     expect(router.resolve('/login').name).toBe('Login')
-    expect(router.resolve('/oauth/callback/github').name).toBe('OAuthCallback')
+    expect(router.resolve('/register').name).toBe('Register')
   })
 })

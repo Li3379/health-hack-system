@@ -65,11 +65,6 @@ export const ERROR_MESSAGES: Record<string, string> = {
   'wellness.loadFailed': '无法加载保健数据，请稍后重试',
   'wellness.saveFailed': '无法保存保健记录，请稍后重试',
 
-  // --- 设备配置（views/settings）---
-  'device.loadFailed': '无法加载设备配置，请点击重试',
-  'device.saveFailed': '无法保存设备配置，请稍后重试',
-  'device.syncFailed': '设备同步未完成，请检查连接后重试',
-
   // --- 个人信息（views/user）---
   'user.loadFailed': '无法加载个人信息，请稍后重试',
   'user.saveFailed': '无法保存个人信息，请检查填写内容',
@@ -85,7 +80,6 @@ export const ERROR_MESSAGES: Record<string, string> = {
   // - reminders/Index.vue:181 复用 alert.updateFailed（通用「状态更新失败」措辞贴切）
   // - health/Score.vue:457 复用 score.loadFailed
   // - prevention/Risk.vue:310,335 复用 profile.loadFailed / profile.saveFailed
-  // - settings/DevicePlatformConfig.vue:355 复用 device.saveFailed
   // - OcrHistory 复用 ai.loadFailed / ai.deleteFailed
   // - ai.sendFailed 刻意不新增：14-12 的发送失败走就地 retry 气泡，
   //   再加一个字典键会形成第二套、且无人消费的词汇表。
