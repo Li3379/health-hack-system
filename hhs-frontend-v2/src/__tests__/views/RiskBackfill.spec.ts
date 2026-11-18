@@ -1011,11 +1011,57 @@ describe('Risk.vue — 呈现契约（源码扫描）', () => {
     await flushPromises()
 
     const items = wrapper.findAll('.risk-coverage__item')
-    // 已知缺陷（16-04 修正）：今天的 missingMetrics 谓词不看 riskNote，
-    // 「有 riskNote 且 MISSING」的两行会被重复渲染，所以这 6 行 fixture 实际
-    // 渲染成 8 项。断言写成 >= 而不是 ==，免得把待修的重复固化成契约。
-    expect(items.length).toBeGreaterThanOrEqual(coverageRows.length)
+    // 严格相等，不是 >=：16-02 留的宽松形态就是等这一步收紧的，两处不能并存 ——
+    // 留着 ≥ 会让重复渲染回归时仍然全绿。
+    expect(items.length).toBe(coverageRows.length)
     expect(wrapper.text()).toContain('高密度脂蛋白')
+  })
+
+  /** 三个分组各自的行标签与行数，供分组互斥的两条断言共用。 */
+  const groupLabels = (wrapper: ReturnType<typeof mountRisk>) =>
+    wrapper.findAll('.risk-coverage__group').map(g => ({
+      title: g.find('.risk-coverage__group-title').text(),
+      labels: g.findAll('.risk-coverage__label').map(l => l.text()),
+      count: g.findAll('.risk-coverage__item').length
+    }))
+
+  /**
+   * ① 有 riskNote 且 MISSING 的指标只渲染一次。
+   *
+   * D-02 落地的直接后果：riskNote 从 3 键变 8 键，其中血脂四项在现有数据下必然
+   * MISSING。旧谓词（usedMetrics 不看 state、missingMetrics 不看 riskNote）让这
+   * 两项各渲染两次 —— 本用例在旧代码上是红的。
+   */
+  it('有 riskNote 且 MISSING 的指标只渲染一次', async () => {
+    getMetricCoverage.mockResolvedValue({ data: coverageRows })
+    const wrapper = mountRisk()
+    await flushPromises()
+
+    const labels = wrapper.findAll('.risk-coverage__label').map(l => l.text())
+    expect(labels.filter(l => l === '总胆固醇')).toHaveLength(1)
+    expect(labels.filter(l => l === '高密度脂蛋白')).toHaveLength(1)
+  })
+
+  /**
+   * ② 三组之和等于覆盖行数。
+   *
+   * 必须求和，不能只断言「每个指标不重复」—— 互斥可以被「把三组都清空」满足。
+   * 区域否定断言是补上的另一半：把带 riskNote 的项挪进「尚未采集」会让和不变
+   * 但语义说谎（T-16-18）。
+   */
+  it('三组之和等于覆盖行数，且「尚未采集」不含任何参与评估的指标', async () => {
+    getMetricCoverage.mockResolvedValue({ data: coverageRows })
+    const wrapper = mountRisk()
+    await flushPromises()
+
+    const groups = groupLabels(wrapper)
+    expect(groups.reduce((sum, g) => sum + g.count, 0)).toBe(coverageRows.length)
+
+    const notCollected = groups.find(g => g.title.startsWith('尚未采集'))
+    expect(notCollected, '未找到「尚未采集」分组').toBeDefined()
+    for (const label of ['总胆固醇', '高密度脂蛋白', 'BMI', '血糖']) {
+      expect(notCollected!.labels).not.toContain(label)
+    }
   })
 
   /**

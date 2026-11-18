@@ -849,8 +849,26 @@ const otherMeasured = computed(() =>
   coverage.value.filter(m => !m.riskNote && m.state !== 'MISSING')
 )
 
-/** 尚未采集的指标。 */
-const missingMetrics = computed(() => coverage.value.filter(m => m.state === 'MISSING'))
+/**
+ * 尚未采集的指标 —— 只收「引擎不读、你也没有」的那批。
+ *
+ * 谓词必须带 `!m.riskNote`，否则「有 riskNote 且 MISSING」的指标会同时出现在
+ * 上面两组里（血脂四项在心血管评估里确实参与，D-02）。把它从「参与」组去掉是
+ * 说谎；它在「参与」组里已经以「未测」状态诚实呈现，所以减掉的是这一组。
+ */
+const missingMetrics = computed(() =>
+  coverage.value.filter(m => m.state === 'MISSING' && !m.riskNote)
+)
+
+/**
+ * 已纳入评估范围但没有取值的项数。
+ *
+ * 必须从 `usedMetrics` 派生，不能从 `coverage` 全局筛 —— 全局筛会把不参与评估
+ * 的缺失项也算进去，摘要就会说「9 项未测」而实际只有 8 项纳入范围。
+ */
+const usedMissing = computed(
+  () => usedMetrics.value.filter(m => m.state === 'MISSING').length
+)
 
 /** 顶部摘要：已测 / 异常 / 参与评估 三个数字。 */
 const coverageSummary = computed(() => ({
