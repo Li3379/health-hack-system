@@ -83,12 +83,13 @@
           <span class="risk-coverage__summary">
             已测 {{ coverageSummary.measured }} / {{ coverageSummary.total }} 项
             <!--
-              措辞随 16-05 的分类来源同批变更：classify 改为按风险阈值分级后，
-              这里的「超出参考范围」会与面板「偏高」pill 自相矛盾（收缩压 130–139
-              判偏高却不计入参考范围）。本计划不动它，故留此注记并非漏改。
+              措辞随分类来源同批变更（D-09，对 Copywriting Contract 的显式修订）：
+              classify 已改为按风险阈值分级，而风险阈值严于元数据参考上限 ——
+              收缩压 130–139 的人会被判「偏高」却不计入「超出参考范围」，
+              两个数字在同一行自相矛盾。措辞必须跟着分类依据走。
             -->
             <template v-if="coverageSummary.abnormal > 0">
-              · <span class="risk-coverage__abnormal">{{ coverageSummary.abnormal }} 项超出参考范围</span>
+              · <span class="risk-coverage__abnormal">{{ coverageSummary.abnormal }} 项超出评估阈值</span>
             </template>
             <!--
               第三段描述「评估范围」而不是「使用」：8 项纳入但只有 3 项有值时，

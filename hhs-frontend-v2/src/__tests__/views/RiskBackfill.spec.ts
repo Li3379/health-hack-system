@@ -1141,6 +1141,48 @@ describe('Risk.vue — 覆盖面板摘要与两套状态词表', () => {
     expect(text).not.toContain('缺数据')
   })
 
+  /**
+   * 摘要第二段的措辞与计数（D-09）。
+   *
+   * 分类依据已从元数据参考范围换成风险阈值（16-05 的后端改动），而风险阈值严于参考上限 ——
+   * 收缩压 130–139 的人判「偏高」却不计入「超出参考范围」，同一行两个数字自相矛盾。
+   *
+   * 断言写成「手算数字 + 与 fixture 按 state 筛选的结果相等」两重，而不是只查「有这个词」：
+   * 前者钉住今天的口径，后者保证计数不是另一个来源凑出来的。
+   */
+  it('摘要第二段说「超出评估阈值」，且数字等于 HIGH/LOW 行数', async () => {
+    getMetricCoverage.mockResolvedValue({ data: coverageRows })
+    const wrapper = mountRisk()
+    await flushPromises()
+
+    const summary = wrapper.find('.risk-coverage__summary')
+    expect(summary.exists()).toBe(true)
+    const text = summary.text()
+
+    expect(text).toContain('项超出评估阈值')
+    expect(text).not.toContain('项超出参考范围')
+
+    // 6 行 fixture 手算：只有血糖是 HIGH，没有 LOW；bmi 与步数是 NORMAL，
+    // 尿酸与两条血脂是 MISSING。
+    const abnormal = coverageRows.filter(r => r.state === 'HIGH' || r.state === 'LOW').length
+    expect(abnormal).toBe(1)
+    expect(summary.find('.risk-coverage__abnormal').text()).toBe(`${abnormal} 项超出评估阈值`)
+  })
+
+  it('摘要第二段的数字随面板状态变化（把步数改 LOW 后为 2）', async () => {
+    // 基于 fixture 派生局部数组，不改共享 fixture —— 16-02 与 16-04 的断言依赖它。
+    const withLowSteps = coverageRows.map(r =>
+      r.key === 'steps' ? { ...r, state: 'LOW' as const } : r
+    )
+    getMetricCoverage.mockResolvedValue({ data: withLowSteps })
+    const wrapper = mountRisk()
+    await flushPromises()
+
+    const abnormal = withLowSteps.filter(r => r.state === 'HIGH' || r.state === 'LOW').length
+    expect(abnormal).toBe(2)
+    expect(wrapper.find('.risk-coverage__summary').text()).toContain(`${abnormal} 项超出评估阈值`)
+  })
+
   it('usedMissing 为 0 时不渲染括号段', async () => {
     // 只留无 riskNote 的行：一条已测（步数）、一条未测（尿酸）。
     const noUsedRows = coverageRows.filter(r => !r.riskNote)
