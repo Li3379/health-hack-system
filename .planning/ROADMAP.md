@@ -121,6 +121,23 @@ Plans:
 
 **UI hint**: yes
 
+**Plans:** 5 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 16-01-PLAN.md — `RiskThresholdRegistry` 落地与阈值搬家（tracer）：规则表 + `consumedKeys()` 单一声明、引擎 4 处阈值改读、`riskNote` 由规则渲染、删除 `RISK_CONSUMERS`（心血管 8 条规则在 16-03 追加）
+- [ ] 16-02-PLAN.md — 三处呈现缺陷与测试脚手架：`--border-1` 归零、`--text-3` 5 改 2 留、弹窗首列 88px、API mock 补 `getMetricCoverage` + 覆盖行 fixture
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 16-03-PLAN.md — 心血管独立评估：9 条自有归因（含血脂四项 MISSING）、删除 `halve`、方向感知的归因工厂、两个血压别名、封顶折算与阈值区分性夹具
+- [ ] 16-04-PLAN.md — 覆盖面板分组互斥与摘要措辞：`missingMetrics` 谓词、`usedMissing`、摘要第三段「纳入评估范围」、空态下一步、两套词表各自渲染
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 16-05-PLAN.md — 面板与引擎同源收口：`public static format` 共享、`classify` 按风险阈值、`assemble` 增加 profile 与 bmi 双源取值、摘要第二段「超出评估阈值」、五条门禁同批全绿
+
 ## Progress
 
 | Milestone | Phases | Plans | Status | Completed |
