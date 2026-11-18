@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -30,10 +31,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class MetricCoverageAssemblerTest {
 
     private MetricCoverageAssembler assembler;
+    private RiskThresholdRegistry riskThresholds;
 
     @BeforeEach
     void setUp() {
-        assembler = new MetricCoverageAssembler(new HealthMetricMetaRegistry());
+        riskThresholds = new RiskThresholdRegistry();
+        assembler = new MetricCoverageAssembler(new HealthMetricMetaRegistry(), riskThresholds);
     }
 
     @Test
@@ -96,7 +99,7 @@ class MetricCoverageAssemblerTest {
     }
 
     @Test
-    @DisplayName("只有真正参与评估的三个指标带 riskNote")
+    @DisplayName("只有真正参与评估的四个指标带 riskNote")
     void onlyEngineInputsCarryRiskNote() {
         List<MetricCoverageVO> rows = assembler.assemble(List.of());
 
@@ -105,11 +108,15 @@ class MetricCoverageAssemblerTest {
                 .map(MetricCoverageVO::key)
                 .sorted()
                 .toList();
-        assertEquals(List.of("bloodGlucose", "diastolicBP", "systolicBP"), withNote,
+        assertEquals(List.of("bloodGlucose", "bmi", "diastolicBP", "systolicBP"), withNote,
                 "riskNote 必须与引擎实际读取的指标一致，多一个会误导用户，少一个会漏报");
 
+        // 同源派生：面板声称参与评估的键，必须恰好是注册表声明的那一组。
+        assertEquals(riskThresholds.consumedKeys().stream().sorted().toList(), withNote,
+                "面板的 riskNote 键集必须与 RiskThresholdRegistry.consumedKeys() 完全一致");
+
         // 反向：这些指标确实不被引擎读取，绝不能声称它们参与评估。
-        for (String unused : List.of("heartRate", "bmi", "steps", "sleepDuration", "uricAcid")) {
+        for (String unused : List.of("heartRate", "steps", "sleepDuration", "uricAcid")) {
             assertNull(find(rows, unused).riskNote(),
                     unused + " 不参与风险评估，不得标注 riskNote");
         }
@@ -154,6 +161,54 @@ class MetricCoverageAssemblerTest {
         }
         assertTrue(lastHealth < firstWellness,
                 "HEALTH 指标必须全部排在 WELLNESS 之前，便于扫读体检数据");
+    }
+
+    @Test
+    @DisplayName("每条 riskNote 都符合唯一形状与 24 字上限，且三条迁移文案逐字节不变")
+    void riskNotesMatchTheSinglePermittedShapeAndLength() {
+        List<MetricCoverageVO> rows = assembler.assemble(List.of());
+        Pattern shape = Pattern.compile("^[^：]+评估：(超过|低于|超出) .+ 计入 \\d+ 分$");
+
+        for (MetricCoverageVO row : rows) {
+            String note = row.riskNote();
+            if (note == null) {
+                continue;
+            }
+            assertTrue(shape.matcher(note).matches(),
+                    row.key() + " 的 riskNote 形状不符（唯一允许的形状见 UI-SPEC 5.2）: " + note);
+            // 计字口径：先去空白，再按码点计长。必须先把去空白结果赋给变量 ——
+            // 写成 note.replaceAll(...).codePointCount(0, note.length()) 会用未去空白的长度
+            // 当 endIndex，恒抛 StringIndexOutOfBoundsException，那种失败会掩盖真正的问题。
+            String compact = note.replaceAll("\\s", "");
+            int length = compact.codePointCount(0, compact.length());
+            assertTrue(length <= 24, row.key() + " 的 riskNote 去空白后为 " + length + " 字，超过上限 24: " + note);
+        }
+
+        // 分隔符守卫：形状正则的 `.+` 会吞掉 `6.1mmol/L`，长度上限也放行（少一个空格只是更短），
+        // 所以只有整串相等能钉住阈值与单位之间那一个空格。三条迁移文案逐字照抄改动前的
+        // MetricCoverageAssembler 硬编码字面量，bmi 是新增键、无迁移前形态，故不参与本断言。
+        assertEquals("糖尿病评估：超过 6.1 mmol/L 计入 30 分", find(rows, "bloodGlucose").riskNote());
+        assertEquals("高血压评估：超过 130 mmHg 计入 35 分", find(rows, "systolicBP").riskNote());
+        assertEquals("高血压评估：超过 85 mmHg 计入 30 分", find(rows, "diastolicBP").riskNote());
+        assertFalse(find(rows, "bloodGlucose").riskNote().contains("6.1mmol/L"),
+                "阈值与单位之间必须有空格，模板是唯一能提供它的地方");
+    }
+
+    @Test
+    @DisplayName("riskNote 不承载来源出处")
+    void riskNotesCarryNoProvenance() {
+        // 来源禁令的可执行否定守卫：形状正则放行括号注（例如「超过 24（档）kg/m²」），
+        // 只有否定断言能拦住它。出处由 .risk-estimate__source-origin 表达，不在本字段。
+        Pattern provenance = Pattern.compile("(健康档案|档案|来源|取自)");
+
+        for (MetricCoverageVO row : assembler.assemble(List.of())) {
+            String note = row.riskNote();
+            if (note == null) {
+                continue;
+            }
+            assertFalse(provenance.matcher(note).find(),
+                    row.key() + " 的 riskNote 不得承载来源信息: " + note);
+        }
     }
 
     private MetricCoverageVO find(List<MetricCoverageVO> rows, String key) {
