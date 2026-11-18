@@ -502,10 +502,12 @@ public class AiParseServiceImpl implements AiParseService {
         // Tier 3: 急危重症 (Panic Limits)
         BigDecimal[] panic = PANIC_LIMITS.get(canonicalKey);
         if (panic != null) {
-            boolean isOxygenCritical = "bloodOxygen".equals(canonicalKey) && value.compareTo(panic[0]) <= 0;
+            // panic[0] is the low bound, panic[1] the high bound; either null means
+            // unbounded on that side. No per-metric special case is needed:
+            // bloodOxygen's low bound (90) is already covered here.
             boolean isCritical = (panic[0] != null && value.compareTo(panic[0]) <= 0) ||
                     (panic[1] != null && value.compareTo(panic[1]) >= 0);
-            if (isOxygenCritical || isCritical) {
+            if (isCritical) {
                 return String.format("指标 %s 的数值 %s %s 严重偏离正常范围，疑似急危重症数值，建议防误触并在确诊后就医",
                         name, formatNumber(value), displayUnit);
             }
