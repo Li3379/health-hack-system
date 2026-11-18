@@ -50,6 +50,13 @@ public record RiskContributorVO(
     /**
      * Build a contributor for a factor that was evaluated against an upper-bound threshold.
      *
+     * <p>The sentence calls the number an assessment threshold, not a reference value. Once risk
+     * thresholds stopped being the clinical reference ranges (D-03), 130 / 85 / 24.0 are
+     * preventive thresholds sitting <em>below</em> the 139 / 89 / 23.9 reference maxima — and the
+     * same screen shows the clinical reference <em>range</em> column beside this sentence.
+     * Calling both "reference" asks the user to reconcile two contradictory descriptions of one
+     * row.</p>
+     *
      * @param key       stable factor key
      * @param label     user-facing name
      * @param value     display-formatted value, or {@code null} when absent
@@ -65,8 +72,8 @@ public record RiskContributorVO(
         }
         String state = hit ? STATE_CONTRIBUTED : STATE_NORMAL;
         String explanation = hit
-                ? label + " " + value + "，超过参考值 " + threshold + "，因此计入 " + points + " 分"
-                : label + " " + value + "，未超过参考值 " + threshold + "，未加分";
+                ? label + " " + value + "，超过评估阈值 " + threshold + "，因此计入 " + points + " 分"
+                : label + " " + value + "，未超过评估阈值 " + threshold + "，未加分";
         return new RiskContributorVO(key, label, state, value, threshold, points, explanation);
     }
 
@@ -74,9 +81,11 @@ public record RiskContributorVO(
      * Build a contributor for a factor whose risky side is <em>below</em> its threshold.
      *
      * <p>Some metrics are protective: HDL cholesterol is normal when high and risky when low
-     * (reference says {@code >= 1.00 mmol/L}). Rendering those through {@link #threshold} would
-     * tell a person at 0.90 that they "exceeded" the very bound they undershot. This factory is
-     * the mirror image.</p>
+     * (the reference says {@code >= 1.00 mmol/L}). Rendering those through {@link #threshold}
+     * would tell a person at 0.90 that they "exceeded" the very bound they undershot — the
+     * sentence would state the fact backwards. This factory is the mirror image, and it uses the
+     * same assessment-threshold wording for the same reason: the number is a risk threshold, not
+     * a reference value.</p>
      *
      * <p>It deliberately performs <em>no</em> comparison. Which side is risky is declared once,
      * as {@code Direction} on the registry rule; duplicating the comparison here would create a
@@ -97,8 +106,8 @@ public record RiskContributorVO(
         }
         String state = breached ? STATE_CONTRIBUTED : STATE_NORMAL;
         String explanation = breached
-                ? label + " " + value + "，低于参考值 " + threshold + "，因此计入 " + points + " 分"
-                : label + " " + value + "，未低于参考值 " + threshold + "，未加分";
+                ? label + " " + value + "，低于评估阈值 " + threshold + "，因此计入 " + points + " 分"
+                : label + " " + value + "，未低于评估阈值 " + threshold + "，未加分";
         return new RiskContributorVO(key, label, state, value, threshold, points, explanation);
     }
 

@@ -53,8 +53,10 @@ public final class MetricKeyNormalizer {
         // Predefined aliases mapped to canonical keys
         Map<String, Set<String>> aliasGroup = new HashMap<>();
         aliasGroup.put("heartRate", Set.of("heart_rate", "HEART_RATE", "heartrate", "pulse", "PULSE"));
-        aliasGroup.put("systolicBP", Set.of("systolic_bp", "systolicBp", "SYSTOLIC_BP", "sbp", "SBP"));
-        aliasGroup.put("diastolicBP", Set.of("diastolic_bp", "diastolicBp", "DIASTOLIC_BP", "dbp", "DBP"));
+        aliasGroup.put("systolicBP", Set.of("systolic_bp", "systolicBp", "SYSTOLIC_BP", "sbp", "SBP",
+                "systolicBloodPressure"));
+        aliasGroup.put("diastolicBP", Set.of("diastolic_bp", "diastolicBp", "DIASTOLIC_BP", "dbp", "DBP",
+                "diastolicBloodPressure"));
         aliasGroup.put("bloodGlucose", Set.of("blood_glucose", "BLOOD_GLUCOSE", "bloodglucose", "glucose", "GLUCOSE", "glu", "GLU"));
         aliasGroup.put("fastingGlucose", Set.of("fasting_glucose", "FASTING_GLUCOSE", "fastingglucose"));
         aliasGroup.put("postprandialGlucose", Set.of("postprandial_glucose", "POSTPRANDIAL_GLUCOSE", "postprandialglucose"));

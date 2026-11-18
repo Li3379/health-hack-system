@@ -414,14 +414,20 @@ class RiskAssessmentAssumptionsTest {
     /**
      * Stub recent metrics with canonical keys, newest first (the mapper's own ordering).
      *
-     * @param keysAndValues alternating canonical key / value pairs
+     * <p>Values are converted via {@code String.valueOf} rather than a cast to {@code Integer}:
+     * an integer-cast overload silently truncates {@code 0.90} to {@code 0}, which would let a
+     * test built on a distinguishing decimal pass against an implementation that never sees it.
+     * One conversion for both shapes — a second overload would keep the truncating call sites
+     * alive.</p>
+     *
+     * @param keysAndValues alternating metric key / value pairs (integers or decimals)
      */
     private void stubMetrics(Object... keysAndValues) {
         List<HealthMetric> rows = new java.util.ArrayList<>();
         for (int i = 0; i < keysAndValues.length; i += 2) {
             HealthMetric m = new HealthMetric();
             m.setMetricKey((String) keysAndValues[i]);
-            m.setValue(new BigDecimal((Integer) keysAndValues[i + 1]));
+            m.setValue(new BigDecimal(String.valueOf(keysAndValues[i + 1])));
             m.setRecordDate(LocalDate.now());
             rows.add(m);
         }
@@ -668,6 +674,66 @@ class RiskAssessmentAssumptionsTest {
                 "缺血糖必须标 MISSING —— 伪造一个 0 值会让「没测」变成「正常」");
         assertNull(sugar.value(), "缺失项的值必须为 null，不能填 0");
         assertEquals(0, sugar.points(), "缺失项不得加分");
+    }
+
+    // ------------------------------------------------------------------
+    // 方向感知的措辞与缺失别名（D-10 / D-11）
+    // ------------------------------------------------------------------
+
+    @Test
+    @DisplayName("HDL 偏低时措辞方向正确：说「低于」，绝不说「超过」")
+    void lowerBoundMetricIsWordedAsBelowNotAbove() {
+        // 0.90 而不是「全缺」：全缺时正确实现与错误实现都给 MISSING，断言没有牙齿。
+        stubProfile(profileWithAgeAndBmi(60, "26"));
+        stubMetrics("hdlCholesterol", 0.90);
+
+        RiskContributorVO hdl = contributorsOf(service.createAssessment(1L), "心血管疾病").stream()
+                .filter(c -> c.key().equals("hdlCholesterol")).findFirst().orElseThrow();
+
+        assertEquals(RiskContributorVO.STATE_CONTRIBUTED, hdl.state());
+        assertEquals(15, hdl.points(), "0.90 < 1.00 应计 15 分");
+        assertTrue(hdl.explanation().contains("低于"),
+                "下限型指标必须说「低于」，实际为: " + hdl.explanation());
+        assertFalse(hdl.explanation().contains("超过"),
+                "绝不能说「超过」—— 0.90 的人实际低于阈值，那句话把事实说反了: " + hdl.explanation());
+        assertTrue(hdl.explanation().contains("评估阈值"),
+                "阈值是风险阈值而非参考值，措辞必须如此: " + hdl.explanation());
+    }
+
+    @Test
+    @DisplayName("上限型指标仍说「超过」，且同样以「评估阈值」称阈值")
+    void upperBoundMetricIsWordedAsAboveWithAssessmentThreshold() {
+        stubProfile(profileWithAgeAndBmi(40, "22"));
+        stubMetrics("systolicBP", 168);
+
+        RiskContributorVO systolic = contributorsOf(service.createAssessment(1L), "高血压").stream()
+                .filter(c -> c.key().equals("systolicBP")).findFirst().orElseThrow();
+
+        assertTrue(systolic.explanation().contains("超过"), "实际为: " + systolic.explanation());
+        assertTrue(systolic.explanation().contains("评估阈值"),
+                "同屏的参考范围列显示 90–139，这一句若把 130 也叫「参考值」就自相矛盾: "
+                        + systolic.explanation());
+        assertFalse(systolic.explanation().contains("参考值"),
+                "风险阈值不得被称作参考值: " + systolic.explanation());
+    }
+
+    @Test
+    @DisplayName("库中 metric_key='systolicBloodPressure' 的行开始参与评估")
+    void systolicBloodPressureAliasRowStartsScoring() {
+        // 用 135 而不是 118：118 在「有别名」与「没别名」两种实现下都低于 130，
+        // 断言同样没牙齿。135 落在风险阈值 130 与参考上限 139 之间，只有正确实现计分。
+        stubProfile(profileWithAgeAndBmi(40, "22"));
+        stubMetrics("systolicBloodPressure", 135);
+
+        List<RiskContributorVO> bp = contributorsOf(service.createAssessment(1L), "高血压");
+        RiskContributorVO systolic = bp.stream()
+                .filter(c -> c.key().equals("systolicBP")).findFirst().orElseThrow();
+
+        assertEquals(RiskContributorVO.STATE_CONTRIBUTED, systolic.state(),
+                "不补别名时 getLatestMetric 返回 null，这一行会永远是 MISSING");
+        assertEquals(35, systolic.points(), "135 > 130 应在高血压计 35 分");
+        assertNotNull(systolic.value(), "别名行必须带出实际取值");
+        assertTrue(systolic.value().contains("135"), "实际为: " + systolic.value());
     }
 
     private int scoreOf(List<RiskAssessmentVO> vos, String disease) {

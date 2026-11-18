@@ -26,6 +26,10 @@ class MetricKeyNormalizerTest {
             "systolicbp, systolicBP",
             "sbp, systolicBP",
             "SBP, systolicBP",
+            // 库中现存的写法（user 8 那一行 metric_key='systolicBloodPressure'）。
+            // 不在别名组里时它会走 lenient passthrough 原样返回，引擎的 getLatestMetric
+            // 恒落空且不报错 —— 已复发两次的静默陷阱。
+            "systolicBloodPressure, systolicBP",
 
             "diastolic_bp, diastolicBP",
             "DIASTOLIC_BP, diastolicBP",
@@ -33,6 +37,7 @@ class MetricKeyNormalizerTest {
             "diastolicbp, diastolicBP",
             "dbp, diastolicBP",
             "DBP, diastolicBP",
+            "diastolicBloodPressure, diastolicBP",
 
             "blood_glucose, bloodGlucose",
             "BLOOD_GLUCOSE, bloodGlucose",
@@ -170,9 +175,19 @@ class MetricKeyNormalizerTest {
         assertTrue(sbpAliases.contains("systolic_bp"));
         assertTrue(sbpAliases.contains("sbp"));
 
+        // 库中现存的写法必须在别名组内 —— 否则那一行数据永远不参与评估，且失败是静默的。
+        assertTrue(sbpAliases.contains("systolicBloodPressure"),
+                "systolicBloodPressure 必须归到 systolicBP，否则库里现存那一行被静默忽略");
+
         // Reverse lookup from alias returns the same canonical set
         Set<String> sbpFromAlias = MetricKeyNormalizer.getAliases("systolic_bp");
         assertEquals(sbpAliases, sbpFromAlias);
+        assertEquals(sbpAliases, MetricKeyNormalizer.getAliases("systolicBloodPressure"),
+                "从新别名反查必须得到同一组，否则 getLatestMetric 与面板会用两套键");
+
+        Set<String> dbpAliases = MetricKeyNormalizer.getAliases("diastolicBP");
+        assertTrue(dbpAliases.contains("diastolicBloodPressure"));
+        assertEquals(dbpAliases, MetricKeyNormalizer.getAliases("diastolicBloodPressure"));
 
         Set<String> hrAliases = MetricKeyNormalizer.getAliases("heart_rate");
         assertTrue(hrAliases.contains("heartRate"));
