@@ -885,7 +885,13 @@ const usedMissing = computed(
 const coverageSummary = computed(() => ({
   total: coverage.value.length,
   measured: coverage.value.filter(m => m.state !== 'MISSING').length,
-  abnormal: coverage.value.filter(m => m.state === 'HIGH' || m.state === 'LOW').length,
+  // 只数「有评估阈值」的指标（riskNote 非空）。措辞是「超出评估阈值」，
+  // 若把 15 个没有 registry 规则、仅按参考范围判定的指标也算进来，
+  // 一个只有 heartRate=45 的用户会看到「1 项超出评估阈值」——
+  // 而心率根本没有评估阈值。词与计数范围必须同一个口径（D-09）。
+  abnormal: coverage.value.filter(
+    m => !!m.riskNote && (m.state === 'HIGH' || m.state === 'LOW')
+  ).length,
   used: usedMetrics.value.length
 }))
 
