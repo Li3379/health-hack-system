@@ -60,7 +60,6 @@ class PerformanceTest {
     private static final long OCR_TARGET_MS = 5000;
     private static final long AI_PARSE_TARGET_MS = 3000;
     private static final long QUICK_INPUT_TARGET_MS = 500;
-    private static final long DEVICE_SYNC_TARGET_MS = 10000;
     private static final long STATS_QUERY_TARGET_MS = 200;
 
     // Number of iterations for averaging
@@ -87,9 +86,6 @@ class PerformanceTest {
 
     @Autowired
     private StatsService statsService;
-
-    @Autowired
-    private DeviceSyncOrchestrationService deviceSyncService;
 
     @Autowired
     private OcrHealthRecordMapper ocrHealthRecordMapper;
@@ -498,83 +494,6 @@ class PerformanceTest {
             mockMvc.perform(get(API_BASE + "/stats/today"))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.code").value(200));
-
-            return System.currentTimeMillis() - start;
-        }
-    }
-
-    // ========================================
-    // Device Sync Performance Tests
-    // ========================================
-
-    @Nested
-    @DisplayName("Device Sync Performance")
-    @TestMethodOrder(OrderAnnotation.class)
-    class DeviceSyncPerformanceTests {
-
-        @Test
-        @Order(1)
-        @DisplayName("PERF-SYNC-001: Device sync time should be under 10 seconds")
-        void testDeviceSyncPerformance() throws Exception {
-            List<Long> measurements = new ArrayList<>();
-
-            // Warmup
-            for (int i = 0; i < WARMUP_ITERATIONS; i++) {
-                runDeviceSync();
-            }
-
-            // Measurement
-            for (int i = 0; i < MEASUREMENT_ITERATIONS; i++) {
-                measurements.add(runDeviceSync());
-            }
-
-            long avgTime = calculateAverage(measurements);
-            long maxTime = Collections.max(measurements);
-
-            testResults.add(new TestResult(
-                "Device Sync",
-                avgTime, maxTime, DEVICE_SYNC_TARGET_MS,
-                measurements
-            ));
-
-            System.out.printf("[Device Sync] Avg: %dms, Max: %dms, Target: %dms%n",
-                avgTime, maxTime, DEVICE_SYNC_TARGET_MS);
-
-            assertTrue(avgTime < DEVICE_SYNC_TARGET_MS,
-                String.format("Device sync average time %dms exceeds target %dms", avgTime, DEVICE_SYNC_TARGET_MS));
-        }
-
-        @Test
-        @Order(2)
-        @DisplayName("PERF-SYNC-002: Multi-platform sync performance")
-        void testMultiPlatformSyncPerformance() throws Exception {
-            List<Long> measurements = new ArrayList<>();
-
-            for (int i = 0; i < MEASUREMENT_ITERATIONS; i++) {
-                long start = System.currentTimeMillis();
-
-                List<SyncResultVO> results = deviceSyncService.syncAllPlatforms(TEST_USER_ID);
-
-                measurements.add(System.currentTimeMillis() - start);
-                assertNotNull(results, "Sync results should not be null");
-            }
-
-            long avgTime = calculateAverage(measurements);
-            testResults.add(new TestResult(
-                "Multi-Platform Sync",
-                avgTime, Collections.max(measurements), DEVICE_SYNC_TARGET_MS,
-                measurements
-            ));
-
-            System.out.printf("[Multi-Sync] Avg: %dms, Target: %dms%n", avgTime, DEVICE_SYNC_TARGET_MS);
-            assertTrue(avgTime < DEVICE_SYNC_TARGET_MS, "Multi-platform sync should be under target");
-        }
-
-        private long runDeviceSync() throws Exception {
-            long start = System.currentTimeMillis();
-
-            mockMvc.perform(post(API_BASE + "/device/sync/huawei"))
-                    .andExpect(status().isOk());
 
             return System.currentTimeMillis() - start;
         }

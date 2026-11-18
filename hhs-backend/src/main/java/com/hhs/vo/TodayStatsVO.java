@@ -24,10 +24,6 @@ public class TodayStatsVO {
      */
     private int wellnessMetricsCount;
 
-    /**
-     * 今日设备同步次数
-     */
-    private int deviceSyncCount;
 
     /**
      * 今日AI识别次数

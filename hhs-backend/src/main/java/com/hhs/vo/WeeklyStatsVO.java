@@ -50,12 +50,10 @@ public class WeeklyStatsVO {
     /**
      * 本周设备同步次数
      */
-    private int currentDeviceSyncCount;
 
     /**
      * 上周设备同步次数
      */
-    private int previousDeviceSyncCount;
 
     /**
      * 设备同步次数变化百分比

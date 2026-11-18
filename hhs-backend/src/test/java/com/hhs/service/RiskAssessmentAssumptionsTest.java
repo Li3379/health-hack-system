@@ -11,6 +11,7 @@ import com.hhs.service.domain.HealthMetricMetaRegistry;
 import com.hhs.service.domain.MetricCoverageAssembler;
 import com.hhs.service.domain.ProfileCompletenessCalculator;
 import com.hhs.service.domain.ProfileFieldCatalog;
+import com.hhs.service.domain.RiskThresholdRegistry;
 import com.hhs.service.impl.RiskAssessmentServiceImpl;
 import com.hhs.vo.RiskAssessmentVO;
 import com.hhs.vo.RiskContributorVO;
@@ -61,7 +62,8 @@ class RiskAssessmentAssumptionsTest {
     void setUp() {
         service = new RiskAssessmentServiceImpl(riskAssessmentMapper, healthProfileMapper,
                 healthMetricMapper, new ProfileCompletenessCalculator(new ProfileFieldCatalog()),
-                new MetricCoverageAssembler(new HealthMetricMetaRegistry()));
+                new MetricCoverageAssembler(new HealthMetricMetaRegistry()),
+                new RiskThresholdRegistry());
     }
 
     @Test
