@@ -880,4 +880,22 @@ class AiParseServiceTest {
         // Tier 4 (bodyTemperature 55.0) 应产生人类生理极限警告
         assertTrue(warnings.stream().anyMatch(w -> w.contains("体温") && w.contains("人类生理极限")), "体温55.0应产生生理极限警告");
     }
+
+    @Test
+    @DisplayName("测试：血氧低于 90 仍报急危重症（钉住 isCritical 已涵盖该分支）")
+    void validateMetricRange_bloodOxygenBelow90_reportsCriticalTier() throws Exception {
+        // bloodOxygen's panic limits are {90, null}. isCritical covers `value <= 90`
+        // on its own, so a separate oxygenation-specific guard was redundant.
+        // This test exists so removing that guard cannot silently drop the alert.
+        java.lang.reflect.Method m = AiParseServiceImpl.class.getDeclaredMethod(
+                "validateMetricRange", String.class, BigDecimal.class, String.class, String.class);
+        m.setAccessible(true);
+
+        String warning = (String) m.invoke(aiParseService,
+                "bloodOxygen", new BigDecimal("85"), "血氧", "%");
+
+        assertNotNull(warning, "血氧 85 必须产生警告");
+        assertTrue(warning.contains("急危重症") || warning.contains("严重偏离"),
+                "血氧 85 应落入 Tier 3（急危重症），实际：" + warning);
+    }
 }
