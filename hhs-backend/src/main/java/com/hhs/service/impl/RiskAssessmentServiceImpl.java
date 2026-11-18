@@ -221,11 +221,15 @@ public class RiskAssessmentServiceImpl implements RiskAssessmentService {
      * {@inheritDoc}
      *
      * <p>Reads the same three-month window the rule engine uses, so the coverage view describes
-     * exactly the data the assessment was allowed to see.</p>
+     * exactly the data the assessment was allowed to see. The profile is read through the same
+     * mapper and the same {@code userId} — it is needed because the engine reads {@code bmi} from
+     * the profile, and a panel fed from a different source would report a number the engine never
+     * used.</p>
      */
     @Override
     public List<MetricCoverageVO> getMetricCoverage(Long userId) {
-        return metricCoverageAssembler.assemble(getRecentMetrics(userId));
+        HealthProfile profile = getProfileByUserId(userId);
+        return metricCoverageAssembler.assemble(profile, getRecentMetrics(userId));
     }
 
 

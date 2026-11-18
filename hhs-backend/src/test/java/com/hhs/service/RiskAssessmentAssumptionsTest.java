@@ -884,7 +884,31 @@ class RiskAssessmentAssumptionsTest {
     }
 
 
-    /** Score of one disease in a returned assessment batch. */
+    /**
+     * 阈值等值点在两个表面同时成立：bmi 24.00 与收缩压 130 面板 NORMAL **且**引擎 0 分。
+     *
+     * <p>必须单列，且两侧必须在同一用例内一起断言：只断言面板会放行「面板与引擎一起把
+     * 比较符写成 {@code >=}」，只断言引擎会放行「面板单独写成 {@code >=}」。D-03 要求同源，
+     * 同源的正确形态就是两个表面在同一个输入上给出同一个结论。</p>
+     */
+    @Test
+    @DisplayName("阈值等值点两侧一致：bmi 24.00 与收缩压 130 面板 NORMAL 且引擎 0 分")
+    void thresholdEqualityPointAgreesOnBothSurfaces() {
+        stubProfile(profileWithAgeAndBmi(40, "24.00"));
+        stubMetrics("systolicBP", 130);
+
+        List<RiskAssessmentVO> created = service.createAssessment(1L);
+        RiskContributorVO cardioBmi = contributorOf(created, "心血管疾病", "bmi");
+        RiskContributorVO cardioSystolic = contributorOf(created, "心血管疾病", "systolicBP");
+
+        assertEquals(0, cardioBmi.points(), "24.00 恰好等于阈值，引擎不得计分");
+        assertEquals(0, cardioSystolic.points(), "130 恰好等于阈值，引擎不得计分");
+
+        assertEquals(MetricCoverageVO.STATE_NORMAL, coverageRowByKey("bmi").state(),
+                "面板必须与引擎同判 NORMAL —— classify 写成 >= 会让这一行变成「偏高」");
+        assertEquals(MetricCoverageVO.STATE_NORMAL, coverageRowByKey("systolicBP").state());
+    }
+
     private int scoreOf(List<RiskAssessmentVO> vos, String disease) {
         return vos.stream().filter(v -> v.diseaseName().equals(disease))
                 .findFirst().orElseThrow().riskScore();

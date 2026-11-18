@@ -1,6 +1,7 @@
 package com.hhs.service.domain;
 
 import com.hhs.entity.HealthMetric;
+import com.hhs.entity.HealthProfile;
 import com.hhs.vo.MetricCoverageVO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -28,22 +29,26 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class MetricCoverageAssembler {
 
+    /** The one metric the engine reads from {@code health_profile} rather than {@code health_metric}. */
+    private static final String BMI_KEY = "bmi";
+
     private final HealthMetricMetaRegistry metaRegistry;
     private final RiskThresholdRegistry riskThresholds;
 
     /**
      * Build the coverage rows for a user's latest values.
      *
+     * @param profile       the stored health profile, or {@code null} when the user has none;
+     *                      used only for dual-source factors (currently {@code bmi})
      * @param recentMetrics metrics ordered newest first; aliases are accepted
      * @return one row per registry metric, ordered HEALTH first then WELLNESS
      */
-    public List<MetricCoverageVO> assemble(List<HealthMetric> recentMetrics) {
+    public List<MetricCoverageVO> assemble(HealthProfile profile, List<HealthMetric> recentMetrics) {
         Map<String, HealthMetric> latest = latestByCanonicalKey(recentMetrics);
 
         List<MetricCoverageVO> rows = new ArrayList<>();
         for (MetricDefinition def : metaRegistry.getAllDefinitions().values()) {
-            HealthMetric hit = latest.get(def.canonicalKey());
-            rows.add(toRow(def, hit));
+            rows.add(toRow(def, profile, latest.get(def.canonicalKey())));
         }
         // HEALTH 在前，同类内按显示名排序，让"体检指标"聚在一起，便于扫读。
         rows.sort(Comparator
@@ -73,40 +78,83 @@ public class MetricCoverageAssembler {
     /**
      * Turn one definition plus its latest reading into a coverage row.
      *
-     * @param def registry definition
-     * @param hit the latest reading, or {@code null} when the user has none
+     * <p>The engine reads {@code bmi} from the profile, never from {@code health_metric}. So when
+     * the engine has a dual-source factor available from the profile, the row is derived from
+     * that same source and the metric row is ignored; when the profile has no value the row
+     * reports MISSING instead of falling back to the metric table. Falling back would show a
+     * number the engine never used ({@code 31.0 / 偏高} beside an engine {@code 22.0（估算）}) —
+     * the same lie this panel exists to remove, pointing the other way. This decision lives here
+     * and is deliberately not delegated to the frontend.</p>
+     *
+     * @param def     registry definition
+     * @param profile the stored profile, or {@code null}
+     * @param hit     the latest reading, or {@code null} when the user has none
      * @return the row
      */
-    private MetricCoverageVO toRow(MetricDefinition def, HealthMetric hit) {
+    private MetricCoverageVO toRow(MetricDefinition def, HealthProfile profile, HealthMetric hit) {
         String range = formatRange(def);
         String riskNote = riskNoteFor(def);
 
-        if (hit == null || hit.getValue() == null) {
+        BigDecimal value = valueFor(def, profile, hit);
+        if (value == null) {
             return new MetricCoverageVO(def.canonicalKey(), def.displayName(), def.unit(),
                     def.category().name(), MetricCoverageVO.STATE_MISSING, null, range, riskNote);
         }
 
-        BigDecimal value = hit.getValue();
         String state = classify(def, value);
         return new MetricCoverageVO(def.canonicalKey(), def.displayName(), def.unit(),
                 def.category().name(), state, formatValue(value, def), range, riskNote);
     }
 
     /**
-     * Judge a value against the registry's clinical reference range.
+     * Pick the value the engine would actually see for this metric.
      *
-     * <p>Metrics without a range are reported NORMAL: the system has a value but no basis to
-     * call it abnormal, and inventing a threshold here would be a second source of truth.</p>
+     * <p>{@code bmi} is the only dual-source factor today: the engine reads the profile's BMI, so
+     * this is where the panel is held to the same source. Absent on the profile means absent —
+     * never "absent there, present here".</p>
      *
-     * <p>Deliberately still the reference range: only the note is same-sourced as of this
-     * change. Classifying by the risk threshold — and the BMI dual-source read that goes with
-     * it — lands separately, so a later reader should not treat this as an oversight.</p>
+     * @param def     registry definition
+     * @param profile the stored profile, or {@code null}
+     * @param hit     the latest metric row, or {@code null}
+     * @return the value to display, or {@code null} when the engine source has none
+     */
+    private BigDecimal valueFor(MetricDefinition def, HealthProfile profile, HealthMetric hit) {
+        if (BMI_KEY.equals(def.canonicalKey())) {
+            return profile == null ? null : profile.getBmi();
+        }
+        return hit == null ? null : hit.getValue();
+    }
+
+    /**
+     * Judge a value against the risk threshold the engine grades it by.
+     *
+     * <p>When the registry declares a rule for this metric the rule's direction and threshold
+     * decide — the same declaration the engine reads, so the pill cannot disagree with the score.
+     * Metrics without a rule keep the clinical reference range: the system has a value but no
+     * assessment basis, and inventing a threshold would be a second source of truth.</p>
+     *
+     * <p>Only the first rule is consulted, exactly as {@link #riskNoteFor} describes only the
+     * first: otherwise the pill would describe one thing while its own note describes another.</p>
      *
      * @param def   registry definition
      * @param value the reading
      * @return HIGH, LOW or NORMAL
      */
     private String classify(MetricDefinition def, BigDecimal value) {
+        List<RiskThresholdRegistry.RiskThresholdRule> rules =
+                riskThresholds.rulesFor(def.canonicalKey());
+        if (!rules.isEmpty()) {
+            RiskThresholdRegistry.RiskThresholdRule rule = rules.get(0);
+            if (rule.direction() == RiskThresholdRegistry.Direction.BELOW) {
+                return value.compareTo(rule.threshold()) < 0
+                        ? MetricCoverageVO.STATE_LOW : MetricCoverageVO.STATE_NORMAL;
+            }
+            // Strictly greater: a value sitting exactly on the threshold scores nothing, and the
+            // pill must say the same thing. `>=` here would show「偏高」to a BMI of exactly 24.00
+            // while the engine awards it 0 points.
+            return value.compareTo(rule.threshold()) > 0
+                    ? MetricCoverageVO.STATE_HIGH : MetricCoverageVO.STATE_NORMAL;
+        }
         if (def.normalMax() != null && value.compareTo(def.normalMax()) > 0) {
             return MetricCoverageVO.STATE_HIGH;
         }

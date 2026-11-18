@@ -1,6 +1,7 @@
 package com.hhs.service.domain;
 
 import com.hhs.entity.HealthMetric;
+import com.hhs.entity.HealthProfile;
 import com.hhs.vo.MetricCoverageVO;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -17,6 +18,7 @@ import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -42,7 +44,7 @@ class MetricCoverageAssemblerTest {
     @Test
     @DisplayName("每个注册表指标都出现且只出现一次")
     void coversEveryRegisteredMetricExactlyOnce() {
-        List<MetricCoverageVO> rows = assembler.assemble(List.of());
+        List<MetricCoverageVO> rows = assembler.assemble(null, List.of());
 
         Map<String, Long> counts = rows.stream()
                 .collect(Collectors.groupingBy(MetricCoverageVO::key, Collectors.counting()));
@@ -53,7 +55,7 @@ class MetricCoverageAssemblerTest {
     @Test
     @DisplayName("没有任何数据时全部标 MISSING，绝不标 NORMAL")
     void emptyMetricsAreAllMissing() {
-        List<MetricCoverageVO> rows = assembler.assemble(List.of());
+        List<MetricCoverageVO> rows = assembler.assemble(null, List.of());
 
         for (MetricCoverageVO row : rows) {
             assertEquals(MetricCoverageVO.STATE_MISSING, row.state(),
@@ -65,7 +67,7 @@ class MetricCoverageAssemblerTest {
     @Test
     @DisplayName("有数据且超上限标 HIGH，低于下限标 LOW，区间内标 NORMAL")
     void classifiesAgainstRegistryRange() {
-        List<MetricCoverageVO> rows = assembler.assemble(List.of(
+        List<MetricCoverageVO> rows = assembler.assemble(null, List.of(
                 metric("systolicBP", 168),
                 metric("heartRate", 45),
                 metric("diastolicBP", 80)));
@@ -79,7 +81,7 @@ class MetricCoverageAssemblerTest {
     @DisplayName("别名 key 也能被识别（legacy glucose 不应漏判）")
     void acceptsLegacyAliasKeys() {
         // 旧行可能存的是 glucose 而不是 bloodGlucose；漏判会让「有数据」显示成「未测」。
-        List<MetricCoverageVO> rows = assembler.assemble(List.of(metric("glucose", 13.8)));
+        List<MetricCoverageVO> rows = assembler.assemble(null, List.of(metric("glucose", 13.8)));
 
         MetricCoverageVO sugar = find(rows, "bloodGlucose");
         assertEquals(MetricCoverageVO.STATE_HIGH, sugar.state(),
@@ -90,7 +92,7 @@ class MetricCoverageAssemblerTest {
     @Test
     @DisplayName("同一指标多条记录取最新（列表已按日期倒序）")
     void takesLatestValuePerMetric() {
-        List<MetricCoverageVO> rows = assembler.assemble(List.of(
+        List<MetricCoverageVO> rows = assembler.assemble(null, List.of(
                 metric("systolicBP", 168),
                 metric("systolicBP", 120)));
 
@@ -101,7 +103,7 @@ class MetricCoverageAssemblerTest {
     @Test
     @DisplayName("只有真正参与评估的八个指标带 riskNote")
     void onlyEngineInputsCarryRiskNote() {
-        List<MetricCoverageVO> rows = assembler.assemble(List.of());
+        List<MetricCoverageVO> rows = assembler.assemble(null, List.of());
 
         List<String> withNote = rows.stream()
                 .filter(r -> r.riskNote() != null)
@@ -133,7 +135,7 @@ class MetricCoverageAssemblerTest {
     @Test
     @DisplayName("缺失的参与指标仍带 riskNote，让用户知道「这项本该参与但没数据」")
     void missingEngineInputStillNamesItsRisk() {
-        List<MetricCoverageVO> rows = assembler.assemble(List.of());
+        List<MetricCoverageVO> rows = assembler.assemble(null, List.of());
 
         MetricCoverageVO systolic = find(rows, "systolicBP");
         assertEquals(MetricCoverageVO.STATE_MISSING, systolic.state());
@@ -145,7 +147,7 @@ class MetricCoverageAssemblerTest {
     @Test
     @DisplayName("参考范围被格式化输出，供用户对照")
     void formatsReferenceRange() {
-        List<MetricCoverageVO> rows = assembler.assemble(List.of(metric("bloodGlucose", 5)));
+        List<MetricCoverageVO> rows = assembler.assemble(null, List.of(metric("bloodGlucose", 5)));
 
         MetricCoverageVO sugar = find(rows, "bloodGlucose");
         assertNotNull(sugar.normalRange(), "有参考范围的指标必须输出范围");
@@ -156,7 +158,7 @@ class MetricCoverageAssemblerTest {
     @Test
     @DisplayName("HEALTH 分组排在 WELLNESS 之前")
     void healthMetricsSortFirst() {
-        List<MetricCoverageVO> rows = assembler.assemble(List.of());
+        List<MetricCoverageVO> rows = assembler.assemble(null, List.of());
 
         int lastHealth = -1;
         int firstWellness = Integer.MAX_VALUE;
@@ -174,7 +176,7 @@ class MetricCoverageAssemblerTest {
     @Test
     @DisplayName("每条 riskNote 都符合唯一形状与 24 字上限，且三条迁移文案逐字节不变")
     void riskNotesMatchTheSinglePermittedShapeAndLength() {
-        List<MetricCoverageVO> rows = assembler.assemble(List.of());
+        List<MetricCoverageVO> rows = assembler.assemble(null, List.of());
         Pattern shape = Pattern.compile("^[^：]+评估：(超过|低于|超出) .+ 计入 \\d+ 分$");
 
         for (MetricCoverageVO row : rows) {
@@ -209,7 +211,7 @@ class MetricCoverageAssemblerTest {
         // 只有否定断言能拦住它。出处由 .risk-estimate__source-origin 表达，不在本字段。
         Pattern provenance = Pattern.compile("(健康档案|档案|来源|取自)");
 
-        for (MetricCoverageVO row : assembler.assemble(List.of())) {
+        for (MetricCoverageVO row : assembler.assemble(null, List.of())) {
             String note = row.riskNote();
             if (note == null) {
                 continue;
@@ -222,6 +224,103 @@ class MetricCoverageAssemblerTest {
     private MetricCoverageVO find(List<MetricCoverageVO> rows, String key) {
         return rows.stream().filter(r -> r.key().equals(key)).findFirst()
                 .orElseThrow(() -> new AssertionError("未找到指标: " + key));
+    }
+
+    // ------------------------------------------------------------------
+    // 分类依据换成风险阈值（D-03 的面板侧）
+    // ------------------------------------------------------------------
+
+    /**
+     * 收缩压 135：面板必须判「偏高」。
+     *
+     * <p>这是唯一能区分两种分类源的夹具 —— 按元数据参考上限 139 判定会得到 NORMAL，而引擎
+     * 按风险阈值 130 计 30 分。不要用 168：两种实现都是 HIGH，断言没有牙齿。</p>
+     */
+    @Test
+    @DisplayName("收缩压 135 按风险阈值判为偏高（按参考上限 139 会判正常）")
+    void classifiesSystolicAgainstTheRiskThresholdNotTheReferenceMax() {
+        List<MetricCoverageVO> rows = assembler.assemble(null,
+                List.of(metric("systolicBP", 135)));
+
+        assertEquals(MetricCoverageVO.STATE_HIGH, find(rows, "systolicBP").state(),
+                "135 > 风险阈值 130 必须是 HIGH；读 normalMax 139 会让它显示「正常」而引擎给 30 分");
+    }
+
+    /**
+     * 阈值等值点：bmi 24.00、收缩压 130 都是 NORMAL。
+     *
+     * <p>开区间夹具（135 / 87 / 23.96）只能证明阈值取值正确，证明不了比较符是严格 {@code >}
+     * 还是 {@code >=}。若 classify 写成 {@code >=}，BMI 恰好 24.00 的人会看到「偏高」而引擎
+     * 给 0 分 —— 两侧同屏矛盾，而现有全部夹具仍全绿。</p>
+     */
+    @Test
+    @DisplayName("阈值等值点判为正常：bmi 24.00 与收缩压 130（比较符是严格 >）")
+    void valuesExactlyOnTheThresholdAreNormal() {
+        HealthProfile atThreshold = profileWithBmi("24.00");
+        List<MetricCoverageVO> rows = assembler.assemble(atThreshold,
+                List.of(metric("systolicBP", 130)));
+
+        assertEquals(MetricCoverageVO.STATE_NORMAL, find(rows, "bmi").state(),
+                "24.00 恰好等于阈值，不得判为偏高");
+        assertEquals(MetricCoverageVO.STATE_NORMAL, find(rows, "systolicBP").state(),
+                "130 恰好等于阈值，不得判为偏高");
+    }
+
+    // ------------------------------------------------------------------
+    // 双源因子：bmi 只由引擎源派生（D-05 的字面要求，不只是 riskNote）
+    // ------------------------------------------------------------------
+
+    @Test
+    @DisplayName("档案有 bmi 时面板读档案：指标表没有 bmi 行也照样渲染 22.9")
+    void bmiRowReadsTheProfileEvenWhenMetricTableHasNoRow() {
+        List<MetricCoverageVO> rows = assembler.assemble(profileWithBmi("22.86"),
+                List.of(metric("systolicBP", 120)));
+
+        MetricCoverageVO bmi = find(rows, "bmi");
+        assertNotEquals(MetricCoverageVO.STATE_MISSING, bmi.state(),
+                "引擎读档案，面板也必须读档案 —— 否则用户会被告知「未测」而分数其实用了它");
+        assertEquals("22.9", bmi.value(), "按注册表 precision 1 渲染，实际为: " + bmi.value());
+    }
+
+    /**
+     * 档案无 bmi 而指标表有行：面板必须报 MISSING，绝不回落。
+     *
+     * <p>回落会让面板显示 {@code 31.0 / 偏高}，而引擎实际用的是 {@code 22.0（估算）} ——
+     * 那正是「面板说谎」，只是换了个方向。</p>
+     */
+    @Test
+    @DisplayName("档案无 bmi 时不回落到指标表的同名行：MISSING 且 value 为 null")
+    void bmiRowNeverFallsBackToTheMetricTable() {
+        List<MetricCoverageVO> rows = assembler.assemble(profileWithBmi(null),
+                List.of(metric("bmi", 31)));
+
+        MetricCoverageVO bmi = find(rows, "bmi");
+        assertEquals(MetricCoverageVO.STATE_MISSING, bmi.state(),
+                "引擎不读指标表的 bmi 行，面板读它就是显示一个从未被使用的数字");
+        assertNull(bmi.value(),
+                "只断言 state 会放过「读了指标行但状态算成 MISSING」的半错实现");
+    }
+
+    /**
+     * bmi 23.96：参考上限 23.9 判 HIGH，风险阈值 24.0 判 NORMAL。
+     *
+     * <p>这个 0.06 的窄带是「bmi 双源 + 风险阈值」两个实现同时正确才能通过的夹具。不要改成
+     * 30（两种实现都是 HIGH，无牙齿）。</p>
+     */
+    @Test
+    @DisplayName("bmi 23.96 判正常：证明 bmi 的分类源是风险阈值 24.0 而不是参考上限 23.9")
+    void bmiBetweenReferenceMaxAndRiskThresholdIsNormal() {
+        List<MetricCoverageVO> rows = assembler.assemble(profileWithBmi("23.96"), List.of());
+
+        assertEquals(MetricCoverageVO.STATE_NORMAL, find(rows, "bmi").state(),
+                "23.96 < 风险阈值 24.0，判 NORMAL；读参考上限 23.9 会判 HIGH");
+    }
+
+    private HealthProfile profileWithBmi(String bmi) {
+        HealthProfile profile = new HealthProfile();
+        profile.setId(9L);
+        profile.setBmi(bmi == null ? null : new BigDecimal(bmi));
+        return profile;
     }
 
     private HealthMetric metric(String key, double value) {
