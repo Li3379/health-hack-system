@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { setActivePinia, createPinia } from 'pinia'
 import type { Mock } from 'vitest'
-import type { RiskAssessmentVO, RiskContributorVO } from '@/types/api'
+import type { RiskAssessmentVO, RiskContributorVO, MetricCoverageVO } from '@/types/api'
 
 /**
  * 风险页的行为证明（PRF-06 / PRF-08，以及本轮「评估直接读档案、不再二次填表」的改造）。
@@ -26,7 +26,10 @@ vi.mock('@/api/prevention', () => ({
     createProfile: vi.fn(),
     updateProfile: vi.fn(),
     getProfile: vi.fn(),
-    getCompleteness: vi.fn()
+    getCompleteness: vi.fn(),
+    // 面板覆盖率的唯一前置：缺了它 loadCoverage 会抛 TypeError 被 catch 吞掉，
+    // coverage 永远是 [] —— 覆盖面板的全部断言都在断言一个空数组。
+    getMetricCoverage: vi.fn()
   }
 }))
 
@@ -80,6 +83,7 @@ const createRiskAssessment = preventionApi.createRiskAssessment as unknown as Mo
 const getRiskAssessments = preventionApi.getRiskAssessments as unknown as Mock
 const getProfile = preventionApi.getProfile as unknown as Mock
 const getCompleteness = preventionApi.getCompleteness as unknown as Mock
+const getMetricCoverage = preventionApi.getMetricCoverage as unknown as Mock
 
 /**
  * 轻量 EP stub。关键点：**不提供任何输入控件 stub 的交互语义** ——
@@ -212,6 +216,52 @@ const completenessPayload = {
   assumptions: ['缺少 BMI，按 22.0 估算'],
   fields: []
 }
+
+/**
+ * 镜像 `GET /risk-assessment/metric-coverage` 的真实返回。
+ *
+ * **本文件只验证渲染，不验证后端的格式化与同源。** 这里不得出现任何模拟后端
+ * formatter 或阈值判定的代码 —— 那会把「面板收到了什么就渲染成什么」变成
+ * 「前端复刻了一遍后端算式」，两侧一旦漂移，测试反而更绿。
+ *
+ * 六行覆盖三种组合：
+ * 1. 有 riskNote + 有值（BMI / 血糖）—— 正常渲染，`NORMAL` / `HIGH` 两态；
+ * 2. 有 riskNote + MISSING（总胆固醇 / 高密度脂蛋白）—— 今天的三个分组谓词交叠，
+ *    这一形态会在「参与评估」与「尚未采集」两组里各渲染一次（16-04 修正）；
+ * 3. 无 riskNote（步数 / 尿酸）—— 已测但不参与 / 未测且不参与。
+ *
+ * `高密度脂蛋白` 的 riskNote 是下限型（`低于`），方向动词与上限型相反，用来
+ * 证明面板不假设「越大越危险」。
+ */
+const coverageRows: MetricCoverageVO[] = [
+  {
+    key: 'bmi', label: 'BMI', unit: 'kg/m²', category: 'HEALTH', state: 'NORMAL',
+    value: '22.9', normalRange: '18.5–23.9',
+    riskNote: '心血管评估：超过 24.0 kg/m² 计入 20 分'
+  },
+  {
+    key: 'bloodGlucose', label: '血糖', unit: 'mmol/L', category: 'HEALTH', state: 'HIGH',
+    value: '13.8', normalRange: '3.9–6.1',
+    riskNote: '糖尿病评估：超过 6.1 mmol/L 计入 30 分'
+  },
+  {
+    key: 'totalCholesterol', label: '总胆固醇', unit: 'mmol/L', category: 'HEALTH', state: 'MISSING', value: null, normalRange: '2.8–5.2',
+    riskNote: '心血管评估：超过 5.20 mmol/L 计入 20 分'
+  },
+  {
+    key: 'hdlCholesterol', label: '高密度脂蛋白', unit: 'mmol/L', category: 'HEALTH', state: 'MISSING',
+    value: null, normalRange: '1.00–2.20',
+    riskNote: '心血管评估：低于 1.00 mmol/L 计入 15 分'
+  },
+  {
+    key: 'steps', label: '步数', unit: '步', category: 'WELLNESS', state: 'NORMAL',
+    value: '8000', normalRange: null, riskNote: null
+  },
+  {
+    key: 'uricAcid', label: '尿酸', unit: 'μmol/L', category: 'HEALTH', state: 'MISSING',
+    value: null, normalRange: '150–420', riskNote: null
+  }
+]
 
 function mountRisk() {
   return mount(Risk, { global: { stubs: globalStubs } })
@@ -905,5 +955,61 @@ describe('Risk.vue — 批次行网格列数与子元素数一致', () => {
       return !!rule && rule[0].includes('grid-template-columns')
     })
     expect(hasRowRule, '没有任何 767px 媒体查询为 .risk-batch__row 声明 grid-template-columns').toBe(true)
+  })
+})
+
+/**
+ * 呈现契约的源码级门禁（UI-SPEC Contract 3.2 / §Color / Contract 4.2）。
+ *
+ * 「需要有人记得去跑的 grep 就是不再跑的 grep」—— 这三件事（描边 token、
+ * 信息文字对比度、六字指标名列宽）都是没有肉眼可见报错的纯样式缺陷，
+ * 只有把它们写进 `test:run` 才会在下次被改坏时立刻变红。
+ */
+describe('Risk.vue — 呈现契约（源码扫描）', () => {
+  const readRisk = async (): Promise<string> => {
+    const fs = await import('node:fs')
+    const path = await import('node:path')
+    return fs.readFileSync(
+      path.resolve(__dirname, '../../views/prevention/Risk.vue'),
+      'utf8'
+    )
+  }
+
+  /** 取某个选择器的样式块，取不到时返回空串（断言会给出可读失败信息）。 */
+  const blockOf = (src: string, selector: string): string => {
+    const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const m = src.match(new RegExp(`${escaped}\\s*\\{[\\s\\S]*?\\}`))
+    return m ? m[0] : ''
+  }
+
+  it('归因行的分隔线指向已定义的 --border，而不是未定义的 --border-1', async () => {
+    const src = await readRisk()
+    const block = blockOf(src, '.risk-dialog-breakdown__item')
+
+    expect(block, '未找到 .risk-dialog-breakdown__item 样式块').not.toBe('')
+    // 区域限定的正负成对断言：只查全文在这个阶段会红（还有 6 处未改），
+    // 只查「含 var(--border)」又会被相邻选择器混淆。
+    expect(block).toContain('border-bottom: 1px solid var(--border);')
+    expect(block).not.toContain('--border-1')
+  })
+
+  /**
+   * 覆盖面板必须在测试里真的渲染出行。
+   *
+   * 在此之前 `preventionApi.getMetricCoverage` 根本不在 mock 工厂里，调用抛
+   * TypeError 被 `loadCoverage` 的 `catch` 吞掉，`coverage` 恒为 `[]` —— 面板的
+   * 每条断言都在断言一个空数组。
+   */
+  it('覆盖面板渲染出后端会给出的行，不再恒为空数组', async () => {
+    getMetricCoverage.mockResolvedValue({ data: coverageRows })
+    const wrapper = mountRisk()
+    await flushPromises()
+
+    const items = wrapper.findAll('.risk-coverage__item')
+    // 已知缺陷（16-04 修正）：今天的 missingMetrics 谓词不看 riskNote，
+    // 「有 riskNote 且 MISSING」的两行会被重复渲染，所以这 6 行 fixture 实际
+    // 渲染成 8 项。断言写成 >= 而不是 ==，免得把待修的重复固化成契约。
+    expect(items.length).toBeGreaterThanOrEqual(coverageRows.length)
+    expect(wrapper.text()).toContain('高密度脂蛋白')
   })
 })
