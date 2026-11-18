@@ -43,22 +43,6 @@ CREATE TABLE IF NOT EXISTS `sys_user` (
     KEY `idx_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='User table';
 
--- Delete log table (operation audit)
-CREATE TABLE IF NOT EXISTS `delete_log` (
-    `id` BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT 'Log ID',
-    `operator_id` BIGINT NOT NULL COMMENT 'Operator user ID',
-    `operator_name` VARCHAR(50) DEFAULT NULL COMMENT 'Operator nickname',
-    `target_type` VARCHAR(32) NOT NULL COMMENT 'Target type: TIP/COMMENT/REPORT etc',
-    `target_id` BIGINT NOT NULL COMMENT 'Target ID',
-    `target_title` VARCHAR(255) DEFAULT NULL COMMENT 'Target title or summary',
-    `delete_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Delete time',
-    `ip_address` VARCHAR(45) DEFAULT NULL COMMENT 'Operator IP address',
-    `remark` VARCHAR(500) DEFAULT NULL COMMENT 'Remark',
-    KEY `idx_operator_id` (`operator_id`),
-    KEY `idx_target` (`target_type`, `target_id`),
-    KEY `idx_delete_time` (`delete_time`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Delete operation log table';
-
 -- ============================================================================
 -- 2. HEALTH PROFILE (depends on sys_user)
 -- ============================================================================
@@ -258,24 +242,6 @@ CREATE TABLE IF NOT EXISTS `alert_template` (
     KEY `idx_metric_severity` (`metric_key`, `severity_level`),
     KEY `idx_enabled` (`enabled`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Alert message template table';
-
--- Alert merge log table (for intelligent deduplication)
-CREATE TABLE IF NOT EXISTS `alert_merge_log` (
-    `id` BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT 'Log ID',
-    `user_id` BIGINT NOT NULL COMMENT 'User ID',
-    `primary_alert_id` BIGINT NOT NULL COMMENT 'Primary alert ID',
-    `merged_alert_ids` JSON DEFAULT NULL COMMENT 'Merged alert ID list (JSON array)',
-    `merge_count` INT DEFAULT 1 COMMENT 'Merge count',
-    `metric_key` VARCHAR(50) NOT NULL COMMENT 'Metric type',
-    `first_occurrence_at` DATETIME NOT NULL COMMENT 'First occurrence time',
-    `last_occurrence_at` DATETIME NOT NULL COMMENT 'Last occurrence time',
-    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT 'Creation time',
-    KEY `idx_user_id` (`user_id`),
-    KEY `idx_primary_alert` (`primary_alert_id`),
-    KEY `idx_user_metric` (`user_id`, `metric_key`),
-    KEY `idx_first_occurrence` (`first_occurrence_at`),
-    CONSTRAINT `fk_alert_merge_log_user` FOREIGN KEY (`user_id`) REFERENCES `sys_user` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Alert merge log table';
 
 -- Health score cache table
 CREATE TABLE IF NOT EXISTS `health_score_cache` (
@@ -717,26 +683,6 @@ CREATE TABLE IF NOT EXISTS `health_score_history` (
 -- 14. DATA EXPORT (v3.8.0)
 -- =====================================================
 
--- Export job table for async data export (CSV / Excel)
-CREATE TABLE IF NOT EXISTS `export_jobs` (
-    `id` BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT 'Job ID',
-    `user_id` BIGINT NOT NULL COMMENT 'User ID',
-    `export_type` VARCHAR(20) NOT NULL COMMENT 'Export type: csv, excel',
-    `content_type` VARCHAR(30) NOT NULL COMMENT 'Content type: metrics, scores, screenings',
-    `status` VARCHAR(20) NOT NULL DEFAULT 'pending' COMMENT 'Status: pending, processing, completed, failed',
-    `file_path` VARCHAR(500) DEFAULT NULL COMMENT 'Stored file path',
-    `file_name` VARCHAR(200) DEFAULT NULL COMMENT 'Download file name',
-    `start_date` DATE DEFAULT NULL COMMENT 'Export date range start',
-    `end_date` DATE DEFAULT NULL COMMENT 'Export date range end',
-    `error_message` VARCHAR(500) DEFAULT NULL COMMENT 'Error message on failure',
-    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT 'Creation time',
-    `completed_at` DATETIME DEFAULT NULL COMMENT 'Completion time',
-    KEY `idx_user_id` (`user_id`),
-    KEY `idx_status` (`status`),
-    KEY `idx_created_at` (`created_at`),
-    CONSTRAINT `fk_export_jobs_user` FOREIGN KEY (`user_id`) REFERENCES `sys_user` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Data export job table';
-
 -- =====================================================
 -- 15. USER REMINDERS (Phase 3)
 -- =====================================================
@@ -760,51 +706,6 @@ CREATE TABLE IF NOT EXISTS `user_reminders` (
 -- =====================================================
 -- 16. GAMIFICATION (Phase 3)
 -- =====================================================
-
-CREATE TABLE IF NOT EXISTS `user_streaks` (
-    `id` BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT 'Streak ID',
-    `user_id` BIGINT NOT NULL COMMENT 'User ID',
-    `current_streak` INT NOT NULL DEFAULT 0 COMMENT 'Current consecutive days',
-    `longest_streak` INT NOT NULL DEFAULT 0 COMMENT 'Longest streak ever',
-    `last_activity_date` DATE DEFAULT NULL COMMENT 'Last activity date',
-    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT 'Creation time',
-    `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Update time',
-    UNIQUE KEY `uk_user_id` (`user_id`),
-    CONSTRAINT `fk_streaks_user` FOREIGN KEY (`user_id`) REFERENCES `sys_user` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='User activity streaks';
-
-CREATE TABLE IF NOT EXISTS `achievements` (
-    `id` BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT 'Achievement ID',
-    `code` VARCHAR(50) NOT NULL COMMENT 'Unique code: first_record, streak_7, etc.',
-    `name` VARCHAR(100) NOT NULL COMMENT 'Display name',
-    `description` VARCHAR(500) DEFAULT NULL COMMENT 'Description',
-    `icon` VARCHAR(50) DEFAULT NULL COMMENT 'Icon identifier',
-    `points` INT NOT NULL DEFAULT 0 COMMENT 'Points awarded',
-    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT 'Creation time',
-    UNIQUE KEY `uk_code` (`code`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Achievement definitions';
-
-CREATE TABLE IF NOT EXISTS `user_achievements` (
-    `id` BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT 'ID',
-    `user_id` BIGINT NOT NULL COMMENT 'User ID',
-    `achievement_id` BIGINT NOT NULL COMMENT 'Achievement ID',
-    `unlocked_at` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT 'Unlock time',
-    UNIQUE KEY `uk_user_achievement` (`user_id`, `achievement_id`),
-    KEY `idx_user_id` (`user_id`),
-    CONSTRAINT `fk_user_ach_user` FOREIGN KEY (`user_id`) REFERENCES `sys_user` (`id`) ON DELETE CASCADE,
-    CONSTRAINT `fk_user_ach_achievement` FOREIGN KEY (`achievement_id`) REFERENCES `achievements` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='User unlocked achievements';
-
-CREATE TABLE IF NOT EXISTS `user_points` (
-    `id` BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT 'Point ID',
-    `user_id` BIGINT NOT NULL COMMENT 'User ID',
-    `points` INT NOT NULL COMMENT 'Points (positive=add, negative=spend)',
-    `source` VARCHAR(50) NOT NULL COMMENT 'Source: achievement, goal, manual',
-    `reference_id` BIGINT DEFAULT NULL COMMENT 'Reference entity ID',
-    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT 'Creation time',
-    KEY `idx_user_id` (`user_id`),
-    CONSTRAINT `fk_points_user` FOREIGN KEY (`user_id`) REFERENCES `sys_user` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='User points ledger';
 
 -- =====================================================
 -- 17. HEALTH GOALS (Phase 3)

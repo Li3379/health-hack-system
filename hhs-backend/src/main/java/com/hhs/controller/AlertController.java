@@ -5,8 +5,6 @@ import com.hhs.dto.AlertVO;
 import com.hhs.common.Result;
 import com.hhs.security.SecurityUtils;
 import com.hhs.service.AlertService;
-import com.hhs.service.alert.TrendPredictor;
-import com.hhs.service.alert.TrendResult;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -25,7 +23,6 @@ import org.springframework.web.bind.annotation.*;
 public class AlertController {
 
     private final AlertService alertService;
-    private final TrendPredictor trendPredictor;
 
     @Operation(summary = "Get user's alerts with pagination")
     @GetMapping
@@ -102,28 +99,5 @@ public class AlertController {
         log.info("Delete alert: alertId={}, userId={}", id, userId);
         Boolean result = alertService.deleteAlert(id, userId);
         return Result.success(result);
-    }
-
-    @Operation(summary = "Get trend prediction for a metric")
-    @GetMapping("/trend/{metricKey}")
-    public Result<TrendResult> getTrendPrediction(
-        @PathVariable String metricKey,
-        @RequestParam(defaultValue = "7") int days) {
-        Long userId = SecurityUtils.getCurrentUserId();
-        log.info("Get trend prediction: userId={}, metricKey={}, days={}", userId, metricKey, days);
-        TrendResult result = trendPredictor.predict(userId, metricKey, days);
-        return Result.success(result);
-    }
-
-    @Operation(summary = "Check if early warning is needed for a metric")
-    @GetMapping("/trend/{metricKey}/early-warning")
-    public Result<java.util.Map<String, Object>> checkEarlyWarning(@PathVariable String metricKey) {
-        Long userId = SecurityUtils.getCurrentUserId();
-        log.debug("Check early warning: userId={}, metricKey={}", userId, metricKey);
-        boolean needsWarning = trendPredictor.shouldGenerateEarlyWarning(userId, metricKey);
-        return Result.success(java.util.Map.of(
-            "metricKey", metricKey,
-            "earlyWarningNeeded", needsWarning
-        ));
     }
 }

@@ -6,12 +6,12 @@
     {
       "number": "15",
       "name": "风险历史按批次折叠与趋势",
-      "status": "in_progress"
+      "status": "complete"
     },
     {
       "number": "16",
       "name": "风险评估引擎输入重组",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "number": "17",
@@ -29,5 +29,5 @@
     "label": "Show progress",
     "reason": "Unsure of state — showing progress"
   },
-  "updated_at": "2026-11-18T04:16:39.750Z"
+  "updated_at": "2026-11-18T12:48:09.706Z"
 }
