@@ -528,56 +528,6 @@ ON DUPLICATE KEY UPDATE
     `message_template` = VALUES(`message_template`),
     `suggestion_template` = VALUES(`suggestion_template`),
     `priority` = VALUES(`priority`);
-
--- =====================================================
--- END OF SCHEMA
--- =====================================================
-
--- =====================================================
--- 11. SMART DATA INPUT TABLES (v3.4.0)
--- =====================================================
-
--- Device connection table (for wearable device sync)
-CREATE TABLE IF NOT EXISTS `device_connection` (
-    `id` BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT 'Connection ID',
-    `user_id` BIGINT NOT NULL COMMENT 'User ID',
-    `platform` VARCHAR(20) NOT NULL COMMENT 'Platform: huawei, xiaomi, wechat, apple',
-    `platform_user_id` VARCHAR(100) DEFAULT NULL COMMENT 'Platform user identifier',
-    `access_token` VARCHAR(500) DEFAULT NULL COMMENT 'Access token (encrypted)',
-    `refresh_token` VARCHAR(500) DEFAULT NULL COMMENT 'Refresh token (encrypted)',
-    `token_expire_at` DATETIME DEFAULT NULL COMMENT 'Token expiration time',
-    `last_sync_at` DATETIME DEFAULT NULL COMMENT 'Last sync time',
-    `sync_enabled` TINYINT DEFAULT 1 COMMENT 'Auto sync enabled: 0-disabled, 1-enabled',
-    `status` VARCHAR(20) DEFAULT 'connected' COMMENT 'Status: connected, expired, disconnected',
-    `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT 'Creation time',
-    `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Update time',
-    UNIQUE KEY `uk_user_platform` (`user_id`, `platform`),
-    KEY `idx_user_id` (`user_id`),
-    KEY `idx_platform` (`platform`),
-    KEY `idx_status` (`status`),
-    CONSTRAINT `fk_device_connection_user` FOREIGN KEY (`user_id`) REFERENCES `sys_user` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Device connection configuration table';
-
--- Sync history table
-CREATE TABLE IF NOT EXISTS `sync_history` (
-    `id` BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT 'History ID',
-    `user_id` BIGINT NOT NULL COMMENT 'User ID',
-    `platform` VARCHAR(20) NOT NULL COMMENT 'Platform: huawei, xiaomi, wechat, apple',
-    `sync_type` VARCHAR(20) NOT NULL COMMENT 'Sync type: manual, scheduled',
-    `metrics_count` INT DEFAULT 0 COMMENT 'Number of metrics synced',
-    `status` VARCHAR(20) NOT NULL COMMENT 'Status: success, partial, failed',
-    `error_message` TEXT DEFAULT NULL COMMENT 'Error message',
-    `start_time` DATETIME NOT NULL COMMENT 'Sync start time',
-    `end_time` DATETIME DEFAULT NULL COMMENT 'Sync end time',
-    `duration_ms` INT DEFAULT NULL COMMENT 'Duration in milliseconds',
-    `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT 'Creation time',
-    KEY `idx_user_id` (`user_id`),
-    KEY `idx_user_time` (`user_id`, `create_time`),
-    KEY `idx_platform` (`platform`, `create_time`),
-    KEY `idx_status` (`status`),
-    CONSTRAINT `fk_sync_history_user` FOREIGN KEY (`user_id`) REFERENCES `sys_user` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Device sync history table';
-
 -- AI parse history table
 CREATE TABLE IF NOT EXISTS `ai_parse_history` (
     `id` BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT 'Parse ID',
@@ -657,32 +607,6 @@ SET @preparedStatement = (SELECT IF(
 PREPARE createIndexIfNotExists FROM @preparedStatement;
 EXECUTE createIndexIfNotExists;
 DEALLOCATE PREPARE createIndexIfNotExists;
-
--- =====================================================
--- 12. DEVICE PLATFORM CONFIG TABLE (v3.5.0)
--- =====================================================
-
--- Device platform configuration table
--- Stores OAuth credentials for each wearable device platform
-CREATE TABLE IF NOT EXISTS `device_platform_config` (
-    `platform` VARCHAR(20) PRIMARY KEY COMMENT 'Platform: huawei, xiaomi, wechat, apple',
-    `client_id` VARCHAR(500) DEFAULT NULL COMMENT 'OAuth client ID (encrypted)',
-    `client_secret` VARCHAR(500) DEFAULT NULL COMMENT 'OAuth client secret (encrypted)',
-    `auth_url` VARCHAR(500) DEFAULT NULL COMMENT 'OAuth authorization URL',
-    `token_url` VARCHAR(500) DEFAULT NULL COMMENT 'Token exchange URL',
-    `redirect_uri` VARCHAR(500) DEFAULT NULL COMMENT 'OAuth callback URL',
-    `scopes` JSON DEFAULT NULL COMMENT 'Permission scopes (JSON array)',
-    `configured` TINYINT DEFAULT 0 COMMENT 'Is configured: 0-no, 1-yes',
-    `last_test_time` DATETIME DEFAULT NULL COMMENT 'Last configuration test time',
-    `test_result` VARCHAR(20) DEFAULT NULL COMMENT 'Test result: success, failed, pending',
-    `test_error_message` TEXT DEFAULT NULL COMMENT 'Test error message',
-    `enabled` TINYINT DEFAULT 0 COMMENT 'Is enabled: 0-disabled, 1-enabled',
-    `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT 'Creation time',
-    `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Update time',
-    KEY `idx_configured` (`configured`),
-    KEY `idx_enabled` (`enabled`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Device platform OAuth configuration table';
-
 -- =====================================================
 -- 13. HEALTH SCORE HISTORY (v3.7.0)
 -- =====================================================

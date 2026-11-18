@@ -60,7 +60,6 @@ public class DashboardSummaryVO {
     /**
      * 累计设备同步次数
      */
-    private int totalDeviceSyncCount;
 
     /**
      * 累计AI识别次数
@@ -70,7 +69,6 @@ public class DashboardSummaryVO {
     /**
      * 今日设备同步次数
      */
-    private int todayDeviceSyncCount;
 
     /**
      * 今日AI识别次数

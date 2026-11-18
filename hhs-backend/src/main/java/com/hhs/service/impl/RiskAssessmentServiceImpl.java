@@ -15,6 +15,7 @@ import com.hhs.service.domain.MetricCoverageAssembler;
 import com.hhs.service.domain.MetricKeyNormalizer;
 import com.hhs.service.domain.ProfileCompletenessCalculator;
 import com.hhs.service.domain.ProfileFieldCatalog;
+import com.hhs.service.domain.RiskThresholdRegistry;
 import com.hhs.vo.MetricCoverageVO;
 import com.hhs.vo.RiskAssessmentVO;
 import com.hhs.vo.RiskContributorVO;
@@ -63,6 +64,7 @@ public class RiskAssessmentServiceImpl implements RiskAssessmentService {
     private final HealthMetricMapper healthMetricMapper;
     private final ProfileCompletenessCalculator profileCompletenessCalculator;
     private final MetricCoverageAssembler metricCoverageAssembler;
+    private final RiskThresholdRegistry riskThresholds;
 
     /**
      * Construct the service with its mappers and the completeness calculator.
@@ -71,17 +73,21 @@ public class RiskAssessmentServiceImpl implements RiskAssessmentService {
      * @param healthProfileMapper           health-profile lookup
      * @param healthMetricMapper            recent-metric lookup
      * @param profileCompletenessCalculator authoritative completeness source
+     * @param metricCoverageAssembler       coverage-panel assembler
+     * @param riskThresholds                authoritative risk thresholds, shared with the panel
      */
     public RiskAssessmentServiceImpl(RiskAssessmentMapper riskAssessmentMapper,
                                      HealthProfileMapper healthProfileMapper,
                                      HealthMetricMapper healthMetricMapper,
                                      ProfileCompletenessCalculator profileCompletenessCalculator,
-                                     MetricCoverageAssembler metricCoverageAssembler) {
+                                     MetricCoverageAssembler metricCoverageAssembler,
+                                     RiskThresholdRegistry riskThresholds) {
         this.riskAssessmentMapper = riskAssessmentMapper;
         this.healthProfileMapper = healthProfileMapper;
         this.healthMetricMapper = healthMetricMapper;
         this.profileCompletenessCalculator = profileCompletenessCalculator;
         this.metricCoverageAssembler = metricCoverageAssembler;
+        this.riskThresholds = riskThresholds;
     }
 
     /**
@@ -101,7 +107,7 @@ public class RiskAssessmentServiceImpl implements RiskAssessmentService {
         HealthProfile profile = getProfileByUserId(userId);
         AssumptionCollector collector = new AssumptionCollector();
         List<ScoredAssessment> scored = RiskRuleEngine.evaluateDetailed(userId, profile,
-                getRecentMetrics(userId), collector);
+                getRecentMetrics(userId), collector, riskThresholds);
 
         // 追加而不是覆盖：删除会让风险趋势无法追踪，而趋势恰恰是风险评估最有价值的部分。
         // 同一次运行的三条记录共享一个 batchId，列表据此折叠成「一次评估」。
@@ -270,13 +276,15 @@ public class RiskAssessmentServiceImpl implements RiskAssessmentService {
      * normal" and "we have no reading" would produce the same score and the same copy.</p>
      */
     private static final class RiskRuleEngine {
-        static List<RiskAssessment> evaluate(Long userId, HealthProfile profile, List<HealthMetric> recentMetrics) {
-            return evaluate(userId, profile, recentMetrics, AssumptionCollector.noop());
+        static List<RiskAssessment> evaluate(Long userId, HealthProfile profile, List<HealthMetric> recentMetrics,
+                                             RiskThresholdRegistry thresholds) {
+            return evaluate(userId, profile, recentMetrics, AssumptionCollector.noop(), thresholds);
         }
 
         static List<RiskAssessment> evaluate(Long userId, HealthProfile profile, List<HealthMetric> recentMetrics,
-                                             AssumptionCollector collector) {
-            return evaluateDetailed(userId, profile, recentMetrics, collector).stream()
+                                             AssumptionCollector collector,
+                                             RiskThresholdRegistry thresholds) {
+            return evaluateDetailed(userId, profile, recentMetrics, collector, thresholds).stream()
                     .map(ScoredAssessment::assessment)
                     .toList();
         }
@@ -288,11 +296,13 @@ public class RiskAssessmentServiceImpl implements RiskAssessmentService {
          * @param profile       health profile, or {@code null}
          * @param recentMetrics recent metrics, newest first
          * @param collector     receives the substitution sentences
+         * @param thresholds    authoritative risk thresholds, shared with the coverage panel
          * @return one entry per disease, in 糖尿病 / 高血压 / 心血管疾病 order
          */
         static List<ScoredAssessment> evaluateDetailed(Long userId, HealthProfile profile,
                                                        List<HealthMetric> recentMetrics,
-                                                       AssumptionCollector collector) {
+                                                       AssumptionCollector collector,
+                                                       RiskThresholdRegistry thresholds) {
             List<ScoredAssessment> result = new ArrayList<>();
             Long profileId = profile != null ? profile.getId() : null;
 
@@ -355,8 +365,11 @@ public class RiskAssessmentServiceImpl implements RiskAssessmentService {
                             ? "年龄 " + ageValue + "，超过 45 岁，计入 " + ageDiabetesPoints + " 分"
                             : "年龄 " + ageValue + "，未超过 45 岁，计入 " + ageDiabetesPoints + " 分"));
 
-            boolean bmiHigh = bmi.compareTo(BigDecimal.valueOf(24)) > 0;
-            int bmiPoints = bmiHigh ? 25 : 10;
+            RiskThresholdRegistry.RiskThresholdRule bmiRule =
+                    requiredRule(thresholds, "bmi", "糖尿病");
+            boolean bmiHigh = bmi.compareTo(bmiRule.threshold()) > 0;
+            // 未命中时的 10 分是无条件基线，不是阈值奖励 —— 它不属于阈值表，故意留在这里。
+            int bmiPoints = bmiHigh ? bmiRule.points() : 10;
             // An assumed BMI is never "the user's own value": label it ASSUMED so the panel can
             // prompt them to fill it in, and so nobody reads the points as measured evidence.
             String bmiState = bmiAssumed
@@ -380,8 +393,11 @@ public class RiskAssessmentServiceImpl implements RiskAssessmentService {
                                     ? "家族病史提到糖尿病，计入 " + familyPoints + " 分"
                                     : "家族病史未提到糖尿病，未加分"));
 
-            boolean sugarHigh = latestBloodSugar != null && latestBloodSugar.compareTo(BigDecimal.valueOf(6.1)) > 0;
-            int sugarPoints = sugarHigh ? 30 : 0;
+            RiskThresholdRegistry.RiskThresholdRule sugarRule =
+                    requiredRule(thresholds, "bloodGlucose", "糖尿病");
+            boolean sugarHigh = latestBloodSugar != null
+                    && latestBloodSugar.compareTo(sugarRule.threshold()) > 0;
+            int sugarPoints = sugarHigh ? sugarRule.points() : 0;
             diabetesParts.add(RiskContributorVO.threshold("bloodGlucose", "血糖",
                     latestBloodSugar == null ? null : latestBloodSugar.stripTrailingZeros().toPlainString() + " mmol/L",
                     "6.1 mmol/L", sugarHigh, sugarPoints));
@@ -401,15 +417,19 @@ public class RiskAssessmentServiceImpl implements RiskAssessmentService {
                             ? "年龄 " + ageValue + "，超过 50 岁，计入 " + ageBpPoints + " 分"
                             : "年龄 " + ageValue + "，未超过 50 岁，计入 " + ageBpPoints + " 分"));
 
-            boolean systolicHigh = systolic != null && systolic.compareTo(BigDecimal.valueOf(130)) > 0;
+            RiskThresholdRegistry.RiskThresholdRule systolicRule =
+                    requiredRule(thresholds, "systolicBP", "高血压");
+            boolean systolicHigh = systolic != null && systolic.compareTo(systolicRule.threshold()) > 0;
             bpParts.add(RiskContributorVO.threshold("systolicBP", "收缩压",
                     systolic == null ? null : systolic.stripTrailingZeros().toPlainString() + " mmHg",
-                    "130 mmHg", systolicHigh, systolicHigh ? 35 : 0));
+                    "130 mmHg", systolicHigh, systolicHigh ? systolicRule.points() : 0));
 
-            boolean diastolicHigh = diastolic != null && diastolic.compareTo(BigDecimal.valueOf(85)) > 0;
+            RiskThresholdRegistry.RiskThresholdRule diastolicRule =
+                    requiredRule(thresholds, "diastolicBP", "高血压");
+            boolean diastolicHigh = diastolic != null && diastolic.compareTo(diastolicRule.threshold()) > 0;
             bpParts.add(RiskContributorVO.threshold("diastolicBP", "舒张压",
                     diastolic == null ? null : diastolic.stripTrailingZeros().toPlainString() + " mmHg",
-                    "85 mmHg", diastolicHigh, diastolicHigh ? 30 : 0));
+                    "85 mmHg", diastolicHigh, diastolicHigh ? diastolicRule.points() : 0));
 
             int bpScore = bpParts.stream().mapToInt(RiskContributorVO::points).sum();
             result.add(new ScoredAssessment(create(userId, profileId, "高血压", bpScore), bpParts));
@@ -458,6 +478,28 @@ public class RiskAssessmentServiceImpl implements RiskAssessmentService {
                     + "（折半计入 " + half + " 分）";
             return new RiskContributorVO(source.key(), source.label(), source.state(), source.value(),
                     source.threshold(), half, explanation);
+        }
+
+        /**
+         * Look up the rule one assessment reads for one metric, failing loudly when absent.
+         *
+         * <p>Returning a default instead would silently award zero points — the exact failure
+         * mode this registry exists to remove, where a misspelt or missing rule lowers a score
+         * without anyone noticing. The lookup goes through {@code ruleFor} once, so the
+         * "what happens when the rule is missing" decision lives in one place rather than being
+         * re-derived at each of the four call sites.</p>
+         *
+         * @param thresholds   the authoritative registry
+         * @param canonicalKey canonical metric key
+         * @param disease      the assessment reading it
+         * @return the matching rule
+         * @throws IllegalStateException when the registry declares no such rule
+         */
+        private static RiskThresholdRegistry.RiskThresholdRule requiredRule(
+                RiskThresholdRegistry thresholds, String canonicalKey, String disease) {
+            return thresholds.ruleFor(canonicalKey, disease)
+                    .orElseThrow(() -> new IllegalStateException(
+                            "缺少风险阈值规则: " + canonicalKey + "/" + disease));
         }
 
         private static String riskStateOf(String value) {

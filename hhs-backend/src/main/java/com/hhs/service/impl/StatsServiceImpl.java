@@ -6,12 +6,10 @@ import com.hhs.entity.AiParseHistory;
 import com.hhs.entity.HealthAlert;
 import com.hhs.entity.HealthMetric;
 import com.hhs.entity.HealthScoreHistory;
-import com.hhs.entity.SyncHistory;
 import com.hhs.mapper.AiParseHistoryMapper;
 import com.hhs.mapper.HealthAlertMapper;
 import com.hhs.mapper.HealthMetricMapper;
 import com.hhs.mapper.HealthScoreHistoryMapper;
-import com.hhs.mapper.SyncHistoryMapper;
 import com.hhs.service.StatsService;
 import com.hhs.vo.DashboardSummaryVO;
 import com.hhs.vo.MonthlyStatsVO;
@@ -43,7 +41,6 @@ public class StatsServiceImpl implements StatsService {
     private final HealthMetricMapper healthMetricMapper;
     private final AiParseHistoryMapper aiParseHistoryMapper;
     private final HealthAlertMapper healthAlertMapper;
-    private final SyncHistoryMapper syncHistoryMapper;
     private final HealthScoreHistoryMapper healthScoreHistoryMapper;
 
     @Override
@@ -68,12 +65,6 @@ public class StatsServiceImpl implements StatsService {
                 .eq(HealthMetric::getCategory, MetricCategory.WELLNESS)
         );
 
-        // Count device syncs
-        Long deviceSyncCount = syncHistoryMapper.selectCount(
-            new LambdaQueryWrapper<SyncHistory>()
-                .eq(SyncHistory::getUserId, userId)
-                .between(SyncHistory::getCreateTime, startOfDay, endOfDay)
-        );
 
         // Count AI recognitions
         Long aiRecognizeCount = aiParseHistoryMapper.selectCount(
@@ -85,7 +76,6 @@ public class StatsServiceImpl implements StatsService {
         return TodayStatsVO.builder()
                 .healthMetricsCount(toInt(healthMetricsCount))
                 .wellnessMetricsCount(toInt(wellnessMetricsCount))
-                .deviceSyncCount(toInt(deviceSyncCount))
                 .aiRecognizeCount(toInt(aiRecognizeCount))
                 .build();
     }
@@ -101,14 +91,12 @@ public class StatsServiceImpl implements StatsService {
         // Current week counts
         int currentHealth = countMetrics(userId, MetricCategory.HEALTH, currentWeekStart, currentWeekEnd);
         int currentWellness = countMetrics(userId, MetricCategory.WELLNESS, currentWeekStart, currentWeekEnd);
-        int currentSync = countSyncHistory(userId, currentWeekStart.atStartOfDay(), currentWeekEnd.atTime(LocalTime.MAX));
         int currentAi = countAiParseHistory(userId, currentWeekStart.atStartOfDay(), currentWeekEnd.atTime(LocalTime.MAX));
         BigDecimal currentAvgScore = getAvgScore(userId, currentWeekStart, currentWeekEnd);
 
         // Previous week counts
         int previousHealth = countMetrics(userId, MetricCategory.HEALTH, previousWeekStart, previousWeekEnd);
         int previousWellness = countMetrics(userId, MetricCategory.WELLNESS, previousWeekStart, previousWeekEnd);
-        int previousSync = countSyncHistory(userId, previousWeekStart.atStartOfDay(), previousWeekEnd.atTime(LocalTime.MAX));
         int previousAi = countAiParseHistory(userId, previousWeekStart.atStartOfDay(), previousWeekEnd.atTime(LocalTime.MAX));
         BigDecimal previousAvgScore = getAvgScore(userId, previousWeekStart, previousWeekEnd);
 
@@ -119,9 +107,6 @@ public class StatsServiceImpl implements StatsService {
                 .currentWellnessMetricsCount(currentWellness)
                 .previousWellnessMetricsCount(previousWellness)
                 .wellnessMetricsChangePercent(calcChangePercent(currentWellness, previousWellness))
-                .currentDeviceSyncCount(currentSync)
-                .previousDeviceSyncCount(previousSync)
-                .deviceSyncChangePercent(calcChangePercent(currentSync, previousSync))
                 .currentAiRecognizeCount(currentAi)
                 .previousAiRecognizeCount(previousAi)
                 .aiRecognizeChangePercent(calcChangePercent(currentAi, previousAi))
@@ -142,14 +127,12 @@ public class StatsServiceImpl implements StatsService {
         // Current month counts
         int currentHealth = countMetrics(userId, MetricCategory.HEALTH, currentMonthStart, currentMonthEnd);
         int currentWellness = countMetrics(userId, MetricCategory.WELLNESS, currentMonthStart, currentMonthEnd);
-        int currentSync = countSyncHistory(userId, currentMonthStart.atStartOfDay(), currentMonthEnd.atTime(LocalTime.MAX));
         int currentAi = countAiParseHistory(userId, currentMonthStart.atStartOfDay(), currentMonthEnd.atTime(LocalTime.MAX));
         BigDecimal currentAvgScore = getAvgScore(userId, currentMonthStart, currentMonthEnd);
 
         // Previous month counts
         int previousHealth = countMetrics(userId, MetricCategory.HEALTH, previousMonthStart, previousMonthEnd);
         int previousWellness = countMetrics(userId, MetricCategory.WELLNESS, previousMonthStart, previousMonthEnd);
-        int previousSync = countSyncHistory(userId, previousMonthStart.atStartOfDay(), previousMonthEnd.atTime(LocalTime.MAX));
         int previousAi = countAiParseHistory(userId, previousMonthStart.atStartOfDay(), previousMonthEnd.atTime(LocalTime.MAX));
         BigDecimal previousAvgScore = getAvgScore(userId, previousMonthStart, previousMonthEnd);
 
@@ -163,9 +146,6 @@ public class StatsServiceImpl implements StatsService {
                 .currentWellnessMetricsCount(currentWellness)
                 .previousWellnessMetricsCount(previousWellness)
                 .wellnessMetricsChangePercent(calcChangePercent(currentWellness, previousWellness))
-                .currentDeviceSyncCount(currentSync)
-                .previousDeviceSyncCount(previousSync)
-                .deviceSyncChangePercent(calcChangePercent(currentSync, previousSync))
                 .currentAiRecognizeCount(currentAi)
                 .previousAiRecognizeCount(previousAi)
                 .aiRecognizeChangePercent(calcChangePercent(currentAi, previousAi))
@@ -222,7 +202,6 @@ public class StatsServiceImpl implements StatsService {
         // Today counts
         int todayHealth = countMetrics(userId, MetricCategory.HEALTH, today, today);
         int todayWellness = countMetrics(userId, MetricCategory.WELLNESS, today, today);
-        int todaySync = countSyncHistory(userId, todayStart, todayEnd);
         int todayAi = countAiParseHistory(userId, todayStart, todayEnd);
 
         // Week counts
@@ -241,10 +220,6 @@ public class StatsServiceImpl implements StatsService {
         int highSeverityAlerts = countHighSeverityAlerts(userId);
 
         // Total counts
-        Long totalSync = syncHistoryMapper.selectCount(
-            new LambdaQueryWrapper<SyncHistory>()
-                .eq(SyncHistory::getUserId, userId)
-        );
         Long totalAi = aiParseHistoryMapper.selectCount(
             new LambdaQueryWrapper<AiParseHistory>()
                 .eq(AiParseHistory::getUserId, userId)
@@ -259,9 +234,7 @@ public class StatsServiceImpl implements StatsService {
                 .weekWellnessMetricsCount(weekWellness)
                 .unreadAlertsCount(unreadAlerts)
                 .highSeverityAlertsCount(highSeverityAlerts)
-                .totalDeviceSyncCount(toInt(totalSync))
                 .totalAiRecognizeCount(toInt(totalAi))
-                .todayDeviceSyncCount(todaySync)
                 .todayAiRecognizeCount(todayAi)
                 .weekActiveDays(weekActiveDays)
                 .build();
@@ -286,15 +259,6 @@ public class StatsServiceImpl implements StatsService {
     /**
      * Count device sync records within a time range
      */
-    private int countSyncHistory(Long userId, LocalDateTime start, LocalDateTime end) {
-        Long count = syncHistoryMapper.selectCount(
-            new LambdaQueryWrapper<SyncHistory>()
-                .eq(SyncHistory::getUserId, userId)
-                .ge(SyncHistory::getCreateTime, start)
-                .le(SyncHistory::getCreateTime, end)
-        );
-        return toInt(count);
-    }
 
     /**
      * Count AI parse history within a time range

@@ -50,12 +50,10 @@ public class MonthlyStatsVO {
     /**
      * 本月设备同步次数
      */
-    private int currentDeviceSyncCount;
 
     /**
      * 上月设备同步次数
      */
-    private int previousDeviceSyncCount;
 
     /**
      * 设备同步次数变化百分比

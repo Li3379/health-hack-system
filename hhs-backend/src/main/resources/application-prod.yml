@@ -93,18 +93,3 @@ app:
     verbose-errors: false
   websocket:
     allowed-origins: ${ALLOWED_ORIGINS:}
-
-# Device OAuth Configuration for Production
-# BASE_URL should be set to your server address (e.g., http://47.112.6.180)
-device:
-  mock:
-    enabled: false
-  oauth:
-    huawei:
-      client-id: ${HUAWEI_CLIENT_ID:}
-      client-secret: ${HUAWEI_CLIENT_SECRET:}
-      redirect-uri: ${BASE_URL}/api/device/callback/huawei
-    xiaomi:
-      client-id: ${XIAOMI_CLIENT_ID:}
-      client-secret: ${XIAOMI_CLIENT_SECRET:}
-      redirect-uri: ${BASE_URL}/api/device/callback/xiaomi
