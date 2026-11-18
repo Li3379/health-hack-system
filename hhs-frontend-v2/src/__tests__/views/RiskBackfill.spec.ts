@@ -975,10 +975,15 @@ describe('Risk.vue — 呈现契约（源码扫描）', () => {
     )
   }
 
-  /** 取某个选择器的样式块，取不到时返回空串（断言会给出可读失败信息）。 */
+  /**
+   * 取某个选择器的样式块。
+   *
+   * `[^{}]*` 而不是 `\s*` —— 有的规则是逗号分隔的选择器列表
+   *（`.risk-batch__delta--flat, .risk-batch__delta--first {`），用 `\s*` 会漏掉。
+   */
   const blockOf = (src: string, selector: string): string => {
     const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    const m = src.match(new RegExp(`${escaped}\\s*\\{[\\s\\S]*?\\}`))
+    const m = src.match(new RegExp(`${escaped}[^{}]*\\{[\\s\\S]*?\\}`))
     return m ? m[0] : ''
   }
 
@@ -1011,5 +1016,44 @@ describe('Risk.vue — 呈现契约（源码扫描）', () => {
     // 渲染成 8 项。断言写成 >= 而不是 ==，免得把待修的重复固化成契约。
     expect(items.length).toBeGreaterThanOrEqual(coverageRows.length)
     expect(wrapper.text()).toContain('高密度脂蛋白')
+  })
+
+  /**
+   * 以下三条守的是 UI-SPEC 的三条声明：Contract 3.2（描边 token）、
+   * §Color（对比度收紧后的精确计数）、Contract 4.2（六字指标名要让得下列宽）。
+   * 失败信息里带契约编号，改坏的人能直接翻到出处。
+   */
+
+  it('Contract 3.2：Risk.vue 中零定义 token --border-1 归零', async () => {
+    const src = await readRisk()
+    // 直接对源码文本计数，不复刻 grep -c 的口径。
+    const count = src.split('var(--border-1)').length - 1
+    expect(count, '仍有未定义的 --border-1：其 border 声明会静默失效').toBe(0)
+  })
+
+  it('§Color：--text-3 恰剩 2 处，且落在两个非信息位置', async () => {
+    const src = await readRisk()
+    // 精确值不是「至多」：7 处清点表里 5 处承载信息（Light 下 3.97:1 不达 AA）
+    // 必须收紧到 --text-2，剩下的是徽标与符号位。
+    expect(src.split('var(--text-3)').length - 1).toBe(2)
+
+    // 计数之外再加区域断言：否则「删掉两处、在别处新增两处」也能凑出 2。
+    expect(blockOf(src, '.risk-batch__legacy-badge')).toContain('var(--text-3)')
+    expect(blockOf(src, '.risk-batch__delta--flat')).toContain('var(--text-3)')
+  })
+
+  it('Contract 4.2：归因行首列 >= 88px，容得下六字指标名', async () => {
+    const src = await readRisk()
+    const block = blockOf(src, '.risk-dialog-breakdown__item')
+    expect(block, '未找到 .risk-dialog-breakdown__item 样式块').not.toBe('')
+
+    const cols = block.match(/grid-template-columns:\s*([^;]+);/)
+    expect(cols, '未声明 grid-template-columns').not.toBeNull()
+    const first = cols![1].trim().split(/\s+/)[0]
+
+    // 门禁守的是「容纳六字名（78px 文本）」这个意图，不是 88 这个魔法数字 ——
+    // 将来调宽仍应通过。
+    expect(first, `首列应为 px 值，实为 ${first}`).toMatch(/^\d+(\.\d+)?px$/)
+    expect(parseFloat(first)).toBeGreaterThanOrEqual(88)
   })
 })

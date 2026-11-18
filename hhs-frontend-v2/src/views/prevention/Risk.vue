@@ -1037,14 +1037,14 @@ defineExpose({ viewDetail, handleCreateClick })
 
 .risk-batch__legacy {
   margin: 0;
-  color: var(--text-3);
+  color: var(--text-2);
   font-size: 13px;
 }
 
 .risk-batches__empty {
   padding: 32px 0;
   text-align: center;
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
 /* ---------- Contract 5：就地补填面板 ---------- */
@@ -1093,8 +1093,8 @@ defineExpose({ viewDetail, handleCreateClick })
   display: flex;
   flex-direction: column;
   gap: 1px;
-  background: var(--border-1);
-  border: 1px solid var(--border-1);
+  background: var(--border);
+  border: 1px solid var(--border);
   border-radius: 6px;
   overflow: hidden;
 }
@@ -1155,7 +1155,7 @@ defineExpose({ viewDetail, handleCreateClick })
 .risk-preparing {
   margin-bottom: 16px;
   padding: 20px;
-  border: 1px solid var(--border-1);
+  border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface-1);
 }
@@ -1190,7 +1190,7 @@ defineExpose({ viewDetail, handleCreateClick })
 .risk-coverage {
   margin-bottom: 16px;
   padding: 16px;
-  border: 1px solid var(--border-1);
+  border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface-1);
 }
@@ -1232,14 +1232,14 @@ defineExpose({ viewDetail, handleCreateClick })
 
 .risk-coverage__hint {
   font-weight: 400;
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
 .risk-coverage__list {
   margin: 0;
   padding: 0;
   list-style: none;
-  border: 1px solid var(--border-1);
+  border: 1px solid var(--border);
   border-radius: 6px;
   overflow: hidden;
 }
@@ -1251,7 +1251,7 @@ defineExpose({ viewDetail, handleCreateClick })
   align-items: baseline;
   padding: 7px 12px;
   background: var(--surface-1);
-  border-bottom: 1px solid var(--border-1);
+  border-bottom: 1px solid var(--border);
   font: 400 13px/1.5 var(--font-ui);
 }
 
@@ -1276,7 +1276,7 @@ defineExpose({ viewDetail, handleCreateClick })
 
 .risk-coverage__range {
   font: 400 12px/1.5 var(--font-mono);
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
 .risk-coverage__state {
@@ -1326,7 +1326,7 @@ defineExpose({ viewDetail, handleCreateClick })
   margin: 0;
   padding: 8px 12px;
   font: 400 12px/1.5 var(--font-ui);
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
 .risk-coverage__loading {
@@ -1375,7 +1375,7 @@ defineExpose({ viewDetail, handleCreateClick })
 
 .risk-dialog-breakdown__item {
   display: grid;
-  grid-template-columns: 80px 72px 48px 1fr;
+  grid-template-columns: 88px 72px 48px 1fr;
   gap: 10px;
   align-items: baseline;
   padding: 8px 12px;
