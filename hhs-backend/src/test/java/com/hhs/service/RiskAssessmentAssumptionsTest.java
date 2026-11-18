@@ -741,6 +741,143 @@ class RiskAssessmentAssumptionsTest {
                 .findFirst().orElseThrow().riskScore();
     }
 
+    private RiskContributorVO contributorOf(List<RiskAssessmentVO> vos, String disease, String key) {
+        return contributorsOf(vos, disease).stream()
+                .filter(c -> c.key().equals(key)).findFirst()
+                .orElseThrow(() -> new AssertionError("未找到归因: " + disease + "/" + key));
+    }
+
+    // ------------------------------------------------------------------
+    // 封顶折算 / 阈值严于参考上限 / 阈值本身不计分（T-8 / T-1 / T-2 / T-28）
+    // ------------------------------------------------------------------
+
+    @Test
+    @DisplayName("封顶折算：手算 150 → riskScore 100、Σpoints 100、说明句含按比例折算")
+    void cappingScalesTheBreakdownToTheCappedScore() {
+        // 夹具必须是「全部异常」：合计 150 = 年龄 15 + BMI 20 + SBP 30 + DBP 15 + 血糖 10
+        // + TC 20 + TG 10 + HDL 15 + LDL 15。改成「全部正常」时合计 5、scaleTo 不执行，
+        // 断言恒绿且毫无意义。
+        stubProfile(profileWithAgeAndBmi(60, "26"));
+        stubMetrics(
+                "systolicBP", 168,
+                "diastolicBP", 95,
+                "bloodGlucose", 8,
+                "totalCholesterol", 5.8,
+                "triglycerides", 2.1,
+                "hdlCholesterol", 0.90,
+                "ldlCholesterol", 4.0);
+
+        List<RiskAssessmentVO> vos = service.createAssessment(1L);
+        RiskAssessmentVO cardio = vos.stream()
+                .filter(v -> v.diseaseName().equals("心血管疾病")).findFirst().orElseThrow();
+
+        int rawSum = cardio.contributors().stream().mapToInt(RiskContributorVO::points).sum();
+        assertEquals(100, cardio.riskScore(), "分数封顶 100");
+        // 核心断言：若 scaleTo 被跳过，总分仍是 100（Math.min）而归因合计是 150 ——
+        // 用户把 9 行加起来就会发现两个数字对不上。
+        assertEquals(100, rawSum, "归因合计必须跟着封顶一起折算，否则明细解释不了总分");
+        assertEquals(cardio.riskScore(), rawSum, "两个数字必须相等（AC-5 的观测点）");
+        assertTrue(cardio.contributors().stream()
+                        .anyMatch(c -> c.explanation().contains("按比例折算")),
+                "至少一条说明必须告诉用户封顶/折算发生了，实际为: "
+                        + cardio.contributors().stream().map(RiskContributorVO::explanation).toList());
+    }
+
+    @Test
+    @DisplayName("收缩压 135：落在 130 与参考上限 139 之间，高血压 35、心血管 30")
+    void systolicBetweenRiskThresholdAndReferenceMaxIsScoredInBothDiseases() {
+        stubProfile(profileWithAgeAndBmi(40, "22"));
+        stubMetrics("systolicBP", 135);
+
+        List<RiskAssessmentVO> vos = service.createAssessment(1L);
+
+        RiskContributorVO bpSystolic = contributorOf(vos, "高血压", "systolicBP");
+        RiskContributorVO cardioSystolic = contributorOf(vos, "心血管疾病", "systolicBP");
+
+        // 误读参考上限（139）时两者都变成 0 分、state NORMAL；这条用例同时钉住
+        // 「阈值搬家没改成参考范围」与「(指标, 疾病) 二元键没退化成单指标阈值」。
+        assertEquals(35, bpSystolic.points(), "135 > 130 在高血压计 35 分");
+        assertEquals(30, cardioSystolic.points(), "同一读数在心血管计 30 分 —— 分值因疾病而异");
+        assertEquals(RiskContributorVO.STATE_CONTRIBUTED, bpSystolic.state());
+        assertEquals(RiskContributorVO.STATE_CONTRIBUTED, cardioSystolic.state());
+    }
+
+    @Test
+    @DisplayName("舒张压 87：落在 85 与参考上限 89 之间，高血压 30、心血管 15")
+    void diastolicBetweenRiskThresholdAndReferenceMaxIsScoredInBothDiseases() {
+        stubProfile(profileWithAgeAndBmi(40, "22"));
+        stubMetrics("diastolicBP", 87);
+
+        List<RiskAssessmentVO> vos = service.createAssessment(1L);
+
+        RiskContributorVO bpDiastolic = contributorOf(vos, "高血压", "diastolicBP");
+        RiskContributorVO cardioDiastolic = contributorOf(vos, "心血管疾病", "diastolicBP");
+
+        assertEquals(30, bpDiastolic.points(), "87 > 85 在高血压计 30 分");
+        assertEquals(15, cardioDiastolic.points(), "同一读数在心血管计 15 分");
+        assertEquals(RiskContributorVO.STATE_CONTRIBUTED, bpDiastolic.state());
+        assertEquals(RiskContributorVO.STATE_CONTRIBUTED, cardioDiastolic.state());
+    }
+
+    @Test
+    @DisplayName("阈值本身不计分：bmi 恰好 24.00 → 心血管 0 分 / NORMAL，糖尿病仍走 10 分基线")
+    void bmiExactlyAtThresholdScoresNothing() {
+        // 开区间夹具（135 / 87）只能证明阈值取值正确，证明不了比较符是严格 > 还是 ≥。
+        // 若 compareTo(...) > 0 被写成 >= 0，上面全部夹具仍全绿，而阈值上的人凭空多出 20 分。
+        stubProfile(profileWithAgeAndBmi(40, "24.00"));
+        stubNoMetrics();
+
+        List<RiskAssessmentVO> vos = service.createAssessment(1L);
+
+        RiskContributorVO cardioBmi = contributorOf(vos, "心血管疾病", "bmi");
+        assertEquals(0, cardioBmi.points(), "24.00 恰好等于阈值，不得计分");
+        assertEquals(RiskContributorVO.STATE_NORMAL, cardioBmi.state());
+
+        RiskContributorVO diabetesBmi = contributorOf(vos, "糖尿病", "bmi");
+        assertEquals(10, diabetesBmi.points(),
+                "糖尿病未命中时仍给 10 分无条件基线（不是阈值奖励）");
+    }
+
+    @Test
+    @DisplayName("阈值本身不计分：收缩压恰好 130 → 高血压 0 分 / NORMAL")
+    void systolicExactlyAtThresholdScoresNothing() {
+        stubProfile(profileWithAgeAndBmi(40, "22"));
+        stubMetrics("systolicBP", 130);
+
+        RiskContributorVO systolic = contributorOf(service.createAssessment(1L), "高血压",
+                "systolicBP");
+
+        assertEquals(0, systolic.points(), "130 恰好等于阈值，不得计分（比较符是严格 >）");
+        assertEquals(RiskContributorVO.STATE_NORMAL, systolic.state());
+    }
+
+    @Test
+    @DisplayName("阈值本身不计分：舒张压恰好 85 → 高血压 0 分 / NORMAL")
+    void diastolicExactlyAtThresholdScoresNothing() {
+        stubProfile(profileWithAgeAndBmi(40, "22"));
+        stubMetrics("diastolicBP", 85);
+
+        RiskContributorVO diastolic = contributorOf(service.createAssessment(1L), "高血压",
+                "diastolicBP");
+
+        assertEquals(0, diastolic.points(), "85 恰好等于阈值，不得计分");
+        assertEquals(RiskContributorVO.STATE_NORMAL, diastolic.state());
+    }
+
+    @Test
+    @DisplayName("阈值本身不计分：HDL 恰好 1.00 → 0 分 / NORMAL（BELOW 用的是严格 <）")
+    void hdlExactlyAtThresholdScoresNothing() {
+        // 这一条钉住下限型的严格性：把 < 写成 <= 会让恰好 1.00 的人被计 15 分。
+        stubProfile(profileWithAgeAndBmi(40, "22"));
+        stubMetrics("hdlCholesterol", 1.00);
+
+        RiskContributorVO hdl = contributorOf(service.createAssessment(1L), "心血管疾病",
+                "hdlCholesterol");
+
+        assertEquals(0, hdl.points(), "1.00 恰好等于下限阈值，不得计分（比较符是严格 <）");
+        assertEquals(RiskContributorVO.STATE_NORMAL, hdl.state());
+    }
+
     private List<RiskContributorVO> contributorsOf(List<RiskAssessmentVO> vos, String disease) {
         return vos.stream().filter(v -> v.diseaseName().equals(disease))
                 .findFirst().orElseThrow().contributors();
