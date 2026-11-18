@@ -102,6 +102,25 @@ Plans:
 
 - [ ] 15-02-PLAN.md — 相邻批次分差与等级变化徽标、批次卡片样式、趋势测试锚点
 
+### Phase 16: 风险评估引擎输入重组
+
+**Goal**: 用系统已有的 23 项指标重新设计三种疾病的评估模型 —— 让每种病使用其临床上相关的全部已有输入，而不是把前两种病折半相加当作第三种；不新增疾病，不改表结构
+
+**Depends on**: Phase 15（风险页已能呈现逐项归因，重组后的输入会直接反映在评分构成里）
+
+**Requirements**: 无独立 REQ-ID（v1.4 未新建 REQUIREMENTS.md，范围由本阶段 CONTEXT.md 界定）
+
+**Success Criteria** (what must be TRUE):
+
+  1. 三种疾病各自的评分由与其临床相关的指标驱动，且每项输入的贡献可在详情弹窗逐项核对（各项之和 = 总分）
+  2. 心血管疾病不再是「糖尿病分与高血压分折半」的派生值，而是用血压、血脂、BMI、年龄等自身相关输入独立评估
+  3. 缺失的输入标 `MISSING` 而非按「正常」计零分；用户能区分「没测」与「正常」
+  4. 指标覆盖面板的 `riskNote` 与实际读取的指标一致 —— 面板说参与评估的，引擎真的读；反之亦然
+  5. 评估结果的历史快照（`contributors` JSON）仍然冻结当时依据，读时不重算
+  6. 后端门禁全绿（`mvn verify -DskipITs` + `checkstyle:check`），前端门禁全绿
+
+**UI hint**: yes
+
 ## Progress
 
 | Milestone | Phases | Plans | Status | Completed |
