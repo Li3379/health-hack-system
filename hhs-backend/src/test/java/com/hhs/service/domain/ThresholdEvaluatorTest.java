@@ -191,6 +191,38 @@ class ThresholdEvaluatorTest {
     }
 
     @Test
+    @DisplayName("测试7：direction 与 severity 同源 - 交叉区间不再产出「警告·偏低」自相矛盾告警")
+    void evaluate_crossedWarningBand_directionAgreesWithSeverity() {
+        // Given: an unusable-but-possible row where warningLow (150) sits ABOVE
+        // warningHigh (140). ThresholdRangeValidator rejects this at write time, but
+        // legacy rows predate that guard, so read-time behaviour must still be sane.
+        //
+        // This is the case where the pre-consolidation code disagreed with itself:
+        // classify() lands 145 in WARNING_LOW (because 145 <= warningLow 150), while
+        // the independent isHigh() OR-chain said HIGH (because 145 >= warningHigh 140).
+        // The alert title then read "警告: …偏低" while pointing at the high boundary.
+        UserThreshold row = thresholdRow(7L, "systolicBP");
+        row.setCriticalLow(new BigDecimal("60"));
+        row.setWarningLow(new BigDecimal("150"));
+        row.setWarningHigh(new BigDecimal("140"));
+        row.setCriticalHigh(new BigDecimal("160"));
+        when(userThresholdMapper.selectList(any(LambdaQueryWrapper.class)))
+                .thenReturn(List.of(row));
+
+        // When
+        AlertVO alert = evaluator.evaluate(userId, "systolicBP", new BigDecimal("145"));
+
+        // Then: severity and direction both derive from the same band, so they cannot
+        // contradict each other. WARNING_LOW -> direction LOW and the boundary shown is
+        // the low one; whatever the ordering, the alert agrees with itself.
+        assertNotNull(alert);
+        assertEquals("WARNING", alert.getAlertType());
+        assertTrue(alert.getTitle().endsWith("偏低"),
+                "direction must follow the band (WARNING_LOW), not an independent OR-chain; title was: "
+                        + alert.getTitle());
+    }
+
+    @Test
     @DisplayName("测试6：wrapper 断言 - metric_key 条件是别名集合 IN 而非标量 eq")
     void getThresholdForUser_wrapperCarriesAliasIn_notScalarEq() {
         when(userThresholdMapper.selectList(any(LambdaQueryWrapper.class)))
