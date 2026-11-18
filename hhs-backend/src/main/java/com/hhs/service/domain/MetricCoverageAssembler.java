@@ -167,13 +167,37 @@ public class MetricCoverageAssembler {
     /**
      * Format a value using the definition's precision.
      *
+     * <p>This is the only formatting formula in the class, and it is {@code public static} so
+     * the rule engine can call it too. That is the whole point: the panel renders {@code bmi}
+     * at precision 1 ({@code 22.9}) while the engine used to render the same stored value with
+     * {@code stripTrailingZeros()} ({@code 22.86}), so one number appeared as two strings on two
+     * surfaces of one screen. Delegating here makes "both surfaces show the same string" a
+     * structural fact instead of something an assertion has to simulate.</p>
+     *
+     * <p>{@code public} rather than package-private is required, not cosmetic:
+     * {@code RiskRuleEngine} is a private nested class of
+     * {@code com.hhs.service.impl.RiskAssessmentServiceImpl}, and a package-private method in
+     * {@code com.hhs.service.domain} is invisible there. The resulting compile error would be
+     * raised far from the defect this method prevents.</p>
+     *
+     * @param value raw value
+     * @param def   registry definition
+     * @return display string
+     */
+    public static String format(BigDecimal value, MetricDefinition def) {
+        int precision = def.precision() != null ? def.precision() : 0;
+        return value.setScale(precision, java.math.RoundingMode.HALF_UP).toPlainString();
+    }
+
+    /**
+     * Format a value using the definition's precision.
+     *
      * @param value raw value
      * @param def   registry definition
      * @return display string
      */
     private String formatValue(BigDecimal value, MetricDefinition def) {
-        int precision = def.precision() != null ? def.precision() : 0;
-        return value.setScale(precision, java.math.RoundingMode.HALF_UP).toPlainString();
+        return format(value, def);
     }
 
     /**

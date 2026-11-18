@@ -736,9 +736,165 @@ class RiskAssessmentAssumptionsTest {
         assertTrue(systolic.value().contains("135"), "实际为: " + systolic.value());
     }
 
+    // ------------------------------------------------------------------
+    // 同源格式化（A(i) / §5.3.1）：同一个数字在两个表面必须是同一个字符串
+    // ------------------------------------------------------------------
+
+    /**
+     * A(i)：面板与归因对同一个 bmi 渲染出同一个字符串。
+     *
+     * <p><strong>适用边界（D-06 的必然结果）：</strong>这条断言只对「本次改动之后创建的
+     * 评估」成立。归因快照在创建时冻结、读时不重算，所以改动前入库的历史记录里 {@code value}
+     * 仍是 {@code 22.86}，而覆盖面板是实时按 precision 1 渲成 {@code 22.9} —— 拿历史记录跑
+     * 这条会失败，而实现是完全正确的。取数口径因此固定为「先跑一次 createAssessment，
+     * 再对该次返回值断言」，绝不读取库里已有的批次。</p>
+     *
+     * <p>{@code bmi} 是唯一两侧都不带单位的引擎输入，因此这里用整串相等。血压、血糖、
+     * 血脂四项的归因值带 {@code " mmHg"} / {@code " mmol/L"}，与面板值只可能构成数值前缀
+     * 关系（下面两条断言即此）—— 为「统一写法」把它们也改成整串相等，会让断言在任何正确
+     * 实现下恒红。</p>
+     */
+    @Test
+    @DisplayName("A(i)：bmi 在面板与归因两侧是同一个字符串（22.9，不是 22.86）")
+    void bmiRendersIdenticallyOnBothSurfacesForThisRun() {
+        // 夹具刻意让两个数据源取同一个值：这条断言考察的是**格式化**是否同源，
+        // 而不是取值源选得对不对 —— 取值源由 16-05 Task 2 的「档案无 bmi 但指标表
+        // 有一行」夹具单独钉住（那里断言 state 为 MISSING 且 value 为 null）。
+        // 只给材料表会漏掉档案、只给档案会让面板在该任务之前是 MISSING，两种写法都
+        // 会让这条断言在它本该能执行的时候执行不了。
+        HealthProfile profile = profileWithAgeAndBmi(40, "22.86");
+        stubProfile(profile);
+        stubMetrics("systolicBP", 120, "bmi", 22.86);
+
+        List<RiskAssessmentVO> created = service.createAssessment(1L);
+        RiskContributorVO cardioBmi = contributorOf(created, "心血管疾病", "bmi");
+        MetricCoverageVO coverageBmi = coverageRowByKey("bmi");
+
+        assertEquals("22.9", coverageBmi.value(),
+                "面板按注册表 precision 1 渲染，实际为: " + coverageBmi.value());
+        assertEquals("22.9", cardioBmi.value(),
+                "归因必须走同一段 formatter，实际为: " + cardioBmi.value());
+        assertEquals(coverageBmi.value(), cardioBmi.value(),
+                "两侧必须字符串相等 —— formatter 被摘掉时这里会先红，上一行给出人可读的原因");
+        assertNotEquals("22.86", cardioBmi.value(),
+                "退回 stripTrailingZeros 会把未舍入的 22.86 直接呈现给用户");
+        assertNotEquals("22.86", coverageBmi.value());
+    }
+
+    /**
+     * 血糖 5.55：面板 {@code 5.6}、归因 {@code 5.6 mmol/L}。
+     *
+     * <p>5.55 是能同时区分两种实现的最小夹具 —— 整数输入在两种实现下都给同一个串。两侧
+     * 整体字符串不相等是**既有不对称**（面板没有单位列），故归因侧用数值前缀比较，不得为此
+     * 给面板加单位列（那会撑破 Contract 2 的五列栅格）。</p>
+     */
+    @Test
+    @DisplayName("血糖 5.55：面板 5.6、归因以 5.6 起头，两侧都不含 5.55")
+    void bloodGlucosePrecisionIsSharedAcrossSurfaces() {
+        stubProfile(profileWithAgeAndBmi(40, "22"));
+        stubMetrics("bloodGlucose", 5.55);
+
+        List<RiskAssessmentVO> created = service.createAssessment(1L);
+        RiskContributorVO cardioSugar = contributorOf(created, "心血管疾病", "bloodGlucose");
+        MetricCoverageVO coverageSugar = coverageRowByKey("bloodGlucose");
+
+        assertEquals("5.6", coverageSugar.value(), "面板按 precision 1 渲染");
+        assertTrue(cardioSugar.value().startsWith("5.6"),
+                "归因的数值部分必须由同一段 formatter 产出，实际为: " + cardioSugar.value());
+        assertFalse(cardioSugar.value().contains("5.55"),
+                "未舍入形态出现即说明 formatter 没被调用: " + cardioSugar.value());
+        assertFalse(coverageSugar.value().contains("5.55"));
+    }
+
+    /**
+     * 血脂四项的 A(i) 前缀探针。
+     *
+     * <p>这是「引擎全部替换点是否覆盖了 D-02 新增的血脂四项」的唯一探针 —— 只断言 bmi 与
+     * 血糖会让漏改血脂站点仍然全绿。探针的牙齿不因改前缀而变钝：漏改一处会留下
+     * {@code "5.8 mmol/L"}，而正确实现给 {@code "5.80 mmol/L"}，{@code startsWith("5.80")}
+     * 当场为假。</p>
+     */
+    @Test
+    @DisplayName("血脂四项：归因值以同名覆盖行值为前缀（数值部分同一段 formatter）")
+    void lipidsShareTheNumericPrefixWithTheirCoverageRows() {
+        stubProfile(profileWithAgeAndBmi(40, "22"));
+        stubMetrics(
+                "totalCholesterol", 5.80,
+                "triglycerides", 2.10,
+                "hdlCholesterol", 0.90,
+                "ldlCholesterol", 4.00);
+
+        List<RiskAssessmentVO> created = service.createAssessment(1L);
+
+        List<String> lipids = List.of("totalCholesterol", "triglycerides",
+                "hdlCholesterol", "ldlCholesterol");
+        for (String key : lipids) {
+            RiskContributorVO contributor = contributorOf(created, "心血管疾病", key);
+            MetricCoverageVO coverageRow = coverageRowByKey(key);
+            assertNotNull(contributor.value(), key + " 有数据必须带出取值");
+            // 面板无单位列，归因带 " mmol/L" —— 只可能构成前缀关系，整串相等永不成立。
+            assertTrue(contributor.value().startsWith(coverageRow.value()),
+                    key + " 的两侧数值必须来自同一段 formatter: 面板 "
+                            + coverageRow.value() + " / 归因 " + contributor.value());
+            assertFalse(contributor.value().equals(coverageRow.value()),
+                    key + " 归因带单位后缀，整串相等说明有人为了「统一写法」删掉了单位");
+        }
+
+        // 未舍入形态的否定守卫：precision 2 下 5.8 必须渲染成 5.80。
+        RiskContributorVO cholesterol = contributorOf(created, "心血管疾病", "totalCholesterol");
+        assertNotEquals("5.8 mmol/L", cholesterol.value(),
+                "stripTrailingZeros 会把 5.80 压成 5.8，与面板的 5.80 分叉");
+    }
+
+    /**
+     * 同一规则在两个表面渲染出同一个阈值串（UI-SPEC §5.2 的 {@code {阈值} = 与 threshold 字段同值}）。
+     *
+     * <p>两个字段本就不是同类值：{@code riskNote} 是整句
+     * {@code {疾病}评估：{方向动词} {阈值} {单位} 计入 {分数} 分}，而 {@code threshold} 只是
+     * {@code {阈值} {单位}} 那一段，整串相等在任何正确实现下都不成立。钉住「同值」的正确形态
+     * 是把 {@code threshold} 当锚点、在 {@code riskNote} 里找出它 —— 包含关系对字节敏感，
+     * 阈值与单位之间那个空格由唯一模板提供，任一表面缺失即红。</p>
+     *
+     * <p>只对血脂四项做，不纳入 bmi：bmi 归因的 {@code threshold} 是不带单位的
+     * {@code "24.0"}，而 {@code riskNote} 里带 {@code kg/m²}，两者连包含关系都不成立
+     * （既有的单位不对称，本阶段不改）。</p>
+     */
+    @Test
+    @DisplayName("同值：血脂四项的 threshold 字段是同一行 riskNote 的子串（5.20 / 1.70 / 1.00 / 3.40）")
+    void lipidThresholdFieldAppearsVerbatimInsideItsRiskNote() {
+        stubProfile(profileWithAgeAndBmi(40, "22"));
+        stubMetrics(
+                "totalCholesterol", 5.80,
+                "triglycerides", 2.10,
+                "hdlCholesterol", 0.90,
+                "ldlCholesterol", 4.00);
+
+        List<RiskAssessmentVO> created = service.createAssessment(1L);
+
+        for (String key : List.of("totalCholesterol", "triglycerides",
+                "hdlCholesterol", "ldlCholesterol")) {
+            String thresholdField = contributorOf(created, "心血管疾病", key).threshold();
+            String riskNote = coverageRowByKey(key).riskNote();
+            assertNotNull(thresholdField, key + " 必须带阈值串");
+            assertNotNull(riskNote, key + " 参与评估必须带 riskNote");
+            assertTrue(riskNote.contains(thresholdField),
+                    key + " 的阈值在两处漂移了：riskNote「" + riskNote
+                            + "」不含 threshold「" + thresholdField + "」");
+        }
+    }
+
+
+    /** Score of one disease in a returned assessment batch. */
     private int scoreOf(List<RiskAssessmentVO> vos, String disease) {
         return vos.stream().filter(v -> v.diseaseName().equals(disease))
                 .findFirst().orElseThrow().riskScore();
+    }
+
+    /** One coverage row by canonical key, read from the same service the engine runs in. */
+    private MetricCoverageVO coverageRowByKey(String key) {        return service.getMetricCoverage(1L).stream()
+                .filter(row -> row.key().equals(key))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("覆盖面板未渲染: " + key));
     }
 
     private RiskContributorVO contributorOf(List<RiskAssessmentVO> vos, String disease, String key) {
