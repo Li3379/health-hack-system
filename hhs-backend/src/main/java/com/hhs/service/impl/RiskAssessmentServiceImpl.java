@@ -11,7 +11,9 @@ import com.hhs.mapper.HealthProfileMapper;
 import com.hhs.mapper.RiskAssessmentMapper;
 import com.hhs.service.RiskAssessmentService;
 import com.hhs.service.domain.AssumptionCollector;
+import com.hhs.service.domain.HealthMetricMetaRegistry;
 import com.hhs.service.domain.MetricCoverageAssembler;
+import com.hhs.service.domain.MetricDefinition;
 import com.hhs.service.domain.MetricKeyNormalizer;
 import com.hhs.service.domain.ProfileCompletenessCalculator;
 import com.hhs.service.domain.ProfileFieldCatalog;
@@ -276,6 +278,20 @@ public class RiskAssessmentServiceImpl implements RiskAssessmentService {
      * normal" and "we have no reading" would produce the same score and the same copy.</p>
      */
     private static final class RiskRuleEngine {
+
+        /**
+         * Metric metadata, held locally because this engine is static.
+         *
+         * <p>Same-source beats one fewer instance: the constructor has no side effects (it only
+         * runs {@code registerAllMetrics()}, and {@code @PostConstruct} is guarded by an
+         * {@code isEmpty()} check), and the startup recommendation pass rewrites only
+         * {@code alertable}/{@code recommended} — {@code precision} is copied unchanged. A
+         * locally built registry therefore yields byte-identical precision to the Spring bean,
+         * while the alternative (threading the bean through every static call) would widen a
+         * constructor signature that the tests depend on.</p>
+         */
+        private static final HealthMetricMetaRegistry METRICS = new HealthMetricMetaRegistry();
+
         static List<RiskAssessment> evaluate(Long userId, HealthProfile profile, List<HealthMetric> recentMetrics,
                                              RiskThresholdRegistry thresholds) {
             return evaluate(userId, profile, recentMetrics, AssumptionCollector.noop(), thresholds);
@@ -335,7 +351,10 @@ public class RiskAssessmentServiceImpl implements RiskAssessmentService {
             // ---- BMI：档案缺失时按 22.0 代入 ----
             boolean bmiAssumed = profile.getBmi() == null;
             BigDecimal bmi = bmiAssumed ? BigDecimal.valueOf(22) : profile.getBmi();
-            String bmiValue = bmiAssumed ? "22.0（估算）" : bmi.stripTrailingZeros().toPlainString();
+            // 与覆盖面板共用同一段 formatter（domain 包里的静态 format），否则同一个
+            // 22.86 在弹窗显示 22.86、在面板显示 22.9 —— 同屏两个数字说同一件事却说成两样。
+            String bmiValue = bmiAssumed ? "22.0（估算）"
+                    : MetricCoverageAssembler.format(bmi, definitionOf("bmi"));
             if (bmiAssumed) {
                 collector.add(MISSING_BMI_ASSUMPTION);
             }
@@ -406,7 +425,9 @@ public class RiskAssessmentServiceImpl implements RiskAssessmentService {
                     && latestBloodSugar.compareTo(sugarRule.threshold()) > 0;
             int sugarPoints = sugarHigh ? sugarRule.points() : 0;
             diabetesParts.add(RiskContributorVO.threshold("bloodGlucose", "血糖",
-                    latestBloodSugar == null ? null : latestBloodSugar.stripTrailingZeros().toPlainString() + " mmol/L",
+                    latestBloodSugar == null ? null
+                            : MetricCoverageAssembler.format(latestBloodSugar,
+                                    definitionOf("bloodGlucose")) + " mmol/L",
                     "6.1 mmol/L", sugarHigh, sugarPoints));
 
             // Sum the parts rather than recomputing: one code path, so the breakdown a user
@@ -428,14 +449,18 @@ public class RiskAssessmentServiceImpl implements RiskAssessmentService {
                     requiredRule(thresholds, "systolicBP", "高血压");
             boolean systolicHigh = systolic != null && systolic.compareTo(systolicRule.threshold()) > 0;
             bpParts.add(RiskContributorVO.threshold("systolicBP", "收缩压",
-                    systolic == null ? null : systolic.stripTrailingZeros().toPlainString() + " mmHg",
+                    systolic == null ? null
+                            : MetricCoverageAssembler.format(systolic,
+                                    definitionOf("systolicBP")) + " mmHg",
                     "130 mmHg", systolicHigh, systolicHigh ? systolicRule.points() : 0));
 
             RiskThresholdRegistry.RiskThresholdRule diastolicRule =
                     requiredRule(thresholds, "diastolicBP", "高血压");
             boolean diastolicHigh = diastolic != null && diastolic.compareTo(diastolicRule.threshold()) > 0;
             bpParts.add(RiskContributorVO.threshold("diastolicBP", "舒张压",
-                    diastolic == null ? null : diastolic.stripTrailingZeros().toPlainString() + " mmHg",
+                    diastolic == null ? null
+                            : MetricCoverageAssembler.format(diastolic,
+                                    definitionOf("diastolicBP")) + " mmHg",
                     "85 mmHg", diastolicHigh, diastolicHigh ? diastolicRule.points() : 0));
 
             int bpScore = bpParts.stream().mapToInt(RiskContributorVO::points).sum();
@@ -484,7 +509,9 @@ public class RiskAssessmentServiceImpl implements RiskAssessmentService {
             boolean cardioSystolicHigh = systolic != null
                     && systolic.compareTo(cardioSystolicRule.threshold()) > 0;
             cardioParts.add(RiskContributorVO.threshold("systolicBP", "收缩压",
-                    systolic == null ? null : systolic.stripTrailingZeros().toPlainString() + " mmHg",
+                    systolic == null ? null
+                            : MetricCoverageAssembler.format(systolic,
+                                    definitionOf("systolicBP")) + " mmHg",
                     "130 mmHg", cardioSystolicHigh,
                     cardioSystolicHigh ? cardioSystolicRule.points() : 0));
 
@@ -494,7 +521,9 @@ public class RiskAssessmentServiceImpl implements RiskAssessmentService {
             boolean cardioDiastolicHigh = diastolic != null
                     && diastolic.compareTo(cardioDiastolicRule.threshold()) > 0;
             cardioParts.add(RiskContributorVO.threshold("diastolicBP", "舒张压",
-                    diastolic == null ? null : diastolic.stripTrailingZeros().toPlainString() + " mmHg",
+                    diastolic == null ? null
+                            : MetricCoverageAssembler.format(diastolic,
+                                    definitionOf("diastolicBP")) + " mmHg",
                     "85 mmHg", cardioDiastolicHigh,
                     cardioDiastolicHigh ? cardioDiastolicRule.points() : 0));
 
@@ -505,7 +534,8 @@ public class RiskAssessmentServiceImpl implements RiskAssessmentService {
                     && latestBloodSugar.compareTo(cardioSugarRule.threshold()) > 0;
             cardioParts.add(RiskContributorVO.threshold("bloodGlucose", "血糖",
                     latestBloodSugar == null ? null
-                            : latestBloodSugar.stripTrailingZeros().toPlainString() + " mmol/L",
+                            : MetricCoverageAssembler.format(latestBloodSugar,
+                                    definitionOf("bloodGlucose")) + " mmol/L",
                     "6.1 mmol/L", cardioSugarHigh,
                     cardioSugarHigh ? cardioSugarRule.points() : 0));
 
@@ -518,7 +548,8 @@ public class RiskAssessmentServiceImpl implements RiskAssessmentService {
                     && totalCholesterol.compareTo(totalCholesterolRule.threshold()) > 0;
             cardioParts.add(RiskContributorVO.threshold("totalCholesterol", "总胆固醇",
                     totalCholesterol == null ? null
-                            : totalCholesterol.stripTrailingZeros().toPlainString() + " mmol/L",
+                            : MetricCoverageAssembler.format(totalCholesterol,
+                                    definitionOf("totalCholesterol")) + " mmol/L",
                     "5.20 mmol/L", totalCholesterolHigh,
                     totalCholesterolHigh ? totalCholesterolRule.points() : 0));
 
@@ -528,7 +559,8 @@ public class RiskAssessmentServiceImpl implements RiskAssessmentService {
                     && triglycerides.compareTo(triglyceridesRule.threshold()) > 0;
             cardioParts.add(RiskContributorVO.threshold("triglycerides", "甘油三酯",
                     triglycerides == null ? null
-                            : triglycerides.stripTrailingZeros().toPlainString() + " mmol/L",
+                            : MetricCoverageAssembler.format(triglycerides,
+                                    definitionOf("triglycerides")) + " mmol/L",
                     "1.70 mmol/L", triglyceridesHigh,
                     triglyceridesHigh ? triglyceridesRule.points() : 0));
 
@@ -540,7 +572,8 @@ public class RiskAssessmentServiceImpl implements RiskAssessmentService {
                     && hdlCholesterol.compareTo(hdlRule.threshold()) < 0;
             cardioParts.add(RiskContributorVO.below("hdlCholesterol", "高密度脂蛋白",
                     hdlCholesterol == null ? null
-                            : hdlCholesterol.stripTrailingZeros().toPlainString() + " mmol/L",
+                            : MetricCoverageAssembler.format(hdlCholesterol,
+                                    definitionOf("hdlCholesterol")) + " mmol/L",
                     "1.00 mmol/L", hdlLow, hdlLow ? hdlRule.points() : 0));
 
             RiskThresholdRegistry.RiskThresholdRule ldlRule =
@@ -549,7 +582,8 @@ public class RiskAssessmentServiceImpl implements RiskAssessmentService {
                     && ldlCholesterol.compareTo(ldlRule.threshold()) > 0;
             cardioParts.add(RiskContributorVO.threshold("ldlCholesterol", "低密度脂蛋白",
                     ldlCholesterol == null ? null
-                            : ldlCholesterol.stripTrailingZeros().toPlainString() + " mmol/L",
+                            : MetricCoverageAssembler.format(ldlCholesterol,
+                                    definitionOf("ldlCholesterol")) + " mmol/L",
                     "3.40 mmol/L", ldlHigh, ldlHigh ? ldlRule.points() : 0));
 
             int cardioRaw = cardioParts.stream().mapToInt(RiskContributorVO::points).sum();
@@ -635,6 +669,23 @@ public class RiskAssessmentServiceImpl implements RiskAssessmentService {
                         p.explanation() + "（总分上限 100，已按比例折算为 " + scaled[i] + " 分）"));
             }
             return scaledParts;
+        }
+
+        /**
+         * Look up a metric's definition from the locally held metadata registry.
+         *
+         * <p>Failing loudly mirrors {@link #requiredRule}: rendering a value with an invented
+         * precision would re-create the very split this formatter exists to remove, and it would
+         * do so silently.</p>
+         *
+         * @param canonicalKey canonical metric key
+         * @return the definition carrying unit and precision
+         * @throws IllegalStateException when the registry declares no such metric
+         */
+        private static MetricDefinition definitionOf(String canonicalKey) {
+            return METRICS.getDefinition(canonicalKey)
+                    .orElseThrow(() -> new IllegalStateException(
+                            "缺少指标元数据: " + canonicalKey));
         }
 
         /**
