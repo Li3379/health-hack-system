@@ -1450,3 +1450,70 @@ body .el-form-item.is-error .el-form-item__content .el-textarea__inner:focus {
     0 0 0 1px var(--hhs-color-error-text) inset,
     0 0 0 3px var(--hhs-color-error-tint) !important;
 }
+
+/* ============================================================================
+   表单浮层动效：弹窗 / 抽屉 / 遮罩 统一切入切出
+   目标：所有表单类浮层使用同一套缓动与节奏，进出场对称，不做弹跳
+   ============================================================================ */
+
+/* 遮罩：淡入 + 轻微模糊扩散 */
+.el-overlay {
+  transition: opacity var(--dur-mid) var(--ease), backdrop-filter var(--dur-mid) var(--ease) !important;
+}
+
+/* 弹窗主体：从下方 12px 位移 + 0.98 缩放入场，退场反向且更快 */
+.el-dialog {
+  transform-origin: center top;
+  transition: opacity var(--dur-mid) var(--ease),
+              transform var(--dur-mid) var(--ease-cinema) !important;
+  will-change: opacity, transform;
+}
+
+.dialog-fade-enter-from .el-dialog,
+.dialog-fade-appear-from .el-dialog {
+  opacity: 0;
+  transform: translateY(12px) scale(0.98);
+}
+
+.dialog-fade-leave-to .el-dialog,
+.dialog-fade-appear-to .el-dialog {
+  opacity: 0;
+  transform: translateY(-8px) scale(0.99);
+}
+
+/* 退场比入场更快，符合「轻出重入」的浮层节奏 */
+.dialog-fade-leave-active .el-dialog {
+  transition-duration: var(--dur-fast) !important;
+}
+
+/* 抽屉：从侧边滑入，宽度保持不变 */
+.el-drawer {
+  transition: transform var(--dur-slow) var(--ease-cinema) !important;
+  will-change: transform;
+}
+
+/* 表单内分区：切换步骤/栏位时的统一淡入上移 */
+.form-section-enter-active {
+  transition: opacity var(--dur-mid) var(--ease), transform var(--dur-mid) var(--ease-cinema);
+}
+.form-section-leave-active {
+  transition: opacity var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
+  position: absolute;
+}
+.form-section-enter-from {
+  opacity: 0;
+  transform: translateY(8px);
+}
+.form-section-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+
+/* 尊重系统「减少动效」偏好 */
+@media (prefers-reduced-motion: reduce) {
+  .el-dialog,
+  .el-drawer,
+  .el-overlay {
+    transition-duration: 0.01ms !important;
+  }
+}

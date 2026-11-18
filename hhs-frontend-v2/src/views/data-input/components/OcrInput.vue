@@ -51,7 +51,8 @@
       </el-button>
     </div>
 
-    <!-- 识别结果 -->
+    <!-- 识别结果：识别完成后淡入上移 -->
+    <Transition name="form-section">
     <div v-if="recognizeResult" class="recognize-result">
       <div class="result-header">
         <span>识别结果</span>
@@ -117,6 +118,7 @@
         <el-button type="primary" :loading="confirming" @click="handleConfirm">确认录入</el-button>
       </div>
     </div>
+    </Transition>
   </el-card>
 </template>
 

@@ -464,14 +464,25 @@ describe('data-input — 源码级契约（保持 / 删除 / presentStates 全�
    * 再取到紧随的顶层 `\n}\n`，避免命中模板里的同名事件绑定。
    */
   function functionBody(source: string, name: string): string {
-    const declaration = new RegExp(`const ${name} = [^\\n]*\\{`)
-    const match = declaration.exec(source)
+    // 统一换行符后按大括号配平取函数体：嵌套 if/else 里的断言也要落在范围内，
+    // 单纯找首个顶层 '\n}\n' 会在第一个内部块就截断。
+    const normalized = source.replace(/\r\n/g, '\n')
+    const declaration = new RegExp(`const ${name} = [^\n]*\{`)
+    const match = declaration.exec(normalized)
     expect(match, `未找到 ${name} 的声明`).toBeTruthy()
-    const start = match!.index
-    const rest = source.slice(start)
-    const end = rest.indexOf('\n}\n')
-    expect(end, `${name} 函数体未闭合`).toBeGreaterThan(-1)
-    return rest.slice(0, end + 3)
+    let depth = 0
+    let seen = false
+    let found = -1
+    for (let i = match!.index; i < normalized.length; i += 1) {
+      const ch = normalized[i]
+      if (ch === '{') { depth += 1; seen = true }
+      else if (ch === '}') {
+        depth -= 1
+        if (seen && depth === 0) { found = i; break }
+      }
+    }
+    expect(found, `${name} 函数体未闭合`).toBeGreaterThan(-1)
+    return normalized.slice(match!.index, found + 1)
   }
 
   it('OcrInput 的两条前置校验仍按「函数 + 字面量」原位留在 handleFileChange 内', () => {

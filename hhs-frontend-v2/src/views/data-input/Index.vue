@@ -1,89 +1,59 @@
 <template>
   <div class="data-input-page">
-    <!-- 今日录入概览 -->
-    <el-row :gutter="16" class="overview-row">
-      <el-col :xs="12" :sm="8">
-        <el-card shadow="hover" class="overview-card">
-          <div class="overview-content">
-            <el-icon class="overview-icon health"><DataLine /></el-icon>
-            <div class="overview-info">
-              <span class="overview-value">{{ todayHealthCount }}</span>
-              <span class="overview-label">健康指标</span>
-            </div>
+    <!-- 今日录入概览：三等分 -->
+    <div class="overview-row">
+      <el-card
+        v-for="stat in overviewStats"
+        :key="stat.key"
+        shadow="hover"
+        class="overview-card"
+      >
+        <div class="overview-content">
+          <el-icon class="overview-icon"><component :is="stat.icon" /></el-icon>
+          <div class="overview-info">
+            <span class="overview-value" :data-target="stat.value">{{ stat.value }}</span>
+            <span class="overview-label">{{ stat.label }}</span>
           </div>
-        </el-card>
-      </el-col>
-      <el-col :xs="12" :sm="8">
-        <el-card shadow="hover" class="overview-card">
-          <div class="overview-content">
-            <el-icon class="overview-icon wellness"><Sunny /></el-icon>
-            <div class="overview-info">
-              <span class="overview-value">{{ todayWellnessCount }}</span>
-              <span class="overview-label">保健指标</span>
-            </div>
-          </div>
-        </el-card>
-      </el-col>
-      <el-col :xs="12" :sm="8">
-        <el-card shadow="hover" class="overview-card">
-          <div class="overview-content">
-            <el-icon class="overview-icon ai"><MagicStick /></el-icon>
-            <div class="overview-info">
-              <span class="overview-value">{{ aiRecognizeCount }}</span>
-              <span class="overview-label">AI识别</span>
-            </div>
-          </div>
-        </el-card>
-      </el-col>
-    </el-row>
+        </div>
+      </el-card>
+    </div>
 
-    <!-- 主功能区 -->
-    <el-row :gutter="16">
-      <!-- 快捷录入 -->
-      <el-col :xs="24" :lg="12">
+    <!-- 主功能区：左快捷录入，右上 AI，右下 OCR -->
+    <div class="work-grid">
+      <div class="work-cell work-cell--tall">
         <QuickInput @refresh="refreshData" />
-      </el-col>
-
-      <!-- AI智能录入 -->
-      <el-col :xs="24" :lg="12">
+      </div>
+      <div class="work-cell">
         <AIInput @refresh="refreshData" />
-      </el-col>
-
-      <!-- OCR识别 -->
-      <el-col :xs="24" :lg="12">
+      </div>
+      <div class="work-cell">
         <OcrInput @refresh="refreshData" />
-      </el-col>
-    </el-row>
+      </div>
+    </div>
 
-    <!-- 最近录入记录 -->
-    <el-row>
-      <el-col :span="24">
-        <RecentRecords ref="recentRecordsRef" />
-      </el-col>
-    </el-row>
-
-    <!-- OCR识别历史 -->
-    <el-row>
-      <el-col :span="24">
-        <OcrHistory ref="ocrHistoryRef" />
-      </el-col>
-    </el-row>
-
-    <!-- AI解析历史 -->
-    <el-row>
-      <el-col :span="24">
-        <AiHistory ref="aiHistoryRef" />
-      </el-col>
-    </el-row>
+    <!-- 历史与记录：标签页承载，避免三张长表纵向堆叠 -->
+    <el-card shadow="never" class="history-card">
+      <el-tabs v-model="activeHistory" class="history-tabs" @tab-change="handleTabChange">
+        <el-tab-pane label="最近录入" name="records">
+          <RecentRecords ref="recentRecordsRef" />
+        </el-tab-pane>
+        <el-tab-pane label="OCR 识别历史" name="ocr">
+          <OcrHistory ref="ocrHistoryRef" />
+        </el-tab-pane>
+        <el-tab-pane label="AI 解析历史" name="ai">
+          <AiHistory ref="aiHistoryRef" />
+        </el-tab-pane>
+      </el-tabs>
+    </el-card>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { DataLine, Sunny, MagicStick } from '@element-plus/icons-vue'
 import {
   staggerReveal, countUp, cleanupScrollTriggers,
-  tilt3D, buttonPress, hoverLift, hoverShine, DUR, EASE,
+  hoverLift, DUR, EASE,
 } from '@/composables/useGsap'
 import QuickInput from './components/QuickInput.vue'
 import AIInput from './components/AIInput.vue'
@@ -93,14 +63,12 @@ import OcrHistory from './components/OcrHistory.vue'
 import AiHistory from './components/AiHistory.vue'
 import { request } from '@/utils/request'
 
-// TypeScript 接口定义
 interface TodayStats {
   healthMetricsCount: number
   wellnessMetricsCount: number
   aiRecognizeCount: number
 }
 
-// 今日统计数据
 const todayHealthCount = ref(0)
 const todayWellnessCount = ref(0)
 const aiRecognizeCount = ref(0)
@@ -109,9 +77,14 @@ const recentRecordsRef = ref()
 const ocrHistoryRef = ref()
 const aiHistoryRef = ref()
 
-/**
- * 加载今日统计数据
- */
+const activeHistory = ref<'records' | 'ocr' | 'ai'>('records')
+
+const overviewStats = computed(() => [
+  { key: 'health', label: '健康指标', value: todayHealthCount.value, icon: DataLine },
+  { key: 'wellness', label: '保健指标', value: todayWellnessCount.value, icon: Sunny },
+  { key: 'ai', label: 'AI 识别', value: aiRecognizeCount.value, icon: MagicStick },
+])
+
 const loadTodayStats = async () => {
   try {
     const res = await request.get<TodayStats>('/api/stats/today')
@@ -120,13 +93,11 @@ const loadTodayStats = async () => {
       todayWellnessCount.value = res.data.wellnessMetricsCount
       aiRecognizeCount.value = res.data.aiRecognizeCount
     }
-  } catch (error) {
-    // stats load failed
+  } catch {
+    // 统计是装饰性数据，失败时保留 0，不打扰用户主流程
   }
 }
 
-// 刷新数据
-// 录入成功后，最近记录与两张历史表都必须同步 —— 否则 API 已有数据、界面仍显示「暂无记录」。
 const refreshData = () => {
   loadTodayStats()
   recentRecordsRef.value?.refresh()
@@ -134,45 +105,36 @@ const refreshData = () => {
   aiHistoryRef.value?.refresh()
 }
 
+const handleTabChange = (name: string | number) => {
+  const target = name === 'ocr' ? ocrHistoryRef : name === 'ai' ? aiHistoryRef : recentRecordsRef
+  target.value?.refresh?.()
+}
+
 onMounted(async () => {
   await loadTodayStats()
 
-  // ── Overview cards: dramatic entrance ──
+  // 概览卡：自下而上错峰入场
   staggerReveal('.overview-card', {
-    y: 50,
-    scale: 0.85,
-    stagger: 0.1,
-    duration: DUR.slow,
-    ease: EASE.back,
+    y: 40, scale: 0.9, stagger: 0.08, duration: DUR.slow, ease: EASE.back,
   })
-  tilt3D('.overview-card', { maxTilt: 10, scale: 1.03 })
+  hoverLift('.overview-card', { y: -4, scale: 1.02 })
 
-  // ── Content cards: scroll-driven ──
-  staggerReveal('.el-col > .el-card, .el-col > *', {
-    y: 30,
-    scale: 0.95,
-    scrollTrigger: true,
-    stagger: 0.1,
-    duration: DUR.mid,
-    ease: EASE.expo,
+  // 工作区：按视觉顺序（左上 -> 右上 -> 右下）依次浮现
+  staggerReveal('.work-cell', {
+    y: 28, scale: 0.96, stagger: 0.09, duration: DUR.mid, ease: EASE.expo,
   })
 
-  // ── Count up overview values ──
+  // 历史区：最后进场，不与主工作区抢注意力
+  staggerReveal('.history-card', {
+    y: 24, scale: 0.98, scrollTrigger: true, duration: DUR.mid, ease: EASE.expo,
+  })
+
   setTimeout(() => {
     document.querySelectorAll('.overview-value').forEach((el) => {
-      const num = parseInt(el.textContent?.trim() ?? '0', 10)
+      const num = parseInt(el.getAttribute('data-target') ?? '0', 10)
       if (num > 0) countUp(el as HTMLElement, num, { duration: DUR.dramatic })
     })
-  }, 600)
-
-  // ── Interaction: hover lift on overview cards ──
-  hoverLift('.overview-card', { y: -6, scale: 1.02 })
-
-  // ── Interaction: shine sweep on content cards ──
-  hoverShine('.el-col > .el-card')
-
-  // ── Interaction: press feedback on tab buttons ──
-  buttonPress('.el-tabs__item')
+  }, 500)
 })
 
 onUnmounted(() => { cleanupScrollTriggers() })
@@ -180,39 +142,88 @@ onUnmounted(() => { cleanupScrollTriggers() })
 
 <style scoped>
 .data-input-page {
-  padding: 32px;
+  padding: 28px 32px 36px;
   max-width: var(--content-max-width);
   margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 }
-.overview-row { margin-bottom: 24px; }
+
+/* ── 概览：三等分，等高 ── */
+.overview-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
 
 .overview-card {
   background: var(--surface-1) !important;
   border: 1px solid var(--border) !important;
   border-radius: var(--radius-lg) !important;
   box-shadow: none !important;
-  transition: border-color var(--dur-mid) var(--ease), transform var(--dur-mid) var(--ease) !important;
+  transition: border-color var(--dur-mid) var(--ease),
+              transform var(--dur-mid) var(--ease) !important;
 }
-.overview-card:hover {
-  border-color: var(--border-strong) !important;
-  transform: translateY(-2px) !important;
-}
+.overview-card:hover { border-color: var(--border-strong) !important; }
+.overview-card :deep(.el-card__body) { padding: 18px 20px; }
+
 .overview-content { display: flex; align-items: center; gap: 14px; }
 .overview-icon {
   width: 44px;
   height: 44px;
+  flex: 0 0 44px;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-md);
+  background: var(--accent-cool-soft);
+  color: var(--accent-cool);
   transition: transform var(--dur-mid) var(--ease);
 }
 .overview-card:hover .overview-icon { transform: scale(1.08); }
-.overview-icon.health { background: var(--accent-cool-soft); color: var(--accent-cool); }
-.overview-icon.wellness { background: var(--accent-cool-soft); color: var(--accent-cool); }
-.overview-icon.ai { background: var(--accent-cool-soft); color: var(--accent-cool); }
-.overview-info { display: flex; flex-direction: column; }
-.overview-value { font: 700 28px/1.2 var(--font-ui); color: var(--text-1); letter-spacing: -0.02em; }
+.overview-info { display: flex; flex-direction: column; min-width: 0; }
+.overview-value {
+  font: 700 28px/1.15 var(--font-ui);
+  color: var(--text-1);
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
 .overview-label { font: 400 13px/1.4 var(--font-ui); color: var(--text-3); margin-top: 2px; }
-@media (max-width: 768px) { .data-input-page { padding: 20px; } }
+
+/* ── 工作区：左高 + 右侧两行 ── */
+.work-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-auto-rows: min-content;
+  gap: 16px;
+  align-items: start;
+}
+.work-cell { min-width: 0; display: flex; }
+.work-cell > * { flex: 1 1 auto; min-width: 0; }
+/* 左栏跨两行，但高度由自身内容决定；右栏两卡各占一行 */
+.work-cell--tall { grid-row: span 2; align-self: stretch; }
+.work-cell > :deep(.el-card) { display: flex; flex-direction: column; }
+.work-cell--tall > :deep(.el-card) { height: 100%; }
+
+/* ── 历史区 ── */
+.history-card {
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-lg) !important;
+  box-shadow: none !important;
+  background: var(--surface-1) !important;
+}
+.history-card :deep(.el-card__body) { padding: 4px 20px 16px; }
+.history-tabs :deep(.el-tabs__header) { margin-bottom: 12px; }
+.history-tabs :deep(.el-tabs__item) { font: 500 13px/1 var(--font-ui); }
+
+/* ── 响应式：窄屏回到单列 ── */
+@media (max-width: 1100px) {
+  .work-grid { grid-template-columns: minmax(0, 1fr); }
+  .work-cell--tall { grid-row: auto; }
+}
+@media (max-width: 768px) {
+  .data-input-page { padding: 20px; }
+  .overview-row { grid-template-columns: minmax(0, 1fr); }
+}
 </style>
