@@ -49,6 +49,7 @@ See: `.planning/PROJECT.md`
 | 12. 阈值配置向导化与告警正确性修复 | done | 9/9 | 100% |
 | 13. 健康档案完善引导（非阻塞） | done | 10/10 | 100% |
 | 14. 全站收尾排查与回归验证 | done | 14/14 | 100% |
+| 16. 风险评估引擎输入重组 | plans complete | 5/5 | 100% (awaiting verify-work) |
 
 ### Completed Phases (v1.0 – v1.2)
 
@@ -67,10 +68,10 @@ See: `.planning/PROJECT.md`
 
 ## Current Position
 
-Phase: 16 (风险评估引擎输入重组) — EXECUTING
+Phase: 16 (风险评估引擎输入重组) — COMPLETE
 Plan: 5 of 5
-Status: Ready to execute
-Last activity: 2026-11-18 — Phase 16 execution started
+Status: All plans executed; five gates green; ready for /gsd:verify-work
+Last activity: 2026-11-18 — 16-05 landed the same-source close-out (shared formatter, threshold classification, profile-sourced bmi)
 
 ## Accumulated Context
 
@@ -99,11 +100,12 @@ Last activity: 2026-11-18 — Phase 16 execution started
 - 2026-11-16: `ee4d534` changed the envelope-code contract, invalidating two recorded truths. Both were *amended*, not refreshed — Phase 11 truth 7 no longer claims `Result.code` semantics are unchanged.
 - 2026-11-17: Milestone audit found three real defects (two silent-error gaps introduced by `ee4d534`, one route-meta inheritance bug). All fixed with mutation-verified tests, then archived.
 - Next step: `/gsd:new-milestone`.
+- 2026-11-18: Phase 16 plan execution complete (5/5). 16-05 closed the same-source gaps: one shared `format`, threshold-based `classify`, profile-sourced `bmi`, summary segment 2 reworded. Five gates green in one batch (backend 702/0, checkstyle 0, frontend 623/54, build, lint). Four-viewport readings and the interface-500 observation are recorded in `16-05-SUMMARY.md`. Note for the next phase: the long-running backend on 8082 serves classes from before 16-01 — restart it before any live UAT, otherwise the coverage panel will look like it still has the old defects.
 
 ## Session
 
-**Last session:** 2026-11-18T14:29:10.917Z
-**Stopped at:** Completed 16-04-PLAN.md (2/2 tasks); 16-05 next
+**Last session:** 2026-11-18T15:20:00.000Z
+**Stopped at:** Completed 16-05-PLAN.md (3/3 tasks) — Phase 16 is plan-complete, awaiting /gsd:verify-work
 **Resume file:** None
 
 ## Performance Metrics
@@ -116,6 +118,7 @@ Last activity: 2026-11-18 — Phase 16 execution started
 | Phase 16 P02 | ~18 min | 2 tasks | 2 files |
 | Phase 16 P03 | 30min | 3 tasks | 8 files |
 | Phase 16 P04 | 35m | 2 tasks | 2 files |
+| Phase 16 P05 | 95m | 3 tasks | 7 files |
 
 ## Decisions
 
@@ -134,6 +137,10 @@ Last activity: 2026-11-18 — Phase 16 execution started
 - [Phase 16]: MetricKeyNormalizer 补 systolicBloodPressure / diastolicBloodPressure 两个别名；其余疑似别名一律不做
 - [Phase 16]: 修 missingMetrics 而不是 usedMetrics：血脂四项确实参与评估（D-02），从参与组移走才是说谎
 - [Phase 16]: 摘要第二段措辞刻意留到 16-05 与 classify 同批变更，避免文字声称阈值而数字仍按参考范围
+- [Phase 16]: 数值格式化收敛为 MetricCoverageAssembler.format（public static，唯一算式）；引擎 11 处 stripTrailingZeros 全部改调，同源成为结构事实而非断言技巧
+- [Phase 16]: classify 两级判定 —— 有规则按注册表 direction/threshold（严格 > / 严格 <，阈值等值点不计分），无规则才回退参考范围
+- [Phase 16]: bmi 双源取值只由 profile.getBmi() 派生，档案无值即 MISSING 且 value 为 null，绝不回落 health_metric 同名行
+- [Phase 16]: 摘要第二段改为「{n} 项超出评估阈值」，abnormal 计算式未动 —— 换了分类源后它自然变成按阈值统计
 
 ## Operator Next Steps
 

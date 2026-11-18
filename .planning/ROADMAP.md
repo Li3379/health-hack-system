@@ -121,7 +121,7 @@ Plans:
 
 **UI hint**: yes
 
-**Plans:** 4/5 plans executed
+**Plans:** 5/5 plans executed
 
 Plans:
 **Wave 1**
@@ -136,7 +136,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 16-05-PLAN.md — 面板与引擎同源收口：`public static format` 共享、`classify` 按风险阈值、`assemble` 增加 profile 与 bmi 双源取值、摘要第二段「超出评估阈值」、五条门禁同批全绿
+- [x] 16-05-PLAN.md — 面板与引擎同源收口：`public static format` 共享、`classify` 按风险阈值、`assemble` 增加 profile 与 bmi 双源取值、摘要第二段「超出评估阈值」、五条门禁同批全绿
 
 ## Progress
 
