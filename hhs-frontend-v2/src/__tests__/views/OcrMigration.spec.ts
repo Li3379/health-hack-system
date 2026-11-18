@@ -467,7 +467,9 @@ describe('data-input — 源码级契约（保持 / 删除 / presentStates 全�
     // 统一换行符后按大括号配平取函数体：嵌套 if/else 里的断言也要落在范围内，
     // 单纯找首个顶层 '\n}\n' 会在第一个内部块就截断。
     const normalized = source.replace(/\r\n/g, '\n')
-    const declaration = new RegExp(`const ${name} = [^\n]*\{`)
+    // 用字符类写花括号：`\{` 在 RegExp 构造器的模板里被 lint 判为多余转义，而无转义的
+    // `{` 只能靠 Annex B 才被当作字面量，正好是「读起来对、行为靠宽容模式」的写法。
+    const declaration = new RegExp(`const ${name} = [^\n]*[{]`)
     const match = declaration.exec(normalized)
     expect(match, `未找到 ${name} 的声明`).toBeTruthy()
     let depth = 0
