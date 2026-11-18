@@ -82,11 +82,21 @@
           <h4 id="risk-coverage-title" class="risk-coverage__title">我的指标覆盖情况</h4>
           <span class="risk-coverage__summary">
             已测 {{ coverageSummary.measured }} / {{ coverageSummary.total }} 项
+            <!--
+              措辞随 16-05 的分类来源同批变更：classify 改为按风险阈值分级后，
+              这里的「超出参考范围」会与面板「偏高」pill 自相矛盾（收缩压 130–139
+              判偏高却不计入参考范围）。本计划不动它，故留此注记并非漏改。
+            -->
             <template v-if="coverageSummary.abnormal > 0">
               · <span class="risk-coverage__abnormal">{{ coverageSummary.abnormal }} 项超出参考范围</span>
             </template>
+            <!--
+              第三段描述「评估范围」而不是「使用」：8 项纳入但只有 3 项有值时，
+              「8 项参与」读起来像「用了 8 项」。括号段用 S1 自己的词（与同一批行
+              状态列渲染的那个词一致），不用 S2 归因态的措辞。
+            -->
             <template v-if="coverageSummary.used > 0">
-              · {{ coverageSummary.used }} 项参与风险评估
+              · {{ coverageSummary.used }} 项纳入评估范围<template v-if="usedMissing > 0">（其中 {{ usedMissing }} 项未测）</template>
             </template>
           </span>
         </header>
@@ -133,7 +143,7 @@
                 <span class="risk-coverage__state">{{ coverageStateLabel(m.state) }}</span>
               </li>
             </ul>
-            <p v-else class="risk-coverage__empty">暂无其他已测指标</p>
+            <p v-else class="risk-coverage__empty">暂无其他已测指标。录入指标后，未被风险评估使用的项目会显示在这里。</p>
           </div>
 
           <div v-if="missingMetrics.length" class="risk-coverage__group">
@@ -854,7 +864,7 @@ const otherMeasured = computed(() =>
  *
  * 谓词必须带 `!m.riskNote`，否则「有 riskNote 且 MISSING」的指标会同时出现在
  * 上面两组里（血脂四项在心血管评估里确实参与，D-02）。把它从「参与」组去掉是
- * 说谎；它在「参与」组里已经以「未测」状态诚实呈现，所以减掉的是这一组。
+ * 说谎；它在「参与」组里已经以缺失状态诚实呈现，所以减掉的是这一组。
  */
 const missingMetrics = computed(() =>
   coverage.value.filter(m => m.state === 'MISSING' && !m.riskNote)
@@ -864,7 +874,7 @@ const missingMetrics = computed(() =>
  * 已纳入评估范围但没有取值的项数。
  *
  * 必须从 `usedMetrics` 派生，不能从 `coverage` 全局筛 —— 全局筛会把不参与评估
- * 的缺失项也算进去，摘要就会说「9 项未测」而实际只有 8 项纳入范围。
+ * 的缺失项也算进去，摘要括号段的数字就会大于实际纳入范围的缺失项数。
  */
 const usedMissing = computed(
   () => usedMetrics.value.filter(m => m.state === 'MISSING').length
