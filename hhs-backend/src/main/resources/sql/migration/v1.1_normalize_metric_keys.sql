@@ -134,9 +134,3 @@ UPDATE health_alert SET metric_key = 'bloodOxygen' WHERE metric_key IN ('blood_o
 -- -----------------------------------------------------
 -- 7. Table: alert_merge_log
 -- -----------------------------------------------------
-UPDATE alert_merge_log SET metric_key = 'heartRate' WHERE metric_key IN ('heart_rate', 'heartrate', 'HEART_RATE');
-UPDATE alert_merge_log SET metric_key = 'systolicBP' WHERE metric_key IN ('systolic_bp', 'systolicBp', 'SYSTOLIC_BP');
-UPDATE alert_merge_log SET metric_key = 'diastolicBP' WHERE metric_key IN ('diastolic_bp', 'diastolicBp', 'DIASTOLIC_BP');
-UPDATE alert_merge_log SET metric_key = 'bloodGlucose' WHERE metric_key IN ('blood_glucose', 'glucose', 'GLUCOSE');
-UPDATE alert_merge_log SET metric_key = 'bodyTemperature' WHERE metric_key IN ('body_temperature', 'temperature', 'temp', 'BODY_TEMPERATURE');
-UPDATE alert_merge_log SET metric_key = 'bloodOxygen' WHERE metric_key IN ('blood_oxygen', 'spo2', 'SPO2');
