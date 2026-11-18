@@ -13,6 +13,7 @@ import com.hhs.service.domain.ProfileCompletenessCalculator;
 import com.hhs.service.domain.ProfileFieldCatalog;
 import com.hhs.service.domain.RiskThresholdRegistry;
 import com.hhs.service.impl.RiskAssessmentServiceImpl;
+import com.hhs.vo.MetricCoverageVO;
 import com.hhs.vo.RiskAssessmentVO;
 import com.hhs.vo.RiskContributorVO;
 import org.junit.jupiter.api.BeforeEach;
@@ -58,12 +59,19 @@ class RiskAssessmentAssumptionsTest {
 
     private RiskAssessmentServiceImpl service;
 
+    /** 服务与覆盖面板必须共享同一份阈值声明 —— 各 new 一个会让同源断言在后续计划里漂移。 */
+    private RiskThresholdRegistry riskThresholds;
+
+    /** Held as a field so the panel can be asserted against the same engine run. */
+    private MetricCoverageAssembler assembler;
+
     @BeforeEach
     void setUp() {
+        riskThresholds = new RiskThresholdRegistry();
+        assembler = new MetricCoverageAssembler(new HealthMetricMetaRegistry(), riskThresholds);
         service = new RiskAssessmentServiceImpl(riskAssessmentMapper, healthProfileMapper,
                 healthMetricMapper, new ProfileCompletenessCalculator(new ProfileFieldCatalog()),
-                new MetricCoverageAssembler(new HealthMetricMetaRegistry()),
-                new RiskThresholdRegistry());
+                assembler, riskThresholds);
     }
 
     @Test
@@ -282,6 +290,22 @@ class RiskAssessmentAssumptionsTest {
         profile.setFamilyHistory("父亲有糖尿病");
         profile.setLifestyleHabits("每周跑步三次");
         return profile;
+    }
+
+    @Test
+    @DisplayName("覆盖面板的 riskNote 与引擎读的阈值同源（同一份声明）")
+    void coverageRiskNoteComesFromTheSameRegistryTheEngineReads() {
+        stubNoMetrics();
+
+        MetricCoverageVO sugar = service.getMetricCoverage(1L).stream()
+                .filter(row -> row.key().equals("bloodGlucose"))
+                .findFirst().orElseThrow();
+
+        String threshold = riskThresholds.ruleFor("bloodGlucose", "糖尿病").orElseThrow()
+                .threshold().toPlainString();
+        assertNotNull(sugar.riskNote(), "参与评估的指标必须带 riskNote");
+        assertTrue(sugar.riskNote().contains(threshold),
+                "面板文案必须由注册表规则渲染，实际为: " + sugar.riskNote());
     }
 
     @Test
