@@ -1,7 +1,8 @@
 ---
 phase: "16"
 slug: "risk-engine-inputs"
-status: draft
+status: approved
+reviewed_at: 2026-11-18
 shadcn_initialized: false
 preset: none
 created: "2026-11-18"
@@ -656,11 +657,40 @@ A(i) 的范围内；若将来纳入评估，按 §5.3.1 的同一规则处理。
 | 项 | 规格 |
 |---|---|
 | formatter | `HealthMetricMetaRegistry.getDefinition(key)` 取 `MetricDefinition.precision()`，再 `value.setScale(precision, RoundingMode.HALF_UP).toPlainString()` —— 与 `MetricCoverageAssembler.formatValue`（`:137-140`）**同一算式** |
-| 归属 | 抽成 `MetricCoverageAssembler` 的包级静态方法（或 `MetricDefinition` 上的实例方法）供 `RiskRuleEngine` 调用；两份实现**必须只有一处**，因为 A(i) 的全部价值就建立在「两侧来自同一段代码」上 |
+| 归属 | 放 `MetricCoverageAssembler` 的 **`public static`** 方法（**不得**是包级私有 —— `impl`≠`domain`，见下方「formatter 的归属」）。两份实现**必须只有一处**，因为 A(i) 的全部价值就建立在「两侧来自同一段代码」上 |
 | 调用范围 | `RiskAssessmentServiceImpl` 中所有写进 `contributor.value` 的数值：`bmi`（`:328`）、`systolicBP`（`:406`）、`diastolicBP`（`:411`）、`bloodGlucose`（`:386`），以及 D-03 落地后新增的血脂四项 |
 | 各指标精度 | 取自注册表，**不得**在此硬编码：`systolicBP` 0、`diastolicBP` 0、`bloodGlucose` 1、`bmi` 1、`totalCholesterol` 2、`triglycerides` 2、`hdlCholesterol` 2、`ldlCholesterol` 2（`HealthMetricMetaRegistry.java:61 / :79 / :97 / :187 / :223 / :241 / :259 / :277`） |
 | 单位后缀 | 保持不变，仍在 formatter 之外拼接（`" mmHg"`、`" mmol/L"`）。formatter 只负责数值部分 |
 | `threshold` 字段 | **不在本次范围**。阈值是常量（`"130 mmHg"`、`"24.0"`），两侧本就同源，不改。**一处留待 D-03 附带的格式对齐（不影响 A(i)）**：血脂四项 precision = 2，若 D-03 的风险阈值写成 `"5.2 mmol/L"` 而同一句里的取值是 `"4.50 mmol/L"`，一句话内会出现两种小数位。`RiskThresholdRegistry` 落地时应让阈值按该指标的 registry precision 渲染（`"5.20"`），§5.2 的 `{阈值}` 随 `threshold` 字段同值即可（`心血管评估：超过 5.20 mmol/L 计入 20 分` 去空白 23 字，仍在 24 上限内）。A(i) 不比较 `threshold`，故本条不改变断言的通过条件 |
+
+**formatter 的归属（上一版的「包级静态方法」路线编译不过，已修正）：** 上一版写的
+「抽成 `MetricCoverageAssembler` 的**包级静态**方法」在本仓库里不成立 —— `RiskRuleEngine` 是
+`com.hhs.service.impl.RiskAssessmentServiceImpl` 的**私有静态嵌套类**（`:272`），
+`MetricCoverageAssembler` 在 `com.hhs.service.domain`，**包级私有跨包不可见**。按那条路线写
+会编译失败，而失败点离契约要防的缺陷很远，实施者会误以为是别的地方错了。
+
+| 路线 | 可行性 | 说明 |
+|---|---|---|
+| ~~`MetricCoverageAssembler` 的**包级**静态方法~~ | ❌ **不可用** | `impl` ≠ `domain`，包级私有跨包不可见。这就是必须修正的那一条 |
+| **`MetricCoverageAssembler` 的 `public static` 方法（采纳）** | ✅ | 只把可见性从包级改为 `public`，签名 `static String format(BigDecimal value, MetricDefinition def)`。**不动 `MetricDefinition`**，因此与 D-04「不改 `MetricDefinition` record」的字面表述无冲突 |
+| `MetricDefinition` 上的 `public` 实例方法 | ⚠️ 可行但需签认 | 技术上成立（`MetricDefinition` 是 `domain` 包的 `public record`，`:29`）。但 D-04 的字面表述是「不改 `MetricDefinition` record」；加实例方法虽不改字段与 24 个构造点（D-04 的实际关切），仍属改该类。**采用此路线前必须确认 D-04 允许**，否则构成决策冲突 |
+
+**采纳上表第二行**：`MetricCoverageAssembler` 新增
+`public static String format(BigDecimal value, MetricDefinition def)`，
+`private String formatValue(value, def)`（`:137-140`）改为**委托**它（或直接内联调用点）。
+引擎侧改成 `MetricCoverageAssembler.format(value, METRICS.getDefinition(key).orElseThrow())`。
+两条调用链因此只经过一处算式，A(i) 的「同一段代码」前提守住，且 `MetricDefinition` 一行未改。
+
+**引擎取注册表的形态（必须写明，否则这条路线的静态方法会拿不到 `MetricDefinition`）：**
+`RiskRuleEngine.evaluateDetailed` 是**静态**方法，拿不到实例字段。落地时二选一，**任选其一即可**：
+
+| 形态 | 做法 | 代价 |
+|---|---|---|
+| 静态常量 | `RiskRuleEngine` 内 `private static final HealthMetricMetaRegistry METRICS = new HealthMetricMetaRegistry();` | 注册表构造无副作用（`HealthMetricMetaRegistry()` 只跑 `registerAllMetrics()`，`@PostConstruct` 有 `isEmpty()` 守卫），可安全新建一份 |
+| 传参 | `evaluateDetailed(..., HealthMetricMetaRegistry registry)`，由 `createAssessment` 传 `this.metaRegistry`（服务需新增一个字段并加进构造器） | 要改构造器签名，而该签名已被 `RiskAssessmentAssumptionsTest:62-64` 依赖；改它需同步那行 |
+
+**本契约不指定哪一种**：两种都满足「同一段代码」，差异只在依赖注入形态，不影响任何断言。
+但**不得**为了绕开可见性而复制一份 formatter 到 `impl` 包 —— 那恰好摧毁 A(i) 的全部价值。
 
 **单位后缀造成的第二处不对称（必须声明，否则 A(i) 会被推广成必然失败的形状）：**
 S1 覆盖面板**没有单位列**（模板 `:112` 只渲染 `m.value`，`grep -n "unit" Risk.vue` → 0 条），
@@ -688,9 +718,17 @@ S1 覆盖面板**没有单位列**（模板 `:112` 只渲染 `m.value`，`grep -
 **A(i) 在这种实现下的形状：** 两侧都是同一 formatter 的输出，因此**字符串相等即可**，
 不再需要数值归一：
 
+```java
+// hhs-backend/.../service/RiskAssessmentAssumptionsTest.java
+assertEquals(coverageRowByKey("bmi").value(), contributorByKey(vo, "bmi").value());
+// 两侧都是 precision-1 字符串；实测期望 "22.9"
 ```
-assert panelRow.value === contributorById('bmi').value   // 两侧都是 precision-1 字符串
-```
+
+**这条断言只能写在 Java 测试里：** 它比较的是**后端两次方法调用**的返回值
+（`getMetricCoverage` 与 `createAssessment`），因此只能写在 Java 测试里。**不得**搬进
+`RiskBackfill.spec.ts` —— 那里两个值都是 mock 的 fixture 字面量，把同一句话写成
+`expect(coverageRow.value).toBe(contributor.value)` 会在两侧都为 `'22.9'` 时通过，
+在真实引擎退回 `stripTrailingZeros()` 时**依然通过**，即在最该失败时保持绿色。
 
 `（估算）` 分支仍由 A(ii) 承担（面板在该分支是 `MISSING`，A(i) 不触发），所以这个直接比较
 不会撞上后缀。
@@ -707,6 +745,10 @@ assert panelRow.value === contributorById('bmi').value   // 两侧都是 precisi
 | 无 `contributors` 的存量记录（`contributors` 为空，Phase 15 已定不渲染明细） | 不适用（A(iii) 的相邻分支，弹窗无 `bmi` 行） |
 
 测试里的取数口径：**先跑一次创建评估，再对该次返回值断言**，不要读库里已有的批次。
+**这条只有后端测试能执行**（`RiskAssessmentAssumptionsTest` 形态：真实 service + mock mappers，
+一次 `createAssessment` 的返回值直接拿来断言）。前端 spec 里没有创建评估的真实执行 ——
+`createRiskAssessment` 是 `vi.fn()`，所以「先跑一次再断言」在前端是一个不存在的动作，
+不得写在 `RiskBackfill.spec.ts` 里（见 A-4 的分工表）。
 
 **由此留下的一处已知残留（如实登记，不掩盖）：** 改动前入库的三条历史记录，其快照 `value` 是
 `22.86` / `20.15`，而覆盖面板始终实时渲成 `22.9` / `20.2`。用户点开一条旧记录仍会看到这个差异。
@@ -751,6 +793,12 @@ assert panelRow.value === contributorById('bmi').value   // 两侧都是 precisi
 | A(i) | 面板 `bmi` 行 `state !== 'MISSING'` | 面板该行的 `value` 与弹窗中 `key === 'bmi'` 归因的 `value` **字符串相等**（两侧都经 §5.3.1 的同一 formatter、同一注册表精度） |
 | A(ii) | 面板 `bmi` 行 `state === 'MISSING'` 且弹窗**有** `key === 'bmi'` 的归因 | 该归因 `state === 'ASSUMED'`，且 `assumptions` 含 `缺少 BMI，按 22.0 估算`；**不得**为 `CONTRIBUTED` / `NORMAL` / `MISSING` |
 | A(iii) | 面板 `bmi` 行 `state === 'MISSING'` 且弹窗**没有** `key === 'bmi'` 的归因 | 成立 —— 这是「连档案都没有」的用户（引擎在 `:299-307` 提前返回，只发一条 `profile` 归因）。**不构成违反**：引擎没读 BMI，面板说 `未测` 是真话 |
+
+**三支的执行位置（本修订新增，不改任何一支的条件）：** A(i) 比较的是后端两次方法调用的
+返回值，只能由 **Java 测试**（`RiskAssessmentAssumptionsTest`）执行；A(ii)/A(iii) 验证的是
+两个面板在给定状态下**各自渲染成契约规定的词**，由前端 spec 执行，且其 fixture 必须标注
+「镜像真实后端输出」。完整的文件分工见 A-4。**任何一支都不得在两个文件里各写一份** ——
+重复的那一份会在该失败时保持绿色。
 
 **为什么必须分方向、不能写成对称比较：** §5.3 上方表格已把「档案无值 → 面板 `MISSING`，
 引擎 `ASSUMED`」定为**正确形态**。若断言写成「两侧 `state !== 'MISSING'` 必须相同」，它在**合规实现上会失败** ——
@@ -996,7 +1044,7 @@ Contract 1/3/4 的改动全部是本仓库 `Risk.vue` 的文本与 CSS 声明。
 
 ## Checker Sign-Off
 
-- [ ] Dimension 1 Copywriting: PASS — Contract 5.2（`riskNote` 形状 + 24 字上限，Java 计字口径可执行）与 5.3/5.3.1（BMI 同源，断言 A 方向性三支 + **共享 formatter 后的精度归一字符串相等**）已解耦：5.3 在 `state`/`value` 层满足，5.2 不带例外；空态给下一步；S1 用 `未测`、S2 用 `缺数据`
+- [ ] Dimension 1 Copywriting: PASS — Contract 5.2（`riskNote` 形状 + 24 字上限，Java 计字口径可执行）与 5.3/5.3.1（BMI 同源，断言 A 方向性三支 + **共享 formatter 后的精度归一字符串相等**）已解耦：5.3 在 `state`/`value` 层满足，5.2 不带例外；空态给下一步；S1 用 `未测`、S2 用 `缺数据`。**断言位置已对齐被测代码**：A(i) 与 ⑧ 在后端 `RiskAssessmentAssumptionsTest`（真实 service + 真实 formatter），A(ii)/A(iii) 与 ①②③ 在前端 spec（渲染层），⑤⑥ 在后端 `MetricCoverageAssemblerTest`；每条的「旧实现是否会失败」在 A-4.2/A-4.3 逐一登记
 - [ ] Dimension 2 Visuals: PASS
 - [ ] Dimension 3 Color: PASS — 五处 `--text-3` → `--text-2`（`range` / `empty` / `hint` / `batches__empty` / `batch__legacy`）；7 处引用 5 改 2 留，全部逐条判定，无沉默豁免
 - [ ] Dimension 4 Typography: PASS — 4 档声明字号；500 共 3 处、全部 11px mono 徽标；`.risk-batches__empty` 继承 15px 已登记
@@ -1033,6 +1081,12 @@ Contract 1/3/4 的改动全部是本仓库 `Risk.vue` 的文本与 CSS 声明。
 | `bmi` 同时存在于档案与指标表 | 引擎读 `profile.getBmi()`（`:326-327`）；面板读 `latestByCanonicalKey`（`MetricCoverageAssembler:56`） | 读两处 |
 | `age` / `familyHistory` 不是注册表指标 | `grep '"age"' HealthMetricMetaRegistry.java` → 空；`familyHistory` → 0 | 读文件 |
 | 弹窗纵向溢出可滚动 | `el-overlay.css`: `.el-overlay{…;overflow:auto}` | 读 `node_modules/element-plus/theme-chalk/el-overlay.css` |
+| `RiskBackfill.spec.ts` 整体替换 API 模块，且缺 `getMetricCoverage` | `:22-31` 的 `vi.mock('@/api/prevention', …)` 只含 6 个 `vi.fn()`（`createRiskAssessment` / `getRiskAssessments` / `createProfile` / `updateProfile` / `getProfile` / `getCompleteness`）；`Risk.vue:878-883` 的 `catch` 把失败渲染成空面板 | `grep -c "getMetricCoverage" src/__tests__/views/RiskBackfill.spec.ts` → **0**；文件内 `it(` 计数 → **29** |
+| 后端 formatter 不在前端执行 | `createRiskAssessment` 在前端是 `vi.fn()`；`getMetricCoverage` 甚至不在 mock 里。前端拿到的 `value` 全是 fixture 字面量 | 读 `:22-31`；`vitest.config.ts` 仅 `happy-dom`，无后端端点 |
+| 包级私有跨包不可见（§5.3.1 首条路线不成立） | `RiskRuleEngine` 是 `RiskAssessmentServiceImpl`（`com.hhs.service.impl`）的 `private static final class`（`:272`）；`MetricCoverageAssembler` 在 `com.hhs.service.domain`。修正后采纳 `MetricCoverageAssembler` 的 `public static`（不改 `MetricDefinition`，与 D-04 字面表述无冲突） | `grep -n "private static final class RiskRuleEngine" RiskAssessmentServiceImpl.java` → `:272`；读两个类的 `package` 声明 |
+| `assemble()` 现在不接收档案（§5.3 落地需改签名） | `RiskAssessmentServiceImpl:220` → `metricCoverageAssembler.assemble(getRecentMetrics(userId))`，只有 metrics | `grep -n "assemble(" MetricCoverageAssembler.java RiskAssessmentServiceImpl.java` |
+| `assemble()` 签名变更的波及面 | `MetricCoverageAssemblerTest` 有 **9 处**调用需同步 | `grep -c "assembler.assemble(" src/test/java/com/hhs/service/domain/MetricCoverageAssemblerTest.java` → 9（`:42/53/65/79/90/101/121/133/144`） |
+| `stubMetrics` 只接受整数，造不出 `5.55` | `:373-383`：`new BigDecimal((Integer) keysAndValues[i + 1])` | 读 `RiskAssessmentAssumptionsTest.java:373-383` |
 
 推演脚本（Zero-dependency，Node）：
 
@@ -1060,7 +1114,7 @@ console.log('修正后总数:', used.length+other.length+missingFixed.length); /
 | 2 | Contract 3 的 `--border-1` → `--border` | 四行连续 MISSING 没有分隔线，读成一块灰；且这个缺陷会让 UAT 把「密度可接受」判为不通过 |
 | 3 | Contract 4 标签列 `80px → 88px` | 六字血脂名在两行上折行，列表行高不均 |
 | 4 | Contract 5 `riskNote` 方向 | HDL 会输出与事实相反的句子（对偏低的人说「超过」） |
-| 5 | Contract 5.3 BMI 同源（值/状态层）+ §5.3.1 共享 formatter | 面板与弹窗对同一用户给出矛盾的「有没有 BMI」，且**三行现有档案每一行都在两个表面显示不同数字**（`22.9` vs `22.86`）。注意此修**不改 `riskNote` 文案**（Contract 5.2 无例外条款），只填 `value`、算 `state`、**并让引擎的 `value` 走面板同一个 formatter**。**双源因子以引擎源为唯一取值源**：档案无值时不得回落到指标表的同名行，否则面板会显示引擎从未使用的数字。落地后跑断言 A(i)/A(ii)/A(iii) 三支，全部通过才算完成 —— A(i) 用**字符串相等**，若引擎仍用 `stripTrailingZeros()` 则必然失败 |
+| 5 | Contract 5.3 BMI 同源（值/状态层）+ §5.3.1 共享 formatter | 面板与弹窗对同一用户给出矛盾的「有没有 BMI」，且**三行现有档案每一行都在两个表面显示不同数字**（`22.9` vs `22.86`）。注意此修**不改 `riskNote` 文案**（Contract 5.2 无例外条款），只填 `value`、算 `state`、**并让引擎的 `value` 走面板同一个 formatter**。**双源因子以引擎源为唯一取值源**：档案无值时不得回落到指标表的同名行，否则面板会显示引擎从未使用的数字。落地后跑断言 A(i)/A(ii)/A(iii) 三支，全部通过才算完成 —— A(i) 用**字符串相等**，若引擎仍用 `stripTrailingZeros()` 则必然失败。**A(i) 与 A(ii)/A(iii) 不在同一个文件里**：A(i)（两侧 `value` 相等）只有后端 `RiskAssessmentAssumptionsTest` 能证明，A(ii)/A(iii)（两套词表各自渲染）在前端。见 A-4 的分工表 |
 
 **第 1 项必须与后端 D-02 同批交付**，否则本阶段一上线就是可见的重复与错位数字。
 
@@ -1076,9 +1130,93 @@ console.log('修正后总数:', used.length+other.length+missingFixed.length); /
 
 ### A-4 测试影响
 
-| 文件 | 影响 |
-|------|------|
-| `src/__tests__/views/RiskBackfill.spec.ts`（31 条 `it()`） | 现有 31 条**全部保持不变**（它们断言的是补填面板、批次折叠、四态标签、面包屑文案，均未被本契约触及）。**新增 8 条**（①–⑧）：① 有 `riskNote` 且 `MISSING` 的指标只渲染一次；② 三组行数之和等于 `coverage.length`；③ `usedMissing > 0` 时摘要出现「其中 N 项未测」（**断言 `未测`，不是 `缺数据`**）；④ `CARDIO` 归因不含 `来自` / `折半` 字样；⑤ 每条 `riskNote` 匹配 `^[^：]+评估：(超过\|低于\|超出) .+ 计入 \d+ 分$` 且 `replace(/\s/g,'').length <= 24`；⑥ 每条 `riskNote` **不匹配** `/(健康档案\|档案\|来源\|取自)/`（来源禁令的可执行化）；⑦ §5.3 断言 A 的三支 —— A(i) `bmi` 行非 `MISSING` 时其 `value` **字符串等于**弹窗 `key==='bmi'` 的 `value`（两侧同 formatter、同 precision，**不做数值归一**）；A(ii) `bmi` 行 `MISSING` 且弹窗有 `bmi` 时为 `ASSUMED` 且 `assumptions` 含 `缺少 BMI，按 22.0 估算`；A(iii) `bmi` 行 `MISSING` 且弹窗无 `bmi` 时通过；⑧ **§5.3.1 的精度守卫（新增，必须有牙齿）**：造一条 `bmi = 22.86` 的档案，**新跑一次创建评估**，断言 `coverage` 中 `bmi` 行的 `value` 与本次归因中 `key==='bmi'` 的 `value` **逐字符相等且都等于 `22.9`**，并额外断言两者 **不等于 `22.86`**。同理对 `bloodGlucose = 5.55` 断言两侧数值部分都是 `5.6`（引擎值带 ` mmol/L`，只比数值前缀）。这条用 `stripTrailingZeros()` 的旧实现会失败（`22.86` / `5.55`），是 formatter 不被摘掉的牙齿 |
+**判定原则（本修订修正的核心）：一条断言只能写在真正执行被测代码的那个测试文件里。**
+
+`src/__tests__/views/RiskBackfill.spec.ts` 在 `:22-31` 用 `vi.mock('@/api/prevention', …)`
+**整体替换**了 API 模块，只给出 6 个 `vi.fn()`。因此该文件里的一切「后端算出来的值」都是
+**fixture 字面量**，不是后端输出。两个后果，都已核实：
+
+| 后果 | 证据 |
+|---|---|
+| **`getMetricCoverage` 不在 mock 里**（`grep -c "getMetricCoverage"` → **0**）。调用它会抛错，`Risk.vue:878-883` 的 `catch { coverage.value = [] }` 把面板清空 —— 依赖覆盖面板的断言**没有任何行可检查** | 读 `:22-31` 与 `Risk.vue:875-884` |
+| **Java formatter 在该文件里从不执行。** 「造一条 `bmi = 22.86` 的档案，新跑一次创建评估」在这里只是 mock 的返回值。把后端改回 `stripTrailingZeros()` 后，这类断言**仍然是绿的** | 读 `:22-31`；切面确认 spec 无任何后端调用 |
+
+所以下表按**被测代码所在的语言**分工，并逐条写明「这条断言真正能证明什么」。
+编号 ①–⑧ 与 §5.2 / §5.3 的引用**保持不变**（下游按编号引用，改号会断链）。
+
+**总数口径（避免「8 条」被读成「8 个测试函数」）：**
+
+| 位置 | 覆盖的编号 | 测试函数数 |
+|---|---|---|
+| 前端 `RiskBackfill.spec.ts` | ①②③ + ⑦A(ii) + ⑦A(iii) | **5** |
+| 后端 `RiskAssessmentAssumptionsTest` | ④ + ⑦A(i) + ⑧ | **3** |
+| 后端 `MetricCoverageAssemblerTest` | ⑤ + ⑥ | **2** |
+| 合计 | ①–⑧（⑦ 拆成 A(i) 后端 + A(ii)/A(iii) 前端） | **10** |
+
+原稿把 8 条全部写在第一行、归给一个文件；本修订把它拆成上表三处，**编号不变**。
+
+#### A-4.1 前置修正：前端 spec 的 mock 必须补上 `getMetricCoverage`
+
+| 项 | 规格 |
+|---|---|
+| 位置 | `RiskBackfill.spec.ts:22-31` 的 `vi.mock('@/api/prevention', …)` 工厂 |
+| 改动 | 在 6 个 `vi.fn()` 之后**追加** `getMetricCoverage: vi.fn()` |
+| 为什么必须做 | 不补则 `preventionApi.getMetricCoverage` 为 `undefined`，调用抛 TypeError 被 `catch` 吞掉，`coverage.value` 恒为 `[]`。① ② ③ 与 ⑦A(ii)/A(iii) 全部**无对象可断言**，写成绿的也只是在断言空数组 |
+| 对既有 29 条的影响 | **无。** `vi.fn()` 未设返回值时同样抛错并被同一个 `catch` 接住，`coverage.value` 仍是 `[]`，与今天的可观测状态逐位相同 |
+| fixture | 新增一个 `coverageRows` 常量，按真实后端的输出填写（至少含 `bmi` 有值行、一条 `riskNote` 且 `state='MISSING'` 的行、一条无 `riskNote` 的行），并在常量上方加注释：**「镜像 `GET /risk-assessment/metric-coverage` 的真实返回；本文件只验证渲染，不验证后端的格式化与同源」** |
+
+#### A-4.2 前端 `src/__tests__/views/RiskBackfill.spec.ts`（Vitest）
+
+现有 **29** 条 `it()`（`grep -cE "^\s*it\("` → 29；原稿写作 31，与文件不符，此处更正）
+**全部保持不变**。新增 5 条，只包含 `Risk.vue` 自己算出来或自己写出来的东西：
+
+| 断言 | 内容 | 被测代码在何处执行 | 这条断言真正证明了什么 |
+|---|---|---|---|
+| ① | 有 `riskNote` 且 `state === 'MISSING'` 的指标只渲染一次 | `Risk.vue:845-853` 的三条 `filter`（computed） | 分组谓词**互斥**（Contract 1.2）。这是纯前端逻辑，fixture 只能提供输入，无法伪造结论 |
+| ② | `usedMetrics.length + otherMeasured.length + missingMetrics.length === coverage.length` | 同上三个 computed | 修正后无遗漏、无重复。**必须同时断言三组之和等于输入行数**，否则「互斥」可以用「两组都为空」满足 |
+| ③ | `usedMissing > 0` 时摘要渲染出「其中 N 项未测」 | `Risk.vue` 模板（Contract 1.3） | 措辞是 `未测` 而非 `缺数据`（S1 词表）；`N` 与 `usedMissing` 相等 |
+| ⑦A(ii) | `bmi` 行 `MISSING` 且弹窗有 `bmi` 归因时，pill 渲染 `未测` / `按默认值`，且 `assumptions` 列表显示 `缺少 BMI，按 22.0 估算` | `coverageStateLabel()` / `stateLabel()` / assumptions 列表模板 | 两套词表**各自独立渲染**（Contract 6.1/6.2），弹窗不被 S1 的词污染。**条件与 §5.3 原文逐字一致，未改动** |
+| ⑦A(iii) | `bmi` 行 `MISSING` 且弹窗无 `bmi` 归因时通过（不渲染归因行） | `v-if="currentAssessment?.contributors?.length"` 等模板条件 | 无明细的记录不渲染空块（Contract 7.3）。**条件未改动** |
+
+**A(ii)/A(iii) 的分工声明（只补位置，不动条件）：** 它们在前端证明的是「给定这组状态，
+两个面板各自渲染成契约规定的词」。**后端是否真的产出这组状态不在本文件的证明范围内**，
+且这部分今天已经有归属，不需要新增：
+
+| 半边 | 已有/应加的位置 |
+|---|---|
+| 弹窗侧 `ASSUMED` + `缺少 BMI，按 22.0 估算` | **已存在** —— `RiskAssessmentAssumptionsTest.assumedValueIsMarkedAssumed`（`:560-579`）已断言 `STATE_ASSUMED` 与 explanation 含「估算」 |
+| 面板侧「档案无值 → `MISSING`」 | **应加** —— `domain/MetricCoverageAssemblerTest`。这半边依赖 §5.3 的 `assemble(profile, metrics)` 签名变更，与 ⑧ 的前置条件同一批 |
+
+因此**不得**把前端这两条描述为「锁住了两侧一致」；两侧一致性由 A(i)（后端）承担。
+
+#### A-4.3 后端 `hhs-backend/src/test/java/com/hhs/service/`（JUnit）
+
+`RiskAssessmentAssumptionsTest.java:58-65` 已经是「真实 service + 真实 rule engine + 真实
+`MetricCoverageAssembler` + 真实 `HealthMetricMetaRegistry`，只 mock 三个 mapper」的形态，
+且 `RiskAssessmentServiceImpl` 同时暴露 `createAssessment()`（归因）与 `getMetricCoverage()`
+（覆盖行），因此**两侧一致性的断言只有在这里才真正执行被测代码**。
+
+| 断言 | 文件 | 构造 | 必须成立 | 旧实现是否会失败 |
+|---|---|---|---|---|
+| ④ | `RiskAssessmentAssumptionsTest` | 现有 `completeProfile()` 一类档案，跑 `createAssessment` | 「心血管疾病」的每条 `contributor.explanation()` **不含** `来自` / `折半` / `（折半计入` | **会**。旧实现 `:455-461` 的 `halve()` 输出即 `来自糖尿病：…（折半计入 N 分）`。放在前端 fixture 里则不会失败 |
+| ⑦A(i) | 同上 | `profile.setBmi(new BigDecimal("22.86"))`，跑 `createAssessment` + `getMetricCoverage` | 覆盖行中 `key='bmi'` 的 `value()` **字符串等于**本次归因中 `key='bmi'` 的 `value()` | **会**。引擎 `:328` 给 `22.86`、面板 `formatValue` 给 `22.9` |
+| ⑧ | 同上 | 同上档案 + `stubMetrics` 含 `bloodGlucose = 5.55` | ①两侧 `bmi` 的 `value()` 都**等于 `"22.9"` 且都不等于 `"22.86"`**；②覆盖行 `bloodGlucose.value()` 与归因 `bloodGlucose.value()` 的**数值前缀**都是 `"5.6"`（归因带 `" mmol/L"`，`startsWith` / 去后缀比较），且都不等于 `5.55` | **会**。这是 formatter 不被摘掉的**牙齿**：`stripTrailingZeros()` 给出 `22.86` / `5.55`，两条断言同时红 |
+| ⑤ | `domain/MetricCoverageAssemblerTest` | 现有 `new MetricCoverageAssembler(new HealthMetricMetaRegistry())` | 所有非 `null` 的 `riskNote` 匹配 `^[^：]+评估：(超过\|低于\|超出) .+ 计入 \d+ 分$`，且 `replaceAll("\\s","").length() <= 24`（Java 侧码点计字，与 §5.2 口径一致） | `riskNote` 是 `MetricCoverageAssembler.RISK_CONSUMERS` 产出的常量（`:41-47`），前端只是 `{{ m.riskNote }}` 直出；放前端等于断言 fixture 自己 |
+| ⑥ | 同上 | 同上 | 所有 `riskNote` **不匹配** `(健康档案\|档案\|来源\|取自)` | 同上。这是来源禁令唯一可执行的否定守卫 |
+
+**⑧ 落地前必须先解决的两处签名（否则测试编译不过，而失败点离缺陷很远）：**
+
+| 事实 | 影响 |
+|---|---|
+| `getMetricCoverage` 现在只传 metrics：`metricCoverageAssembler.assemble(getRecentMetrics(userId))`（`RiskAssessmentServiceImpl:220`），而 §5.3 要求 `bmi` 行由**档案**派生 | `assemble` 需要接收 `HealthProfile`。改签名会波及 `MetricCoverageAssemblerTest` 的 **9 处** `assembler.assemble(...)` 调用（`:42/53/65/79/90/101/121/133/144`），需同批同步 |
+| `RiskAssessmentAssumptionsTest.stubMetrics` 只接受 `Integer`（`:373-383`，`new BigDecimal((Integer) keysAndValues[i + 1])`） | 要造 `bloodGlucose = 5.55` 必须加一个接受 `BigDecimal` 的重载（或让 helper 接受 `Object` 并 `new BigDecimal(String.valueOf(v))`）。不改则只能造整数，⑧ 的血糖分支无法表达 |
+| `getMetricCoverage` 改成读档案后，会多一次 `healthProfileMapper.selectOne` | `getProfileByUserId`（`:224-228`）走的就是这个 mapper，`stubProfile` 已覆盖，**不需要**新增 stub。但 `MockitoExtension` 默认 STRICT_STUBS：若某个测试只调 `getMetricCoverage` 却用 `stubMetrics` 之外的 stub，需确认没有多余 stub，否则会报 `UnnecessaryStubbingException` |
+
+#### A-4.4 其余行（不变）
+
+| 项 | 影响 |
+|---|---|
 | 关于 ⑤ 的覆盖边界（必须写清，否则会被当成「来源禁令已被守卫」） | ⑤ 只锁**形状与长度**。实测反例：`心血管评估：超过 24（档）kg/m² 计入 20 分` 匹配该正则、去空白后 23 字，**⑤ 放行**。来源禁令由 ⑥ 的否定断言 + §5.2 散文 + Copywriting 表共同承担；⑤ **不得**在下游被描述为「同时锁住了来源标注」 |
-| 几何断言 | 沿用该文件既有的「读源码 + 正则」手法：新增一条断言 `.risk-dialog-breakdown__item` 的首列 ≥ 88px，且 `Risk.vue` 内 `var(--border-1)` 出现次数为 0 |
-| 基线 | 前端 `npm run test:run` 当前 640 条全绿；本阶段只加不减 |
+| 几何断言 | 沿用既有「读源码 + 正则」手法（纯前端，本来就只能在前端做）：新增一条断言 `.risk-dialog-breakdown__item` 的首列 ≥ 88px，且 `Risk.vue` 内 `var(--border-1)` 出现次数为 0 |
+| 基线 | 前端 `npm run test:run` 当前 640 条全绿；本阶段只加不减。**本文件实测 29 条全绿**（`npx vitest run src/__tests__/views/RiskBackfill.spec.ts` → `29 passed`，2026-11-18）。后端 `mvn clean verify -DskipITs` 必须全绿（④⑤⑥⑦A(i)⑧ 全部计入后端条数） |
+| **不得**做的 | 为了「让断言看起来在前端也在跑」而在 spec 里手写一份 formatter/正则去模拟后端；那会把一个实现缺陷固化成测试认可的形态（同 §5.3.1 对 route (a) 的否决理由） |
