@@ -34,6 +34,7 @@
       </div>
 
       <!-- 解析结果 -->
+      <Transition name="form-section">
       <div v-if="parseResult" class="parse-result">
         <div class="result-header">
           <span>解析结果</span>
@@ -71,6 +72,7 @@
           </el-button>
         </div>
       </div>
+      </Transition>
 
       <!-- 警告信息 -->
       <el-alert
