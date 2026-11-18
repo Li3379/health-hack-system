@@ -14,6 +14,7 @@ import com.hhs.security.SecurityUtils;
 import com.hhs.service.AlertRuleEngine;
 import com.hhs.service.AlertService;
 import com.hhs.service.MetricDeduplicationService;
+import com.hhs.service.domain.MetricDisplayFormatter;
 import com.hhs.vo.MetricTrendVO;
 import com.hhs.vo.RealtimeMetricVO;
 import io.swagger.v3.oas.annotations.Operation;
@@ -47,6 +48,7 @@ public class RealtimeController {
     private final AlertService alertService;
     private final AlertRuleEngine alertRuleEngine;
     private final MetricDeduplicationService deduplicationService;
+    private final MetricDisplayFormatter displayFormatter;
 
     @Operation(summary = "Add a real-time metric")
     @PostMapping("/metrics")
@@ -162,45 +164,15 @@ public class RealtimeController {
     }
 
     private String getDisplayName(String metricKey) {
-        return switch (metricKey) {
-            // 健康指标
-            case "heartRate" -> "心率";
-            case "systolicBP" -> "收缩压";
-            case "diastolicBP" -> "舒张压";
-            case "glucose" -> "血糖";
-            case "weight" -> "体重";
-            case "bmi" -> "BMI";
-            case "temperature" -> "体温";
-            // 保健指标
-            case "sleepDuration" -> "睡眠时长";
-            case "sleepQuality" -> "睡眠质量";
-            case "steps" -> "步数";
-            case "exerciseMinutes" -> "运动时长";
-            case "waterIntake" -> "饮水量";
-            case "mood" -> "心情";
-            case "energy" -> "精力";
-            default -> metricKey;
-        };
+        // Delegated: this used to be a second, poorer copy of the formatter's switch
+        // (it lacked lipids, blood oxygen, fasting glucose, and matched the legacy
+        // "glucose"/"temperature" aliases instead of the canonical keys, so those
+        // metrics fell through to the raw English identifier). One implementation.
+        return displayFormatter.getDisplayName(metricKey);
     }
 
     private String getUnit(String metricKey) {
-        return switch (metricKey) {
-            // 健康指标
-            case "heartRate" -> "次/分";
-            case "systolicBP", "diastolicBP" -> "mmHg";
-            case "glucose" -> "mmol/L";
-            case "weight" -> "kg";
-            case "temperature" -> "°C";
-            case "bmi" -> "";
-            // 保健指标
-            case "sleepDuration" -> "小时";
-            case "sleepQuality" -> "级";
-            case "steps" -> "步";
-            case "exerciseMinutes" -> "分钟";
-            case "waterIntake" -> "杯";
-            case "mood", "energy" -> "分";
-            default -> "";
-        };
+        return displayFormatter.getUnit(metricKey);
     }
 
     // Alias endpoints for API compatibility with tests
