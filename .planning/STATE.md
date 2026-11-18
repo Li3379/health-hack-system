@@ -5,11 +5,11 @@ milestone_name: 风险评估可信化与引擎收敛
 current_phase: 16
 current_phase_name: 风险评估引擎输入重组
 status: idle
-stopped_at: Phase 16 context gathered (7 decisions)
-last_updated: "2026-11-18T04:47:30.100Z"
+stopped_at: Phase 16 UI-SPEC approved
+last_updated: "2026-11-18T08:06:11.964Z"
 last_activity: 2026-11-18
 last_activity_desc: Phase 15 verified — 15/15 UAT, one layout defect found and fixed, one truth overridden
-state_head: 7faa9575e8c14eacc5feda419d872f48d2a7109a
+state_head: 625735b6782ff01a92dc62c1ace6c22a5c8e4545
 progress:
   total_phases: 2
   completed_phases: 11
@@ -102,9 +102,9 @@ Last activity: 2026-11-18 — Phase 16 context gathered (7 decisions)
 
 ## Session
 
-**Last session:** 2026-11-18T04:47:30.006Z
-**Stopped at:** Phase 16 context gathered (7 decisions)
-**Resume file:** .planning/phases/16-risk-engine-inputs/16-CONTEXT.md
+**Last session:** 2026-11-18T08:06:11.934Z
+**Stopped at:** Phase 16 UI-SPEC approved
+**Resume file:** .planning/phases/16-risk-engine-inputs/16-UI-SPEC.md
 
 ## Performance Metrics
 

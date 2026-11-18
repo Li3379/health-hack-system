@@ -1,0 +1,9 @@
+{
+  "workingDir": "D:/hhs-ar15",
+  "maxIterations": 12,
+  "benchmarkHashes": {
+    "measure": "86595af95b30598b7a14c85bbcf95b20bff8e404555b55baf9b1c6eb1036b88d",
+    "checks": "281bc2fa1df68d971783b737f6529e08690e573c304b94e3f18b20e54182d9a7"
+  },
+  "pendingChecksFailed": false
+}
