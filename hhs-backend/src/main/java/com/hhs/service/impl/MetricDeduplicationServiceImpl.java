@@ -1,5 +1,6 @@
 package com.hhs.service.impl;
 
+import com.hhs.service.domain.MetricKeyNormalizer;
 import com.hhs.entity.RealtimeMetric;
 import com.hhs.mapper.RealtimeMetricMapper;
 import com.hhs.service.MetricDeduplicationService;
@@ -95,11 +96,14 @@ public class MetricDeduplicationServiceImpl implements MetricDeduplicationServic
     }
 
     private int getDedupWindowSeconds(String metricKey) {
-        return switch (metricKey) {
+        // Canonicalize before switching: a row stored under a legacy alias
+        // ("glucose") would otherwise get the default window instead of the
+        // glucose one, silently changing how aggressively duplicates collapse.
+        return switch (MetricKeyNormalizer.toCanonicalKey(metricKey)) {
             case "heartRate" -> DEDUP_HEART_RATE;
             case "systolicBP", "diastolicBP" -> DEDUP_BLOOD_PRESSURE;
             case "weight" -> DEDUP_WEIGHT;
-            case "glucose" -> DEDUP_GLUCOSE;
+            case "bloodGlucose" -> DEDUP_GLUCOSE;
             default -> DEDUP_DEFAULT;
         };
     }
