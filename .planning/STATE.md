@@ -5,11 +5,11 @@ milestone_name: 风险评估可信化与引擎收敛
 current_phase: 16
 current_phase_name: 风险评估引擎输入重组
 status: executing
-stopped_at: Completed 16-01-PLAN.md (2/2 tasks); 16-02 next
-last_updated: "2026-11-18T13:29:01.039Z"
+stopped_at: Completed 16-02-PLAN.md (2/2 tasks); 16-04 next
+last_updated: "2026-11-18T13:40:56.285Z"
 last_activity: 2026-11-18
 last_activity_desc: Phase 16 execution started
-state_head: 737405552f618f92627ea8307b8c6bbfc83b1ca9
+state_head: 9d16f94f334069394835b598945c719462382012
 progress:
   total_phases: 2
   completed_phases: 11
@@ -68,7 +68,7 @@ See: `.planning/PROJECT.md`
 ## Current Position
 
 Phase: 16 (风险评估引擎输入重组) — EXECUTING
-Plan: 2 of 5
+Plan: 3 of 5
 Status: Ready to execute
 Last activity: 2026-11-18 — Phase 16 execution started
 
@@ -102,8 +102,8 @@ Last activity: 2026-11-18 — Phase 16 execution started
 
 ## Session
 
-**Last session:** 2026-11-18T13:29:00.991Z
-**Stopped at:** Completed 16-01-PLAN.md (2/2 tasks); 16-02 next
+**Last session:** 2026-11-18T13:40:51.097Z
+**Stopped at:** Completed 16-02-PLAN.md (2/2 tasks); 16-04 next
 **Resume file:** None
 
 ## Performance Metrics
@@ -113,6 +113,7 @@ Last activity: 2026-11-18 — Phase 16 execution started
 | Phase 04-key P01 | 18min | 2 tasks | 11 files |
 | Phase 04 P02 | 25min | 2 tasks | 8 files |
 | Phase 16 P01 | 32min | 2 tasks | 6 files |
+| Phase 16 P02 | ~18 min | 2 tasks | 2 files |
 
 ## Decisions
 
@@ -123,6 +124,9 @@ Last activity: 2026-11-18 — Phase 16 execution started
 - [Phase 4]: Service-layer queries expand single key filter to full alias set via `LambdaQueryWrapper.in()`
 - [Phase 4]: Idempotent SQL migration script `v1.1_normalize_metric_keys.sql` for historical records
 - [Phase 16]: 风险阈值收敛到 RiskThresholdRegistry 的 (metricKey, disease) 规则表；引擎与覆盖面板同读一份声明，riskNote 由规则渲染（16-01）
+- [Phase 16]: 零新增 token：8 处 --border-1 全部改指既有 --border，保持三档边框体系
+- [Phase 16]: 覆盖面板断言写 >= fixture 长度，因分组谓词交叠导致的重复渲染是 16-04 的待修项
+- [Phase 16]: 精确保留 2 处 --text-3（徽标 + 符号位），用计数与区域双断言守 T-16-08
 
 ## Operator Next Steps
 
