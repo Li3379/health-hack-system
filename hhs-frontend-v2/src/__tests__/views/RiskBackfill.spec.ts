@@ -1169,8 +1169,36 @@ describe('Risk.vue — 覆盖面板摘要与两套状态词表', () => {
     expect(summary.find('.risk-coverage__abnormal').text()).toBe(`${abnormal} 项超出评估阈值`)
   })
 
-  it('摘要第二段的数字随面板状态变化（把步数改 LOW 后为 2）', async () => {
+  it('摘要第二段的数字随面板状态变化（把一项有评估阈值的指标改 LOW 后 +1）', async () => {
     // 基于 fixture 派生局部数组，不改共享 fixture —— 16-02 与 16-04 的断言依赖它。
+    //
+    // 必须挑一个**带 riskNote** 的行：摘要说的是「超出评估阈值」，只有参与评估的
+    // 指标才有评估阈值。steps 没有 riskNote（不在任何疾病的输入集里），把它改 LOW
+    // 不该进这个计数 —— 否则一个只有心率偏低的用户会看到「1 项超出评估阈值」，
+    // 而心率根本没有评估阈值。
+    const target = coverageRows.find(r => !!r.riskNote && r.state !== 'LOW')
+    expect(target, 'fixture 里应存在一条带 riskNote 且非 LOW 的行').toBeDefined()
+
+    const baseline = coverageRows.filter(
+      r => !!r.riskNote && (r.state === 'HIGH' || r.state === 'LOW')
+    ).length
+    const mutated = coverageRows.map(r =>
+      r.key === target!.key ? { ...r, state: 'LOW' as const } : r
+    )
+    getMetricCoverage.mockResolvedValue({ data: mutated })
+    const wrapper = mountRisk()
+    await flushPromises()
+
+    expect(wrapper.find('.risk-coverage__summary').text())
+      .toContain(`${baseline + 1} 项超出评估阈值`)
+  })
+
+  it('无评估阈值的指标变异常时不进「超出评估阈值」计数', async () => {
+    // steps 不在任何疾病的输入集里（riskNote 为 null），它的 LOW 是「低于参考范围」，
+    // 不是「超出评估阈值」。D-09 改了措辞，计数范围必须跟措辞同一个口径。
+    const baseline = coverageRows.filter(
+      r => !!r.riskNote && (r.state === 'HIGH' || r.state === 'LOW')
+    ).length
     const withLowSteps = coverageRows.map(r =>
       r.key === 'steps' ? { ...r, state: 'LOW' as const } : r
     )
@@ -1178,9 +1206,8 @@ describe('Risk.vue — 覆盖面板摘要与两套状态词表', () => {
     const wrapper = mountRisk()
     await flushPromises()
 
-    const abnormal = withLowSteps.filter(r => r.state === 'HIGH' || r.state === 'LOW').length
-    expect(abnormal).toBe(2)
-    expect(wrapper.find('.risk-coverage__summary').text()).toContain(`${abnormal} 项超出评估阈值`)
+    expect(wrapper.find('.risk-coverage__summary').text())
+      .toContain(`${baseline} 项超出评估阈值`)
   })
 
   it('usedMissing 为 0 时不渲染括号段', async () => {

@@ -432,7 +432,7 @@ public class RiskAssessmentServiceImpl implements RiskAssessmentService {
                     latestBloodSugar == null ? null
                             : MetricCoverageAssembler.format(latestBloodSugar,
                                     definitionOf("bloodGlucose")) + " mmol/L",
-                    "6.1 mmol/L", sugarHigh, sugarPoints));
+                    thresholdText(sugarRule, "bloodGlucose"), sugarHigh, sugarPoints));
 
             // Sum the parts rather than recomputing: one code path, so the breakdown a user
             // reads can never disagree with the score above it.
@@ -456,7 +456,7 @@ public class RiskAssessmentServiceImpl implements RiskAssessmentService {
                     systolic == null ? null
                             : MetricCoverageAssembler.format(systolic,
                                     definitionOf("systolicBP")) + " mmHg",
-                    "130 mmHg", systolicHigh, systolicHigh ? systolicRule.points() : 0));
+                    thresholdText(systolicRule, "systolicBP"), systolicHigh, systolicHigh ? systolicRule.points() : 0));
 
             RiskThresholdRegistry.RiskThresholdRule diastolicRule =
                     requiredRule(thresholds, "diastolicBP", "高血压");
@@ -465,7 +465,7 @@ public class RiskAssessmentServiceImpl implements RiskAssessmentService {
                     diastolic == null ? null
                             : MetricCoverageAssembler.format(diastolic,
                                     definitionOf("diastolicBP")) + " mmHg",
-                    "85 mmHg", diastolicHigh, diastolicHigh ? diastolicRule.points() : 0));
+                    thresholdText(diastolicRule, "diastolicBP"), diastolicHigh, diastolicHigh ? diastolicRule.points() : 0));
 
             int bpScore = bpParts.stream().mapToInt(RiskContributorVO::points).sum();
             result.add(new ScoredAssessment(create(userId, profileId, "高血压", bpScore), bpParts));
@@ -516,7 +516,7 @@ public class RiskAssessmentServiceImpl implements RiskAssessmentService {
                     systolic == null ? null
                             : MetricCoverageAssembler.format(systolic,
                                     definitionOf("systolicBP")) + " mmHg",
-                    "130 mmHg", cardioSystolicHigh,
+                    thresholdText(cardioSystolicRule, "systolicBP"), cardioSystolicHigh,
                     cardioSystolicHigh ? cardioSystolicRule.points() : 0));
 
             // ---- 4. 舒张压 ----
@@ -528,7 +528,7 @@ public class RiskAssessmentServiceImpl implements RiskAssessmentService {
                     diastolic == null ? null
                             : MetricCoverageAssembler.format(diastolic,
                                     definitionOf("diastolicBP")) + " mmHg",
-                    "85 mmHg", cardioDiastolicHigh,
+                    thresholdText(cardioDiastolicRule, "diastolicBP"), cardioDiastolicHigh,
                     cardioDiastolicHigh ? cardioDiastolicRule.points() : 0));
 
             // ---- 5. 血糖 ----
@@ -540,7 +540,7 @@ public class RiskAssessmentServiceImpl implements RiskAssessmentService {
                     latestBloodSugar == null ? null
                             : MetricCoverageAssembler.format(latestBloodSugar,
                                     definitionOf("bloodGlucose")) + " mmol/L",
-                    "6.1 mmol/L", cardioSugarHigh,
+                    thresholdText(cardioSugarRule, "bloodGlucose"), cardioSugarHigh,
                     cardioSugarHigh ? cardioSugarRule.points() : 0));
 
             // ---- 6-9. 血脂四项：缺失一律 MISSING + 0 分，绝不代入人群默认值（D-02） ----
@@ -554,7 +554,7 @@ public class RiskAssessmentServiceImpl implements RiskAssessmentService {
                     totalCholesterol == null ? null
                             : MetricCoverageAssembler.format(totalCholesterol,
                                     definitionOf("totalCholesterol")) + " mmol/L",
-                    "5.20 mmol/L", totalCholesterolHigh,
+                    thresholdText(totalCholesterolRule, "totalCholesterol"), totalCholesterolHigh,
                     totalCholesterolHigh ? totalCholesterolRule.points() : 0));
 
             RiskThresholdRegistry.RiskThresholdRule triglyceridesRule =
@@ -565,7 +565,7 @@ public class RiskAssessmentServiceImpl implements RiskAssessmentService {
                     triglycerides == null ? null
                             : MetricCoverageAssembler.format(triglycerides,
                                     definitionOf("triglycerides")) + " mmol/L",
-                    "1.70 mmol/L", triglyceridesHigh,
+                    thresholdText(triglyceridesRule, "triglycerides"), triglyceridesHigh,
                     triglyceridesHigh ? triglyceridesRule.points() : 0));
 
             // HDL 是下限型：低于阈值才是风险，因此走 below(...) 而不是 threshold(...)，
@@ -578,7 +578,7 @@ public class RiskAssessmentServiceImpl implements RiskAssessmentService {
                     hdlCholesterol == null ? null
                             : MetricCoverageAssembler.format(hdlCholesterol,
                                     definitionOf("hdlCholesterol")) + " mmol/L",
-                    "1.00 mmol/L", hdlLow, hdlLow ? hdlRule.points() : 0));
+                    thresholdText(hdlRule, "hdlCholesterol"), hdlLow, hdlLow ? hdlRule.points() : 0));
 
             RiskThresholdRegistry.RiskThresholdRule ldlRule =
                     requiredRule(thresholds, "ldlCholesterol", "心血管");
@@ -588,7 +588,7 @@ public class RiskAssessmentServiceImpl implements RiskAssessmentService {
                     ldlCholesterol == null ? null
                             : MetricCoverageAssembler.format(ldlCholesterol,
                                     definitionOf("ldlCholesterol")) + " mmol/L",
-                    "3.40 mmol/L", ldlHigh, ldlHigh ? ldlRule.points() : 0));
+                    thresholdText(ldlRule, "ldlCholesterol"), ldlHigh, ldlHigh ? ldlRule.points() : 0));
 
             int cardioRaw = cardioParts.stream().mapToInt(RiskContributorVO::points).sum();
             // 9 项上限合计 150 > 100，因此「全部异常」的用户真实走到这里。分数封顶 100，
@@ -690,6 +690,29 @@ public class RiskAssessmentServiceImpl implements RiskAssessmentService {
             return METRICS.getDefinition(canonicalKey)
                     .orElseThrow(() -> new IllegalStateException(
                             "缺少指标元数据: " + canonicalKey));
+        }
+
+        /**
+         * Render a rule's threshold as the display string the attribution row carries.
+         *
+         * <p>Derived from the rule, not from a second literal. Before this helper each
+         * contributor passed its own hardcoded copy ({@code "130 mmHg"}, {@code "6.1 mmol/L"}),
+         * so changing the registry would leave the dialog quoting the old number — the
+         * comparison would move and the sentence next to it would not.</p>
+         *
+         * <p>Formatted at the metric's registry precision (the same {@code format} the panel
+         * uses), then suffixed with the unit. The space before the unit is load-bearing:
+         * the panel has no unit column, so its value and this string only ever relate by
+         * numeric prefix.</p>
+         *
+         * @param rule        the rule whose threshold to render
+         * @param canonicalKey the metric it belongs to, for precision and unit
+         * @return e.g. {@code "130 mmHg"}, {@code "5.20 mmol/L"}
+         */
+        private static String thresholdText(RiskThresholdRegistry.RiskThresholdRule rule,
+                                            String canonicalKey) {
+            MetricDefinition def = definitionOf(canonicalKey);
+            return MetricCoverageAssembler.format(rule.threshold(), def) + " " + def.unit();
         }
 
         /**
