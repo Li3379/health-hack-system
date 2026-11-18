@@ -1103,3 +1103,113 @@ describe('Risk.vue — 呈现契约（源码扫描）', () => {
     expect(parseFloat(first)).toBeGreaterThanOrEqual(88)
   })
 })
+
+/**
+ * 摘要措辞与两套词表（UI-SPEC Contract 1.3 与 Contract 6.1）。
+ *
+ * 这一组断言守的是「词跟着表面走」：摘要与覆盖面板行都在 S1，用 `未测`；
+ * 弹窗归因在 S2，用 `缺数据` / `按默认值`。合并成一个映射会让「未测」出现在
+ * 归因里，读成「引擎没测」。
+ */
+describe('Risk.vue — 覆盖面板摘要与两套状态词表', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+    getRiskAssessments.mockResolvedValue({ data: [diabetesAssessment] })
+    getProfile.mockResolvedValue({ data: profileWithGaps })
+    getCompleteness.mockResolvedValue({ data: completenessPayload })
+  })
+
+  /** 把 bmi 覆盖行改成 MISSING（弹窗 fixture 里 bmi 仍是 ASSUMED）。 */
+  const rowsWithBmiMissing = (): MetricCoverageVO[] =>
+    coverageRows.map(r => (r.key === 'bmi' ? { ...r, state: 'MISSING', value: null } : r))
+
+  it('摘要用「纳入评估范围」与「未测」，不用「参与风险评估」与「缺数据」', async () => {
+    getMetricCoverage.mockResolvedValue({ data: coverageRows })
+    const wrapper = mountRisk()
+    await flushPromises()
+
+    // 范围限定在摘要：分组标题里本就有「参与风险评估的指标」这个合法字面量，
+    // 全局断言会假红。
+    const summary = wrapper.find('.risk-coverage__summary')
+    expect(summary.exists()).toBe(true)
+    const text = summary.text()
+
+    expect(text).toContain('纳入评估范围')
+    expect(text).toContain('其中 2 项未测')
+    expect(text).not.toContain('项参与风险评估')
+    expect(text).not.toContain('缺数据')
+  })
+
+  it('usedMissing 为 0 时不渲染括号段', async () => {
+    // 只留无 riskNote 的行：一条已测（步数）、一条未测（尿酸）。
+    const noUsedRows = coverageRows.filter(r => !r.riskNote)
+    getMetricCoverage.mockResolvedValue({ data: noUsedRows })
+    const wrapper = mountRisk()
+    await flushPromises()
+
+    const text = wrapper.find('.risk-coverage__summary').text()
+    expect(text).not.toContain('其中')
+    expect(text).not.toContain('（其中 0')
+  })
+
+  /**
+   * ⑦A(ii)：同一个 bmi，S1 说「未测」、S2 说「按默认值」。
+   *
+   * 状态不同是设计而不是不一致 —— S1 回答「你有没有这个数据」，S2 回答
+   * 「引擎这次用了什么」。两条断言合起来证明两套词表各自渲染、互不污染。
+   */
+  it('S1 与 S2 对同一个 bmi 各自渲染自己的词', async () => {
+    getMetricCoverage.mockResolvedValue({ data: rowsWithBmiMissing() })
+    const wrapper = mountRisk()
+    await flushPromises()
+
+    const coverageBmi = wrapper
+      .findAll('.risk-coverage__item')
+      .find(li => li.find('.risk-coverage__label').text() === 'BMI')
+    expect(coverageBmi, '覆盖面板未渲染 BMI 行').toBeDefined()
+    expect(coverageBmi!.find('.risk-coverage__state').text()).toBe('未测')
+    expect(wrapper.find('.risk-coverage').text()).not.toContain('按默认值')
+
+    const vm = wrapper.vm as unknown as { viewDetail: (row: RiskAssessmentVO) => void }
+    vm.viewDetail(diabetesAssessment)
+    await flushPromises()
+
+    const dialog = wrapper.find('.el-dialog')
+    const dialogBmi = dialog
+      .findAll('.risk-dialog-breakdown__item')
+      .find(li => li.find('.risk-dialog-breakdown__label').text() === 'BMI')
+    expect(dialogBmi, '弹窗未渲染 BMI 归因行').toBeDefined()
+    expect(dialogBmi!.find('.risk-dialog-breakdown__state').text()).toBe('按默认值')
+    // 弹窗里不出现 S1 的词；覆盖面板里不出现 S2 的词。
+    expect(dialog.text()).not.toContain('未测')
+    expect(dialog.text()).toContain('缺少 BMI，按 22.0 估算')
+  })
+
+  /**
+   * ⑦A(iii)：没有档案的用户 —— 引擎早退只发一条 profile 归因，弹窗里根本没有
+   * bmi 这一行。此时「S1 说未测」是真话，且不得因缺行而报错。
+   */
+  it('弹窗无 BMI 归因行时通过，不渲染空块也不报错', async () => {
+    getMetricCoverage.mockResolvedValue({ data: rowsWithBmiMissing() })
+    const wrapper = mountRisk()
+    await flushPromises()
+
+    const withoutBmi: RiskAssessmentVO = {
+      ...diabetesAssessment,
+      contributors: diabetesAssessment.contributors!.filter(c => c.key !== 'bmi')
+    }
+    const vm = wrapper.vm as unknown as { viewDetail: (row: RiskAssessmentVO) => void }
+    vm.viewDetail(withoutBmi)
+    await flushPromises()
+
+    const dialog = wrapper.find('.el-dialog')
+    expect(dialog.exists()).toBe(true)
+    const bmiRow = dialog
+      .findAll('.risk-dialog-breakdown__item')
+      .find(li => li.find('.risk-dialog-breakdown__label').text() === 'BMI')
+    expect(bmiRow).toBeUndefined()
+    // 其余归因照常渲染，缺 bmi 不使整块消失。
+    expect(dialog.findAll('.risk-dialog-breakdown__item').length).toBe(3)
+  })
+})
