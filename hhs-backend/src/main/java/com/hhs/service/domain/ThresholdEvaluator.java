@@ -25,7 +25,6 @@ public class ThresholdEvaluator {
 
     private final UserThresholdMapper userThresholdMapper;
     private final AlertRuleMapper alertRuleMapper;
-    private final ThresholdComparator comparator;
     private final ThresholdRangeChecker rangeChecker;
     private final MetricDisplayFormatter displayFormatter;
 
@@ -104,35 +103,40 @@ public class ThresholdEvaluator {
             return null;
         }
 
-        // Determine alert details
+        // Determine alert details. The band is the single classification; severity,
+        // direction and which boundary was exceeded all derive from it, so no
+        // second comparison against the raw boundaries is written here.
+        ThresholdRangeChecker.Band band = rangeChecker.bandOf(value.doubleValue(), threshold);
         String severityLevel = rangeChecker.getSeverityLevel(value.doubleValue(), threshold);
         String alertLevel = rangeChecker.getAlertLevel(severityLevel);
-
-        // Determine direction (high or low)
-        String direction = comparator.isHigh(value.doubleValue(), threshold) ? "HIGH" : "LOW";
+        String direction = band == ThresholdRangeChecker.Band.WARNING_HIGH
+                || band == ThresholdRangeChecker.Band.CRITICAL_HIGH ? "HIGH" : "LOW";
 
         // Find which threshold was exceeded
-        BigDecimal exceededValue = findExceededThreshold(value, threshold, direction);
+        BigDecimal exceededValue = findExceededThreshold(threshold, band);
 
         return createAlert(metricKey, value, exceededValue, severityLevel, alertLevel, direction);
     }
 
     /**
-     * Find the specific threshold value that was exceeded.
+     * Find the specific threshold value that was exceeded, given the band.
+     *
+     * <p>The band already encodes whether the value is above or below the band and
+     * whether it crossed the critical boundary, so this only projects the band onto
+     * the boundary that should be shown to the user.</p>
      */
-    private BigDecimal findExceededThreshold(BigDecimal value, UserThreshold threshold, String direction) {
-        if ("HIGH".equals(direction)) {
-            // Prefer critical high, fall back to warning high
-            if (threshold.getCriticalHigh() != null && value.compareTo(threshold.getCriticalHigh()) >= 0) {
+    private BigDecimal findExceededThreshold(UserThreshold threshold, ThresholdRangeChecker.Band band) {
+        switch (band) {
+            case CRITICAL_HIGH:
                 return threshold.getCriticalHigh();
-            }
-            return threshold.getWarningHigh();
-        } else {
-            // Prefer critical low, fall back to warning low
-            if (threshold.getCriticalLow() != null && value.compareTo(threshold.getCriticalLow()) <= 0) {
+            case WARNING_HIGH:
+                return threshold.getWarningHigh();
+            case CRITICAL_LOW:
                 return threshold.getCriticalLow();
-            }
-            return threshold.getWarningLow();
+            case WARNING_LOW:
+                return threshold.getWarningLow();
+            default:
+                return null;
         }
     }
 
