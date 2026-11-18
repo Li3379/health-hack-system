@@ -487,22 +487,21 @@ describe('data-input — 源码级契约（保持 / 删除 / presentStates 全�
     expect(source.split('ElMessage.error').length - 1).toBe(2)
   })
 
-  it('三个文件的每个 showError 都带 presentStates: true（无状态块 → 不许静默）', () => {
+  it('两个文件的每个 showError 都带 presentStates: true（无状态块 → 不许静默）', () => {
     for (const rel of [
       'src/views/data-input/components/OcrInput.vue',
-      'src/views/data-input/components/OcrHistory.vue',
-      'src/views/data-input/components/DeviceConfigWizard.vue'
+      'src/views/data-input/components/OcrHistory.vue'
     ]) {
       const source = read(rel)
       const calls = source.split('showError(').length - 1
       expect(calls).toBeGreaterThan(0)
       expect(source.split('presentStates: true').length - 1).toBe(calls)
-      // 三个文件都不渲染状态块，因此 presentStates 是唯一兜底。
+      // 两个文件都不渲染状态块，因此 presentStates 是唯一兜底。
       expect(source).not.toContain('ErrorState')
     }
   })
 
-  it('三个文件不再有「非 200」的不可达 else 兜底', () => {
+  it('两个文件不再有「非 200」的不可达 else 兜底', () => {
     // OcrInput 的确认路径：`if (res.code === 200 && res.data)` 之后不得再有 else。
     expect(functionBody(read('src/views/data-input/components/OcrInput.vue'), 'handleConfirm')).not.toContain(
       '} else {'
@@ -514,7 +513,6 @@ describe('data-input — 源码级契约（保持 / 删除 / presentStates 全�
     }
     const historySource = read('src/views/data-input/components/OcrHistory.vue')
     expect(historySource).not.toContain('res.message ||')
-    expect(read('src/views/data-input/components/DeviceConfigWizard.vue')).not.toContain('res.message ||')
   })
 
   it('OcrInput 的识别面板失败态赋值仍在，且由归一化结果驱动', () => {
@@ -536,10 +534,7 @@ describe('data-input — 源码级契约（保持 / 删除 / presentStates 全�
     expect(source).not.toContain("'ocr.deleteFailed'")
   })
 
-  it('OcrHistory 与 DeviceConfigWizard 的 showError 计数与文件匹配', () => {
+  it('OcrHistory 的 showError 计数与文件匹配', () => {
     expect(read('src/views/data-input/components/OcrHistory.vue').split('showError(').length - 1).toBe(3)
-    expect(
-      read('src/views/data-input/components/DeviceConfigWizard.vue').split('showError(').length - 1
-    ).toBe(1)
   })
 })

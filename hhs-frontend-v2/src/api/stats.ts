@@ -15,9 +15,6 @@ export interface WeeklyStatsVO {
   currentWellnessMetricsCount: number
   previousWellnessMetricsCount: number
   wellnessMetricsChangePercent: number
-  currentDeviceSyncCount: number
-  previousDeviceSyncCount: number
-  deviceSyncChangePercent: number
   currentAiRecognizeCount: number
   previousAiRecognizeCount: number
   aiRecognizeChangePercent: number
@@ -33,9 +30,6 @@ export interface MonthlyStatsVO {
   currentWellnessMetricsCount: number
   previousWellnessMetricsCount: number
   wellnessMetricsChangePercent: number
-  currentDeviceSyncCount: number
-  previousDeviceSyncCount: number
-  deviceSyncChangePercent: number
   currentAiRecognizeCount: number
   previousAiRecognizeCount: number
   aiRecognizeChangePercent: number
@@ -54,9 +48,7 @@ export interface DashboardSummaryVO {
   weekWellnessMetricsCount: number
   unreadAlertsCount: number
   highSeverityAlertsCount: number
-  totalDeviceSyncCount: number
   totalAiRecognizeCount: number
-  todayDeviceSyncCount: number
   todayAiRecognizeCount: number
   weekActiveDays: number
 }

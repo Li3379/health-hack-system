@@ -15,12 +15,6 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: false }
   },
   {
-    path: '/oauth/callback/:platform',
-    name: 'OAuthCallback',
-    component: () => import('@/views/oauth/OAuthCallback.vue'),
-    meta: { requiresAuth: true }
-  },
-  {
     path: '/',
     redirect: '/dashboard',
     component: () => import('@/components/layout/MainLayout.vue'),
@@ -105,12 +99,6 @@ const routes: RouteRecordRaw[] = [
         path: 'user/push-settings',
         name: 'PushSettings',
         component: () => import('@/views/user/PushSettings.vue')
-      },
-      {
-        path: 'settings/device-platform',
-        name: 'DevicePlatformConfig',
-        component: () => import('@/views/settings/DevicePlatformConfig.vue'),
-        meta: { requiresAdmin: true }
       },
       {
         path: 'reminders',

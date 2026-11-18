@@ -475,42 +475,6 @@ export interface HealthReportVO {
   isEstimated?: boolean
 }
 
-// 设备同步相关
-export interface DeviceConnectionVO {
-  platform: string
-  platformName: string
-  status: string
-  statusName: string
-  lastSyncAt?: string
-  syncEnabled?: boolean
-  platformUserId?: string
-}
-
-export interface SyncResultVO {
-  platform: string
-  platformName: string
-  status: string
-  statusName: string
-  metricsCount?: number
-  syncTime?: string
-  errorMessage?: string
-  durationMs?: number
-}
-
-export interface SyncHistoryVO {
-  id: number
-  platform: string
-  platformName: string
-  syncType: string
-  syncTypeName: string
-  metricsCount?: number
-  status: string
-  statusName: string
-  errorMessage?: string
-  syncTime: string
-  durationMs?: number
-}
-
 export interface PlatformInfo {
   platform: string
   displayName: string

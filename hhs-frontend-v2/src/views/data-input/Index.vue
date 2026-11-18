@@ -2,7 +2,7 @@
   <div class="data-input-page">
     <!-- 今日录入概览 -->
     <el-row :gutter="16" class="overview-row">
-      <el-col :xs="12" :sm="6">
+      <el-col :xs="12" :sm="8">
         <el-card shadow="hover" class="overview-card">
           <div class="overview-content">
             <el-icon class="overview-icon health"><DataLine /></el-icon>
@@ -13,7 +13,7 @@
           </div>
         </el-card>
       </el-col>
-      <el-col :xs="12" :sm="6">
+      <el-col :xs="12" :sm="8">
         <el-card shadow="hover" class="overview-card">
           <div class="overview-content">
             <el-icon class="overview-icon wellness"><Sunny /></el-icon>
@@ -24,18 +24,7 @@
           </div>
         </el-card>
       </el-col>
-      <el-col :xs="12" :sm="6">
-        <el-card shadow="hover" class="overview-card">
-          <div class="overview-content">
-            <el-icon class="overview-icon sync"><Connection /></el-icon>
-            <div class="overview-info">
-              <span class="overview-value">{{ deviceSyncCount }}</span>
-              <span class="overview-label">设备同步</span>
-            </div>
-          </div>
-        </el-card>
-      </el-col>
-      <el-col :xs="12" :sm="6">
+      <el-col :xs="12" :sm="8">
         <el-card shadow="hover" class="overview-card">
           <div class="overview-content">
             <el-icon class="overview-icon ai"><MagicStick /></el-icon>
@@ -58,11 +47,6 @@
       <!-- AI智能录入 -->
       <el-col :xs="24" :lg="12">
         <AIInput @refresh="refreshData" />
-      </el-col>
-
-      <!-- 设备同步 -->
-      <el-col :xs="24" :lg="12">
-        <DeviceSync @refresh="refreshData" />
       </el-col>
 
       <!-- OCR识别 -->
@@ -96,14 +80,13 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
-import { DataLine, Sunny, Connection, MagicStick } from '@element-plus/icons-vue'
+import { DataLine, Sunny, MagicStick } from '@element-plus/icons-vue'
 import {
   staggerReveal, countUp, cleanupScrollTriggers,
   tilt3D, buttonPress, hoverLift, hoverShine, DUR, EASE,
 } from '@/composables/useGsap'
 import QuickInput from './components/QuickInput.vue'
 import AIInput from './components/AIInput.vue'
-import DeviceSync from './components/DeviceSync.vue'
 import OcrInput from './components/OcrInput.vue'
 import RecentRecords from './components/RecentRecords.vue'
 import OcrHistory from './components/OcrHistory.vue'
@@ -114,14 +97,12 @@ import { request } from '@/utils/request'
 interface TodayStats {
   healthMetricsCount: number
   wellnessMetricsCount: number
-  deviceSyncCount: number
   aiRecognizeCount: number
 }
 
 // 今日统计数据
 const todayHealthCount = ref(0)
 const todayWellnessCount = ref(0)
-const deviceSyncCount = ref(0)
 const aiRecognizeCount = ref(0)
 
 const recentRecordsRef = ref()
@@ -137,7 +118,6 @@ const loadTodayStats = async () => {
     if (res.code === 200 && res.data) {
       todayHealthCount.value = res.data.healthMetricsCount
       todayWellnessCount.value = res.data.wellnessMetricsCount
-      deviceSyncCount.value = res.data.deviceSyncCount
       aiRecognizeCount.value = res.data.aiRecognizeCount
     }
   } catch (error) {
@@ -230,7 +210,6 @@ onUnmounted(() => { cleanupScrollTriggers() })
 .overview-card:hover .overview-icon { transform: scale(1.08); }
 .overview-icon.health { background: var(--accent-cool-soft); color: var(--accent-cool); }
 .overview-icon.wellness { background: var(--accent-cool-soft); color: var(--accent-cool); }
-.overview-icon.sync { background: var(--accent-warm-soft); color: var(--accent-warm); }
 .overview-icon.ai { background: var(--accent-cool-soft); color: var(--accent-cool); }
 .overview-info { display: flex; flex-direction: column; }
 .overview-value { font: 700 28px/1.2 var(--font-ui); color: var(--text-1); letter-spacing: -0.02em; }
