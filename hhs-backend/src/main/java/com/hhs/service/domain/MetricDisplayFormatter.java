@@ -44,16 +44,21 @@ public class MetricDisplayFormatter {
             }
         }
 
-        return switch (metricKey) {
+        // Canonicalize before matching. Legacy rows and inbound aliases (glucose,
+        // temperature, ...) must resolve here too: a switch arm written for an
+        // alias silently misses the canonical key and falls through to the raw
+        // English identifier, which is what the user then sees.
+        String canonicalKey = MetricKeyNormalizer.toCanonicalKey(metricKey);
+        return switch (canonicalKey) {
             // Health metrics - 健康指标
             case "heartRate" -> "心率";
             case "systolicBP" -> "收缩压";
             case "diastolicBP" -> "舒张压";
-            case "glucose" -> "血糖";
+            case "bloodGlucose" -> "血糖";
             case "fastingGlucose" -> "空腹血糖";
             case "postprandialGlucose" -> "餐后血糖";
             case "bmi" -> "BMI";
-            case "temperature", "bodyTemperature" -> "体温";
+            case "bodyTemperature" -> "体温";
             case "weight" -> "体重";
             case "bloodOxygen" -> "血氧";
             case "totalCholesterol" -> "总胆固醇";
@@ -95,12 +100,13 @@ public class MetricDisplayFormatter {
             }
         }
 
-        return switch (metricKey) {
+        String canonicalKey = MetricKeyNormalizer.toCanonicalKey(metricKey);
+        return switch (canonicalKey) {
             // Health metrics - 健康指标
             case "heartRate" -> "次/分";
             case "systolicBP", "diastolicBP" -> "mmHg";
-            case "glucose", "fastingGlucose", "postprandialGlucose" -> "mmol/L";
-            case "temperature", "bodyTemperature" -> "°C";
+            case "bloodGlucose", "fastingGlucose", "postprandialGlucose" -> "mmol/L";
+            case "bodyTemperature" -> "°C";
             case "weight" -> "kg";
             case "bmi" -> "";
             case "bloodOxygen" -> "%";
