@@ -30,6 +30,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -289,6 +290,25 @@ class RiskAssessmentAssumptionsTest {
         profile.setAllergyHistory("青霉素");
         profile.setFamilyHistory("父亲有糖尿病");
         profile.setLifestyleHabits("每周跑步三次");
+        return profile;
+    }
+
+    /**
+     * A profile with a decisive age and BMI and no family-history noise.
+     *
+     * <p>Cardiovascular cases fix these two because they carry points of their own (age 15/5,
+     * BMI 20/0) — leaving them nil would make the expected totals depend on the age fallback.</p>
+     *
+     * @param ageYears completed years of age
+     * @param bmi      BMI as a decimal string
+     * @return the profile
+     */
+    private HealthProfile profileWithAgeAndBmi(int ageYears, String bmi) {
+        HealthProfile profile = new HealthProfile();
+        profile.setId(9L);
+        profile.setBirthDate(LocalDate.now().minusYears(ageYears));
+        profile.setBmi(new BigDecimal(bmi));
+        profile.setFamilyHistory("无");
         return profile;
     }
 
@@ -653,5 +673,127 @@ class RiskAssessmentAssumptionsTest {
     private int scoreOf(List<RiskAssessmentVO> vos, String disease) {
         return vos.stream().filter(v -> v.diseaseName().equals(disease))
                 .findFirst().orElseThrow().riskScore();
+    }
+
+    private List<RiskContributorVO> contributorsOf(List<RiskAssessmentVO> vos, String disease) {
+        return vos.stream().filter(v -> v.diseaseName().equals(disease))
+                .findFirst().orElseThrow().contributors();
+    }
+
+    // ------------------------------------------------------------------
+    // 心血管独立评估（D-01 / D-02 / D-08）
+    // ------------------------------------------------------------------
+
+    /** 心血管 9 条归因的固定顺序 —— 即 UI-SPEC Contract 3.1 的枚举，也是快照的数组顺序。 */
+    private static final List<String> CARDIO_KEYS = List.of(
+            "age", "bmi", "systolicBP", "diastolicBP", "bloodGlucose",
+            "totalCholesterol", "triglycerides", "hdlCholesterol", "ldlCholesterol");
+
+    @Test
+    @DisplayName("心血管归因恰 9 条，键与顺序精确")
+    void cardiovascularHasExactlyNineInputsInDeclaredOrder() {
+        HealthProfile profile = profileWithAgeAndBmi(60, "26");
+        stubProfile(profile);
+        stubMetrics("systolicBP", 168, "diastolicBP", 95, "bloodGlucose", 8);
+
+        List<RiskAssessmentVO> vos = service.createAssessment(1L);
+        List<RiskContributorVO> cardio = contributorsOf(vos, "心血管疾病");
+
+        assertEquals(9, cardio.size(),
+                "D-08：心血管恰好 9 项输入（含血脂四项，不含 heartRate）");
+        assertEquals(CARDIO_KEYS, cardio.stream().map(RiskContributorVO::key).toList(),
+                "顺序错误会让前端 9 行错位；这里用逐项 equals 而不是集合比较");
+
+        // 手算：年龄 60>55 → 15，BMI 26>24 → 20，SBP 168>130 → 30，DBP 95>85 → 15，
+        // 血糖 8>6.1 → 10，血脂四项缺失 → 0。合计 90，未触及封顶。
+        assertEquals(List.of(15, 20, 30, 15, 10, 0, 0, 0, 0),
+                cardio.stream().map(RiskContributorVO::points).toList());
+        assertEquals(90, scoreOf(vos, "心血管疾病"));
+    }
+
+    @Test
+    @DisplayName("心血管归因不含来源前缀或折半措辞")
+    void cardiovascularAttributionCarriesNoSourcePrefixAndNoHalving() {
+        stubProfile(profileWithAgeAndBmi(60, "26"));
+        stubMetrics("systolicBP", 168, "diastolicBP", 95, "bloodGlucose", 8);
+
+        List<RiskContributorVO> cardio = contributorsOf(service.createAssessment(1L), "心血管疾病");
+
+        // 唯一的否定守卫：旧实现把 12 条归因写成「来自糖尿病：…（折半计入 N 分）」，
+        // 正则可以放行任何一种新措辞，只有这两个否定检查能证伪「halve 没删干净」。
+        for (RiskContributorVO part : cardio) {
+            String explanation = part.explanation();
+            assertFalse(explanation.contains("来自"),
+                    "心血管归因不得残留来源前缀（复合评分时代的产物）: " + explanation);
+            assertFalse(explanation.contains("折半"),
+                    "心血管归因不得残留折半措辞: " + explanation);
+            assertFalse(explanation.matches(".*[（(]折半计入.*"),
+                    "全角括号包裹的折半分值同样是旧形态: " + explanation);
+            // 自足性：有值时以指标名或「年龄」开头；缺失行走共享的 missing() 形态
+            // （「缺少{label}数据，此项未计入评分」），它同样点名了指标，只是以「缺少」起句 ——
+            // 该形态是 Phase 15 三个疾病共用的，本计划不改动它。
+            if (RiskContributorVO.STATE_MISSING.equals(part.state())) {
+                assertTrue(explanation.contains(part.label()),
+                        "缺失项的说明必须点名是哪一项: " + explanation);
+            } else {
+                assertTrue(explanation.startsWith(part.label()) || explanation.startsWith("年龄"),
+                        "每条说明必须自足、以指标名或「年龄」开头，实际为: " + explanation);
+            }
+        }
+    }
+
+    @Test
+    @DisplayName("血脂四项全缺 → 4 条 MISSING、0 分、无任何 ASSUMED")
+    void lipidsAbsentAreMissingAndNeverSubstituted() {
+        // 年龄与 BMI 有档案值，因此这两项不会触发 ASSUMED 兜底 —— 整份列表中任何一条
+        // ASSUMED 都只能来自「血脂被代入了人群默认值」，正是 D-02 要防的半实现。
+        stubProfile(profileWithAgeAndBmi(60, "26"));
+        stubNoMetrics();
+
+        List<RiskContributorVO> cardio = contributorsOf(service.createAssessment(1L), "心血管疾病");
+
+        List<String> lipids = List.of("totalCholesterol", "triglycerides",
+                "hdlCholesterol", "ldlCholesterol");
+        for (String key : lipids) {
+            RiskContributorVO part = cardio.stream()
+                    .filter(c -> c.key().equals(key)).findFirst().orElseThrow();
+            assertEquals(RiskContributorVO.STATE_MISSING, part.state(),
+                    key + " 无数据时必须标 MISSING");
+            assertEquals(0, part.points(), key + " 缺失项不得加分");
+            assertNull(part.value(), key + " 缺失项不得伪造取值");
+        }
+
+        assertTrue(cardio.stream().noneMatch(c -> RiskContributorVO.STATE_ASSUMED.equals(c.state())),
+                "血脂缺失绝不代入人群默认值；ASSUMED 只对年龄/BMI 的档案兜底成立");
+    }
+
+    @Test
+    @DisplayName("存量快照读时原样返回，不按当前逻辑重算")
+    void storedSnapshotIsReturnedVerbatimNotRecomputed() {
+        // 一段真实形态的存量快照：单条、带「来自」与「折半」—— 那是复合评分时代的原文。
+        // 若实现为了让新断言全绿而回去重算（或批量 UPDATE 历史行），这条会红。
+        String legacyJson = "[{\"key\":\"age\",\"label\":\"年龄\",\"state\":\"CONTRIBUTED\","
+                + "\"value\":\"52 岁\",\"threshold\":\"50 岁\",\"points\":5,"
+                + "\"explanation\":\"来自高血压：年龄 52 岁，超过 50 岁，计入 15 分（折半计入 5 分）\"}]";
+        RiskAssessment row = assessmentRow(7L, 1L);
+        row.setContributors(legacyJson);
+        stubAssessmentRows(row);
+        stubProfile(profileWithAgeAndBmi(52, "22"));
+        stubMetrics("systolicBP", 168, "diastolicBP", 95, "bloodGlucose", 8);
+
+        List<RiskAssessmentVO> listed = service.listByUserId(1L);
+        List<RiskContributorVO> stored = listed.get(0).contributors();
+
+        assertEquals(1, stored.size(), "快照有几条就返回几条，不补不删");
+        assertEquals("age", stored.get(0).key());
+        assertEquals(5, stored.get(0).points());
+        assertEquals(legacyJson.contains("折半"), stored.get(0).explanation().contains("折半"),
+                "原文的措辞必须原样保留 —— 历史记录是当时的真实依据");
+
+        // 反向：当前引擎对同一份输入会产出 9 条、且不含折半 —— 两者必须不同。
+        List<RiskContributorVO> recomputed = contributorsOf(service.createAssessment(1L), "心血管疾病");
+        assertEquals(9, recomputed.size());
+        assertNotEquals(recomputed, stored,
+                "读路径若拿当前输入重算，就会得到与旧分数对不上的明细 —— 这正是禁止的形态");
     }
 }
