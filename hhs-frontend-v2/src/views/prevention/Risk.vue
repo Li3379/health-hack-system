@@ -973,7 +973,13 @@ defineExpose({ viewDetail, handleCreateClick })
 
 .risk-batch__row {
   display: grid;
-  grid-template-columns: 110px auto 150px minmax(0, 1fr) auto;
+  /*
+    六列，与模板的子元素一一对应：疾病 / 等级标签 / 分数+分差 / 等级变化 / 建议 / 详情。
+    等级变化是条件渲染的（只在跨等级时出现），所以它那列用 minmax(0, auto)：
+    缺省时收成 0 宽，不会把「建议」和「详情」挤到第二行。
+    早先这里只声明了 5 列，跨等级的行会把详情按钮折到下一行 —— 而那恰恰是最该看清的行。
+  */
+  grid-template-columns: 110px auto 150px minmax(0, auto) minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
   padding: 10px 12px;
@@ -1473,5 +1479,30 @@ defineExpose({ viewDetail, handleCreateClick })
 }
 .risk-page :deep(.el-form-item__label) {
   font: 600 14px/1.5 var(--font-ui) !important;
+}
+
+/*
+  窄屏：六列横排会横向溢出（实测 375px 下 scrollWidth 444 > clientWidth 375）。
+  折成两列 —— 疾病名与等级标签占第一行，分数、分差、等级变化、建议、详情各自落到
+  后续整行，任何一项都不再与另一项争同一格。
+*/
+@media (max-width: 767px) {
+  .risk-batch__row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    row-gap: 6px;
+  }
+  .risk-batch__score,
+  .risk-batch__level-change,
+  .risk-batch__suggestion {
+    grid-column: 1 / -1;
+  }
+  .risk-batch__suggestion {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .risk-batch__row > .el-button {
+    grid-column: 2;
+    justify-self: end;
+  }
 }
 </style>
