@@ -121,7 +121,7 @@ Plans:
 
 **UI hint**: yes
 
-**Plans:** 3/5 plans executed
+**Plans:** 4/5 plans executed
 
 Plans:
 **Wave 1**
@@ -132,7 +132,7 @@ Plans:
 **Wave 2** *(blocked on Wave 1 completion)*
 
 - [x] 16-03-PLAN.md — 心血管独立评估：9 条自有归因（含血脂四项 MISSING）、删除 `halve`、方向感知的归因工厂、两个血压别名、封顶折算与阈值区分性夹具
-- [ ] 16-04-PLAN.md — 覆盖面板分组互斥与摘要措辞：`missingMetrics` 谓词、`usedMissing`、摘要第三段「纳入评估范围」、空态下一步、两套词表各自渲染
+- [x] 16-04-PLAN.md — 覆盖面板分组互斥与摘要措辞：`missingMetrics` 谓词、`usedMissing`、摘要第三段「纳入评估范围」、空态下一步、两套词表各自渲染
 
 **Wave 3** *(blocked on Wave 2 completion)*
 

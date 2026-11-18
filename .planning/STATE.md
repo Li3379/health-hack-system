@@ -5,11 +5,11 @@ milestone_name: 风险评估可信化与引擎收敛
 current_phase: 16
 current_phase_name: 风险评估引擎输入重组
 status: executing
-stopped_at: Completed 16-03-PLAN.md (3/3 tasks); 16-04 next
-last_updated: "2026-11-18T14:16:56.672Z"
+stopped_at: Completed 16-04-PLAN.md (2/2 tasks); 16-05 next
+last_updated: "2026-11-18T14:29:10.959Z"
 last_activity: 2026-11-18
 last_activity_desc: Phase 16 execution started
-state_head: 1646f1760e92bea84964af4997e040186d933d8c
+state_head: 869104ac6ec006e73657a8d48d0d01f399793ba1
 progress:
   total_phases: 2
   completed_phases: 11
@@ -68,7 +68,7 @@ See: `.planning/PROJECT.md`
 ## Current Position
 
 Phase: 16 (风险评估引擎输入重组) — EXECUTING
-Plan: 4 of 5
+Plan: 5 of 5
 Status: Ready to execute
 Last activity: 2026-11-18 — Phase 16 execution started
 
@@ -102,8 +102,8 @@ Last activity: 2026-11-18 — Phase 16 execution started
 
 ## Session
 
-**Last session:** 2026-11-18T14:16:48.933Z
-**Stopped at:** Completed 16-03-PLAN.md (3/3 tasks); 16-04 next
+**Last session:** 2026-11-18T14:29:10.917Z
+**Stopped at:** Completed 16-04-PLAN.md (2/2 tasks); 16-05 next
 **Resume file:** None
 
 ## Performance Metrics
@@ -115,6 +115,7 @@ Last activity: 2026-11-18 — Phase 16 execution started
 | Phase 16 P01 | 32min | 2 tasks | 6 files |
 | Phase 16 P02 | ~18 min | 2 tasks | 2 files |
 | Phase 16 P03 | 30min | 3 tasks | 8 files |
+| Phase 16 P04 | 35m | 2 tasks | 2 files |
 
 ## Decisions
 
@@ -131,6 +132,8 @@ Last activity: 2026-11-18 — Phase 16 execution started
 - [Phase 16]: 心血管评估改为 9 项自有输入（年龄基线 5/15、BMI 24.0/20、SBP 130/30、DBP 85/15、血糖 6.1/10、TC 5.20/20、TG 1.70/10、HDL BELOW 1.00/15、LDL 3.40/15，上限 150），删除 halve 折半
 - [Phase 16]: 归因措辞改为方向感知的「评估阈值」：上限型说「超过」、下限型说「低于」，不再把风险阈值称作参考值
 - [Phase 16]: MetricKeyNormalizer 补 systolicBloodPressure / diastolicBloodPressure 两个别名；其余疑似别名一律不做
+- [Phase 16]: 修 missingMetrics 而不是 usedMetrics：血脂四项确实参与评估（D-02），从参与组移走才是说谎
+- [Phase 16]: 摘要第二段措辞刻意留到 16-05 与 classify 同批变更，避免文字声称阈值而数字仍按参考范围
 
 ## Operator Next Steps
 
