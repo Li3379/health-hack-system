@@ -121,12 +121,12 @@ Plans:
 
 **UI hint**: yes
 
-**Plans:** 5 plans
+**Plans:** 1/5 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 16-01-PLAN.md — `RiskThresholdRegistry` 落地与阈值搬家（tracer）：规则表 + `consumedKeys()` 单一声明、引擎 4 处阈值改读、`riskNote` 由规则渲染、删除 `RISK_CONSUMERS`（心血管 8 条规则在 16-03 追加）
+- [x] 16-01-PLAN.md — `RiskThresholdRegistry` 落地与阈值搬家（tracer）：规则表 + `consumedKeys()` 单一声明、引擎 4 处阈值改读、`riskNote` 由规则渲染、删除 `RISK_CONSUMERS`（心血管 8 条规则在 16-03 追加）
 - [ ] 16-02-PLAN.md — 三处呈现缺陷与测试脚手架：`--border-1` 归零、`--text-3` 5 改 2 留、弹窗首列 88px、API mock 补 `getMetricCoverage` + 覆盖行 fixture
 
 **Wave 2** *(blocked on Wave 1 completion)*

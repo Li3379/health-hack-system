@@ -5,11 +5,11 @@ milestone_name: 风险评估可信化与引擎收敛
 current_phase: 16
 current_phase_name: 风险评估引擎输入重组
 status: executing
-stopped_at: Phase 16 planned (5 plans, 3 waves); ready for /gsd:execute-phase 16
-last_updated: "2026-11-18T12:48:09.624Z"
+stopped_at: Completed 16-01-PLAN.md (2/2 tasks); 16-02 next
+last_updated: "2026-11-18T13:29:01.039Z"
 last_activity: 2026-11-18
-last_activity_desc: Phase 15 verified — 15/15 UAT, one layout defect found and fixed, one truth overridden
-state_head: 36330fa99f5855530f9e7405802da80951b40e6f
+last_activity_desc: Phase 16 execution started
+state_head: 737405552f618f92627ea8307b8c6bbfc83b1ca9
 progress:
   total_phases: 2
   completed_phases: 11
@@ -21,7 +21,7 @@ progress:
 
 **Created:** 2026-05-28
 **Current Milestone:** v1.4 风险评估可信化与引擎收敛
-**Current Phase:** 15
+**Current Phase:** 16
 **Status:** Ready to execute
 
 ## Project Reference
@@ -29,7 +29,7 @@ progress:
 See: `.planning/PROJECT.md`
 
 **Core value:** 平台核心价值是提供可靠、准确的健康评分和趋势分析 — 评分数据必须完整持久化（包括维度评分），历史趋势图必须正确展示，部署过程必须稳定可靠。
-**Current focus:** Phase 15 — 风险历史按批次折叠与趋势
+**Current focus:** Phase 16 — 风险评估引擎输入重组
 
 ## Milestone Progress
 
@@ -67,10 +67,10 @@ See: `.planning/PROJECT.md`
 
 ## Current Position
 
-Phase: 16 (风险评估引擎输入重组) — READY TO EXECUTE
-Plan: 5 of 5
+Phase: 16 (风险评估引擎输入重组) — EXECUTING
+Plan: 2 of 5
 Status: Ready to execute
-Last activity: 2026-11-18 — Phase 16 planned (5 plans, 3 waves) and verified after 4 revision rounds
+Last activity: 2026-11-18 — Phase 16 execution started
 
 ## Accumulated Context
 
@@ -102,9 +102,9 @@ Last activity: 2026-11-18 — Phase 16 planned (5 plans, 3 waves) and verified a
 
 ## Session
 
-**Last session:** 2026-11-18T08:06:11.934Z
-**Stopped at:** Phase 16 UI-SPEC approved
-**Resume file:** .planning/phases/16-risk-engine-inputs/16-UI-SPEC.md
+**Last session:** 2026-11-18T13:29:00.991Z
+**Stopped at:** Completed 16-01-PLAN.md (2/2 tasks); 16-02 next
+**Resume file:** None
 
 ## Performance Metrics
 
@@ -112,6 +112,7 @@ Last activity: 2026-11-18 — Phase 16 planned (5 plans, 3 waves) and verified a
 |------|----------|-------|-------|
 | Phase 04-key P01 | 18min | 2 tasks | 11 files |
 | Phase 04 P02 | 25min | 2 tasks | 8 files |
+| Phase 16 P01 | 32min | 2 tasks | 6 files |
 
 ## Decisions
 
@@ -121,6 +122,7 @@ Last activity: 2026-11-18 — Phase 16 planned (5 plans, 3 waves) and verified a
 - [Phase 4]: Physical-impossible values intercepted via `@ValidMetricRecord` class-level constraint
 - [Phase 4]: Service-layer queries expand single key filter to full alias set via `LambdaQueryWrapper.in()`
 - [Phase 4]: Idempotent SQL migration script `v1.1_normalize_metric_keys.sql` for historical records
+- [Phase 16]: 风险阈值收敛到 RiskThresholdRegistry 的 (metricKey, disease) 规则表；引擎与覆盖面板同读一份声明，riskNote 由规则渲染（16-01）
 
 ## Operator Next Steps
 
