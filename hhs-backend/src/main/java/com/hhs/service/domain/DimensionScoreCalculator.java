@@ -63,14 +63,18 @@ public class DimensionScoreCalculator {
         boolean sawBmi = false;
 
         for (RealtimeMetric metric : metrics) {
-            String key = metric.getMetricKey();
+            // Canonicalize before switching: rows stored under a legacy alias
+            // ("glucose") otherwise fall through to default and the metric is
+            // silently excluded from its dimension entirely — no exception, just
+            // a score that reads better than the data warrants.
+            String key = MetricKeyNormalizer.toCanonicalKey(metric.getMetricKey());
             BigDecimal value = metric.getValue();
 
             switch (key) {
                 case "heartRate" -> cardiovascularPenalty += getPenalty(value, 60, 100, 10);
                 case "systolicBP" -> cardiovascularPenalty += getPenalty(value, 90, 140, 15);
                 case "diastolicBP" -> cardiovascularPenalty += getPenalty(value, 60, 90, 15);
-                case "glucose" -> metabolicPenalty += getPenalty(value, 3.9, 7.0, 20);
+                case "bloodGlucose" -> metabolicPenalty += getPenalty(value, 3.9, 7.0, 20);
                 case "bmi" -> {
                     weightPenalty += getPenalty(value, 18.5, 28, 10);
                     sawBmi = true;
