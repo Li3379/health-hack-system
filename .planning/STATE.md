@@ -4,16 +4,16 @@ milestone: v1.4
 milestone_name: 风险评估可信化与引擎收敛
 current_phase: 16
 current_phase_name: 风险评估引擎输入重组
-status: idle
-stopped_at: Phase 16 UI-SPEC approved
-last_updated: "2026-11-18T08:06:11.964Z"
+status: executing
+stopped_at: Phase 16 planned (5 plans, 3 waves); ready for /gsd:execute-phase 16
+last_updated: "2026-11-18T12:48:09.624Z"
 last_activity: 2026-11-18
 last_activity_desc: Phase 15 verified — 15/15 UAT, one layout defect found and fixed, one truth overridden
-state_head: 625735b6782ff01a92dc62c1ace6c22a5c8e4545
+state_head: 36330fa99f5855530f9e7405802da80951b40e6f
 progress:
   total_phases: 2
   completed_phases: 11
-  total_plans: 2
+  total_plans: 7
   completed_plans: 41
 ---
 
@@ -67,10 +67,10 @@ See: `.planning/PROJECT.md`
 
 ## Current Position
 
-Phase: 15 (风险历史按批次折叠与趋势) — READY TO EXECUTE
-Plan: 0 of 0
+Phase: 16 (风险评估引擎输入重组) — READY TO EXECUTE
+Plan: 5 of 5
 Status: Ready to execute
-Last activity: 2026-11-18 — Phase 16 context gathered (7 decisions)
+Last activity: 2026-11-18 — Phase 16 planned (5 plans, 3 waves) and verified after 4 revision rounds
 
 ## Accumulated Context
 
