@@ -2,16 +2,16 @@
 gsd_state_version: "1.0"
 milestone: v1.4
 milestone_name: 风险评估可信化与引擎收敛
-current_phase: 15
-current_phase_name: 风险历史按批次折叠与趋势
+current_phase: 16
+current_phase_name: 风险评估引擎输入重组
 status: idle
-stopped_at: Phase 15 complete — 15/15 UAT pass, verification passed, 640 tests green
-last_updated: "2026-11-18T04:16:39.612Z"
+stopped_at: Phase 16 context gathered (7 decisions)
+last_updated: "2026-11-18T04:47:30.100Z"
 last_activity: 2026-11-18
 last_activity_desc: Phase 15 verified — 15/15 UAT, one layout defect found and fixed, one truth overridden
-state_head: 342a68c0ed40c52842df1fcf8bfb34abbe7c5b84
+state_head: 7faa9575e8c14eacc5feda419d872f48d2a7109a
 progress:
-  total_phases: 1
+  total_phases: 2
   completed_phases: 11
   total_plans: 2
   completed_plans: 41
@@ -68,9 +68,9 @@ See: `.planning/PROJECT.md`
 ## Current Position
 
 Phase: 15 (风险历史按批次折叠与趋势) — READY TO EXECUTE
-Plan: 2 of 2
+Plan: 0 of 0
 Status: Ready to execute
-Last activity: 2026-11-18 — Phase 15 verified (15/15 UAT, one layout defect fixed)
+Last activity: 2026-11-18 — Phase 16 context gathered (7 decisions)
 
 ## Accumulated Context
 
@@ -102,9 +102,9 @@ Last activity: 2026-11-18 — Phase 15 verified (15/15 UAT, one layout defect fi
 
 ## Session
 
-**Last session:** 2026-11-17T01:35:00.000Z
-**Stopped at:** v1.3 shipped and audited; ready for /gsd:new-milestone
-**Resume file:** none — start a new milestone
+**Last session:** 2026-11-18T04:47:30.006Z
+**Stopped at:** Phase 16 context gathered (7 decisions)
+**Resume file:** .planning/phases/16-risk-engine-inputs/16-CONTEXT.md
 
 ## Performance Metrics
 
