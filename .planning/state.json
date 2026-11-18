@@ -15,19 +15,19 @@
     },
     {
       "number": "17",
-      "name": "告警语义收敛",
-      "status": "in_progress"
+      "name": "告警语义收敛（目标类已删除，改由 ThresholdRangeChecker.bandOf 单一判定源收口）",
+      "status": "complete"
     },
     {
       "number": "18",
       "name": "技术债清理与收尾",
-      "status": "pending"
+      "status": "in_progress"
     }
   ],
   "next": {
-    "command": "/gsd:progress --next",
-    "label": "Advance to the next step (plan phase 17)",
-    "reason": "Phase 17 of 4 — needs a plan"
+    "command": "/gsd:discuss-phase 18",
+    "label": "Plan phase 18",
+    "reason": "Phase 18 of 4 — 技术债清理与收尾"
   },
   "updated_at": "2026-11-18T16:20:32.815Z"
 }

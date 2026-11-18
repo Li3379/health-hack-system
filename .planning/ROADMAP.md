@@ -58,7 +58,7 @@ Audit: [milestones/v1.3-MILESTONE-AUDIT.md](milestones/v1.3-MILESTONE-AUDIT.md) 
 
 - [x] **Phase 15: 风险历史按批次折叠与趋势** — 把已写入的 `batchId` 用起来：历史按「一次评估」折叠，显示各项相对上次的分数变化
 - [x] **Phase 16: 风险评估引擎输入重组** — 用现有 23 项指标重新设计三种疾病的评估（心血管用血脂/血压/BMI/年龄，不再只是前两项折半），不新增疾病 (completed 2026-11-19)
-- [ ] **Phase 17: 告警语义收敛** — 消除 `IntelligentAlertService` 内 4 处独立区间比较，统一到 `ThresholdRangeChecker`，避免接线时分叉出 FIX-01 缺陷
+- [x] **Phase 17: 告警语义收敛** — 成功标准 3 已达成 (completed 2026-11-19)。原目标类 `IntelligentAlertService` 已在 `19db185` 随 `service/alert/` 整包删除，但**目标本身仍然违反**：`ThresholdComparator` 是平行的第二套五区间实现（8 处比较、无任何测试），`ThresholdEvaluator.findExceededThreshold` 是第三份。已通过 `ThresholdRangeChecker.bandOf` 单一判定源收口，删除 `ThresholdComparator`，并通过 `autoresearch/threshold-single-source` 分支以机械指标 `dup_sites` 10→0 验证；顺带修复「交叉区间下 severity 与 direction 自相矛盾」的既有缺陷
 - [ ] **Phase 18: 技术债清理与收尾** — 删除无引用的 `RiskAnalyzer`、`RiskScorer` 改读归因快照、修复 `FileUploadController` 英文泄漏、清理未消费字典键
 
 **Success criteria**
@@ -146,4 +146,4 @@ Plans:
 | v1.1 智能健康指标填报引导与友好校验 | 4/4 | 9/9 | Complete | 2026-11-05 |
 | v1.2 全站健康与保健指标录入标准化与体验对齐 | 3/3 | 6/6 | Complete | 2026-11-05 |
 | v1.3 引导式配置与友好错误反馈 | 4/4 | 41/41 | Complete | 2026-11-17 |
-| v1.4 风险评估可信化与引擎收敛 | 2/4 | 7/7 | In progress | — |
+| v1.4 风险评估可信化与引擎收敛 | 3/4 | 7/7 | In progress | — |
