@@ -2,27 +2,27 @@
 gsd_state_version: "1.0"
 milestone: v1.4
 milestone_name: 风险评估可信化与引擎收敛
-current_phase: 16
-current_phase_name: 风险评估引擎输入重组
-status: executing
-stopped_at: Completed 16-04-PLAN.md (2/2 tasks); 16-05 next
-last_updated: "2026-11-18T14:29:10.959Z"
-last_activity: 2026-11-18
-last_activity_desc: Phase 16 execution started
-state_head: 869104ac6ec006e73657a8d48d0d01f399793ba1
+current_phase: 17 — 告警语义收敛
+current_phase_name: 告警语义收敛
+status: planning
+stopped_at: Phase 16 complete, ready to plan Phase 17
+last_updated: "2026-11-18T16:20:32.712Z"
+last_activity: 2026-11-19
+last_activity_desc: Phase 16 complete, transitioned to Phase 17
+state_head: b320f297f36fd22aa157047c2cc9661cb7ff25c9
 progress:
-  total_phases: 2
-  completed_phases: 11
+  total_phases: 4
+  completed_phases: 2
   total_plans: 7
-  completed_plans: 41
+  completed_plans: 7
 ---
 
 # State: Health Hack System
 
 **Created:** 2026-05-28
 **Current Milestone:** v1.4 风险评估可信化与引擎收敛
-**Current Phase:** 16
-**Status:** Ready to execute
+**Current Phase:** 17 — 告警语义收敛
+**Status:** Ready to plan
 
 ## Project Reference
 
@@ -69,9 +69,9 @@ See: `.planning/PROJECT.md`
 ## Current Position
 
 Phase: 16 (风险评估引擎输入重组) — COMPLETE
-Plan: 5 of 5
+Plan: Not started
 Status: All plans executed; five gates green; ready for /gsd:verify-work
-Last activity: 2026-11-18 — 16-05 landed the same-source close-out (shared formatter, threshold classification, profile-sourced bmi)
+Last activity: 2026-11-19 — Phase 16 complete, transitioned to Phase 17
 
 ## Accumulated Context
 
@@ -105,7 +105,7 @@ Last activity: 2026-11-18 — 16-05 landed the same-source close-out (shared for
 ## Session
 
 **Last session:** 2026-11-18T15:20:00.000Z
-**Stopped at:** Completed 16-05-PLAN.md (3/3 tasks) — Phase 16 is plan-complete, awaiting /gsd:verify-work
+**Stopped at:** Phase 16 complete, ready to plan Phase 17
 **Resume file:** None
 
 ## Performance Metrics

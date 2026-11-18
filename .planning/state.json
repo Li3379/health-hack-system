@@ -11,12 +11,12 @@
     {
       "number": "16",
       "name": "风险评估引擎输入重组",
-      "status": "in_progress"
+      "status": "complete"
     },
     {
       "number": "17",
       "name": "告警语义收敛",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "number": "18",
@@ -26,8 +26,8 @@
   ],
   "next": {
     "command": "/gsd:progress --next",
-    "label": "Advance to the next step",
-    "reason": "Phase 16 of 2 · executing"
+    "label": "Advance to the next step (plan phase 17)",
+    "reason": "Phase 17 of 4 — needs a plan"
   },
-  "updated_at": "2026-11-18T14:28:55.500Z"
+  "updated_at": "2026-11-18T16:20:32.815Z"
 }
