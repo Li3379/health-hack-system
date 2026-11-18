@@ -77,11 +77,11 @@ class ThresholdEvaluatorTest {
 
     @BeforeEach
     void setUp() {
+        ThresholdRangeChecker rangeChecker = new ThresholdRangeChecker();
         evaluator = new ThresholdEvaluator(
                 userThresholdMapper,
                 alertRuleMapper,
-                new ThresholdComparator(),
-                new ThresholdRangeChecker(),
+                rangeChecker,
                 new MetricDisplayFormatter(new HealthMetricMetaRegistry()));
     }
 

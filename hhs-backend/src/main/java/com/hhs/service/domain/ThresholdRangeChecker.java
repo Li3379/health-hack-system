@@ -88,6 +88,23 @@ public class ThresholdRangeChecker {
     }
 
     /**
+     * Classify a value into one of five bands.
+     *
+     * <p>This is the public face of {@link #classify(BigDecimal, UserThreshold)}:
+     * components that need to distinguish direction (high vs low) or severity read
+     * the band here instead of re-deriving it from the raw boundaries. Keep every
+     * band boundary inside this class.</p>
+     *
+     * @param value the metric value; null is treated as {@link Band#NORMAL}
+     * @param threshold the user threshold to compare against; null yields {@link Band#NORMAL}
+     * @return the band the value falls into
+     */
+    public Band bandOf(Double value, UserThreshold threshold) {
+        if (value == null || threshold == null) return Band.NORMAL;
+        return classify(BigDecimal.valueOf(value), threshold);
+    }
+
+    /**
      * Single-source classification of a value into one of five bands.
      *
      * <p>Every band is derived from the two existing inclusive helpers only
