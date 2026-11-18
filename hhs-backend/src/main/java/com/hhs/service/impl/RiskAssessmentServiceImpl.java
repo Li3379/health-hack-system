@@ -355,6 +355,13 @@ public class RiskAssessmentServiceImpl implements RiskAssessmentService {
             BigDecimal systolic = getLatestMetric(recentMetrics, "systolicBP");
             BigDecimal diastolic = getLatestMetric(recentMetrics, "diastolicBP");
 
+            // 血脂四项：库里当前零条记录。缺失一律 MISSING + 0 分，绝不代入人群默认值 ——
+            // 代入等于凭空造临床值，与「区分无数据与正常」的原则直接冲突。
+            BigDecimal totalCholesterol = getLatestMetric(recentMetrics, "totalCholesterol");
+            BigDecimal triglycerides = getLatestMetric(recentMetrics, "triglycerides");
+            BigDecimal hdlCholesterol = getLatestMetric(recentMetrics, "hdlCholesterol");
+            BigDecimal ldlCholesterol = getLatestMetric(recentMetrics, "ldlCholesterol");
+
             // ================= 糖尿病 =================
             List<RiskContributorVO> diabetesParts = new ArrayList<>();
 
@@ -435,27 +442,119 @@ public class RiskAssessmentServiceImpl implements RiskAssessmentService {
             result.add(new ScoredAssessment(create(userId, profileId, "高血压", bpScore), bpParts));
 
             // ================= 心血管 =================
-            // 该病由糖尿病与高血压折半合成，因此归因也折半，逐项相加即为总分。
+            // 这是一次独立评估（D-01）：9 项自有输入，没有任何一项取自糖尿病分或高血压分。
+            // 此前这里是「两种病的分数各取一半，再加一个 BMI 超额奖励」，于是用户点开
+            // 「心血管疾病」看到的全是别的疾病的依据 —— 没有一条是心血管自己的，而血脂、
+            // BMI、年龄这些核心因子从未参与。
+            //
+            // 键顺序即 UI-SPEC Contract 3.1 的 9 行枚举，也是 contributors 快照的数组顺序。
             List<RiskContributorVO> cardioParts = new ArrayList<>();
-            for (RiskContributorVO part : diabetesParts) {
-                cardioParts.add(halve(part, "糖尿病"));
-            }
-            for (RiskContributorVO part : bpParts) {
-                cardioParts.add(halve(part, "高血压"));
-            }
-            boolean bmiVeryHigh = bmi.compareTo(BigDecimal.valueOf(28)) > 0;
-            int bmiExtra = bmiVeryHigh ? 20 : 0;
-            cardioParts.add(bmiVeryHigh
-                    ? new RiskContributorVO("bmi", "BMI", riskStateOf(bmiValue), bmiValue,
-                            "28.0", bmiExtra,
-                            "BMI " + bmiValue + "，超过 28.0，额外计入 " + bmiExtra + " 分")
-                    : new RiskContributorVO("bmi", "BMI", RiskContributorVO.STATE_NORMAL, bmiValue,
-                            "28.0", 0, "BMI " + bmiValue + "，未超过 28.0，未额外加分"));
+
+            // ---- 1. 年龄：基线 5 分，越过 55 岁计 15 分 ----
+            // 基线不是「奖励」而是分级设计的一部分：5 + 30（严重收缩压）= 35，恰好跨 MEDIUM，
+            // 因此「血压 168 的年轻用户」在心血管卡上不会读成 LOW，与高血压卡不再自相矛盾。
+            int ageCardioPoints = age > 55 ? 15 : 5;
+            cardioParts.add(new RiskContributorVO("age", "年龄", ageState, ageValue,
+                    "55 岁", ageCardioPoints,
+                    age > 55
+                            ? "年龄 " + ageValue + "，超过 55 岁，计入 " + ageCardioPoints + " 分"
+                            : "年龄 " + ageValue + "，未超过 55 岁，计入 " + ageCardioPoints + " 分"));
+
+            // ---- 2. BMI：读注册表的心血管规则（24.0 / 20），复用已渲染好的 bmiValue ----
+            RiskThresholdRegistry.RiskThresholdRule cardioBmiRule =
+                    requiredRule(thresholds, "bmi", "心血管");
+            boolean cardioBmiHigh = bmi.compareTo(cardioBmiRule.threshold()) > 0;
+            int cardioBmiPoints = cardioBmiHigh ? cardioBmiRule.points() : 0;
+            // 档案缺失时的 BMI 既不是用户真实数据，也不是「完全没计入」：标 ASSUMED，
+            // 让面板能提示补填，也避免把估算值当成实测证据。
+            String cardioBmiState = bmiAssumed
+                    ? RiskContributorVO.STATE_ASSUMED
+                    : (cardioBmiHigh ? RiskContributorVO.STATE_CONTRIBUTED
+                            : RiskContributorVO.STATE_NORMAL);
+            cardioParts.add(new RiskContributorVO("bmi", "BMI", cardioBmiState, bmiValue,
+                    "24.0", cardioBmiPoints,
+                    cardioBmiHigh
+                            ? "BMI " + bmiValue + "，超过 24.0，计入 " + cardioBmiPoints + " 分"
+                            : "BMI " + bmiValue + (bmiAssumed ? "，档案缺失按 22.0 估算" : "")
+                                    + "，未超过 24.0，未加分"));
+
+            // ---- 3. 收缩压：与高血压共用阈值 130，但分值不同（30 vs 35） ----
+            RiskThresholdRegistry.RiskThresholdRule cardioSystolicRule =
+                    requiredRule(thresholds, "systolicBP", "心血管");
+            boolean cardioSystolicHigh = systolic != null
+                    && systolic.compareTo(cardioSystolicRule.threshold()) > 0;
+            cardioParts.add(RiskContributorVO.threshold("systolicBP", "收缩压",
+                    systolic == null ? null : systolic.stripTrailingZeros().toPlainString() + " mmHg",
+                    "130 mmHg", cardioSystolicHigh,
+                    cardioSystolicHigh ? cardioSystolicRule.points() : 0));
+
+            // ---- 4. 舒张压 ----
+            RiskThresholdRegistry.RiskThresholdRule cardioDiastolicRule =
+                    requiredRule(thresholds, "diastolicBP", "心血管");
+            boolean cardioDiastolicHigh = diastolic != null
+                    && diastolic.compareTo(cardioDiastolicRule.threshold()) > 0;
+            cardioParts.add(RiskContributorVO.threshold("diastolicBP", "舒张压",
+                    diastolic == null ? null : diastolic.stripTrailingZeros().toPlainString() + " mmHg",
+                    "85 mmHg", cardioDiastolicHigh,
+                    cardioDiastolicHigh ? cardioDiastolicRule.points() : 0));
+
+            // ---- 5. 血糖 ----
+            RiskThresholdRegistry.RiskThresholdRule cardioSugarRule =
+                    requiredRule(thresholds, "bloodGlucose", "心血管");
+            boolean cardioSugarHigh = latestBloodSugar != null
+                    && latestBloodSugar.compareTo(cardioSugarRule.threshold()) > 0;
+            cardioParts.add(RiskContributorVO.threshold("bloodGlucose", "血糖",
+                    latestBloodSugar == null ? null
+                            : latestBloodSugar.stripTrailingZeros().toPlainString() + " mmol/L",
+                    "6.1 mmol/L", cardioSugarHigh,
+                    cardioSugarHigh ? cardioSugarRule.points() : 0));
+
+            // ---- 6-9. 血脂四项：缺失一律 MISSING + 0 分，绝不代入人群默认值（D-02） ----
+            // 阈值按注册表精度渲染（四项 precision 均为 2）：写成 "5.2" 会与面板 riskNote 的
+            // "5.20" 在同一个值的两种小数位之间分叉。
+            RiskThresholdRegistry.RiskThresholdRule totalCholesterolRule =
+                    requiredRule(thresholds, "totalCholesterol", "心血管");
+            boolean totalCholesterolHigh = totalCholesterol != null
+                    && totalCholesterol.compareTo(totalCholesterolRule.threshold()) > 0;
+            cardioParts.add(RiskContributorVO.threshold("totalCholesterol", "总胆固醇",
+                    totalCholesterol == null ? null
+                            : totalCholesterol.stripTrailingZeros().toPlainString() + " mmol/L",
+                    "5.20 mmol/L", totalCholesterolHigh,
+                    totalCholesterolHigh ? totalCholesterolRule.points() : 0));
+
+            RiskThresholdRegistry.RiskThresholdRule triglyceridesRule =
+                    requiredRule(thresholds, "triglycerides", "心血管");
+            boolean triglyceridesHigh = triglycerides != null
+                    && triglycerides.compareTo(triglyceridesRule.threshold()) > 0;
+            cardioParts.add(RiskContributorVO.threshold("triglycerides", "甘油三酯",
+                    triglycerides == null ? null
+                            : triglycerides.stripTrailingZeros().toPlainString() + " mmol/L",
+                    "1.70 mmol/L", triglyceridesHigh,
+                    triglyceridesHigh ? triglyceridesRule.points() : 0));
+
+            // HDL 是下限型：低于阈值才是风险，因此走 below(...) 而不是 threshold(...)，
+            // 否则一个 0.90 的人会被告知「超过」了它实际低于的阈值。
+            RiskThresholdRegistry.RiskThresholdRule hdlRule =
+                    requiredRule(thresholds, "hdlCholesterol", "心血管");
+            boolean hdlLow = hdlCholesterol != null
+                    && hdlCholesterol.compareTo(hdlRule.threshold()) < 0;
+            cardioParts.add(RiskContributorVO.below("hdlCholesterol", "高密度脂蛋白",
+                    hdlCholesterol == null ? null
+                            : hdlCholesterol.stripTrailingZeros().toPlainString() + " mmol/L",
+                    "1.00 mmol/L", hdlLow, hdlLow ? hdlRule.points() : 0));
+
+            RiskThresholdRegistry.RiskThresholdRule ldlRule =
+                    requiredRule(thresholds, "ldlCholesterol", "心血管");
+            boolean ldlHigh = ldlCholesterol != null
+                    && ldlCholesterol.compareTo(ldlRule.threshold()) > 0;
+            cardioParts.add(RiskContributorVO.threshold("ldlCholesterol", "低密度脂蛋白",
+                    ldlCholesterol == null ? null
+                            : ldlCholesterol.stripTrailingZeros().toPlainString() + " mmol/L",
+                    "3.40 mmol/L", ldlHigh, ldlHigh ? ldlRule.points() : 0));
 
             int cardioRaw = cardioParts.stream().mapToInt(RiskContributorVO::points).sum();
-            // The score is capped at 100, so the breakdown has to be scaled with it — otherwise
-            // a user adding up the items gets 108 next to a total of 100 and rightly stops
-            // trusting either number.
+            // 9 项上限合计 150 > 100，因此「全部异常」的用户真实走到这里。分数封顶 100，
+            // 归因也必须一起折算 —— 否则用户把 9 行加起来得到 150，却看到总分 100。
             if (cardioRaw > 100) {
                 cardioParts = scaleTo(cardioParts, cardioRaw, 100);
             }
@@ -463,21 +562,6 @@ public class RiskAssessmentServiceImpl implements RiskAssessmentService {
             result.add(new ScoredAssessment(create(userId, profileId, "心血管疾病", cardioScore), cardioParts));
 
             return result;
-        }
-
-        /**
-         * Halve a contributor's points for the composite cardio score.
-         *
-         * @param source   the origin contributor
-         * @param fromDisease which composite input it came from, for the explanation
-         * @return a contributor carrying half the points
-         */
-        private static RiskContributorVO halve(RiskContributorVO source, String fromDisease) {
-            int half = Math.floorDiv(source.points(), 2);
-            String explanation = "来自" + fromDisease + "：" + source.explanation()
-                    + "（折半计入 " + half + " 分）";
-            return new RiskContributorVO(source.key(), source.label(), source.state(), source.value(),
-                    source.threshold(), half, explanation);
         }
 
         /**
@@ -500,10 +584,6 @@ public class RiskAssessmentServiceImpl implements RiskAssessmentService {
             return thresholds.ruleFor(canonicalKey, disease)
                     .orElseThrow(() -> new IllegalStateException(
                             "缺少风险阈值规则: " + canonicalKey + "/" + disease));
-        }
-
-        private static String riskStateOf(String value) {
-            return value == null ? RiskContributorVO.STATE_MISSING : RiskContributorVO.STATE_CONTRIBUTED;
         }
 
         /**

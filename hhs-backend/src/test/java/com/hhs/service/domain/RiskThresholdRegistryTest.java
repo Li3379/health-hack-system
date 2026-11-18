@@ -24,25 +24,69 @@ class RiskThresholdRegistryTest {
     private final RiskThresholdRegistry registry = new RiskThresholdRegistry();
 
     @Test
-    @DisplayName("规则集恰好 4 条，消费键精确等于 4 个 canonical key")
+    @DisplayName("规则集恰好 12 条，消费键精确等于 8 个 canonical key")
     void declaresExactlyTheFourMigratedRules() {
-        assertEquals(4, registry.allRules().size(),
-                "本阶段只搬移引擎原本硬编码的 4 个阈值；多一条会声称引擎读了它没读的指标");
+        // 4 条既有（16-01 迁移）+ 8 条心血管（16-03）。多一条会声称引擎读了它没读的指标；
+        // 少一条则心血管的某项输入静默不计分。
+        assertEquals(12, registry.allRules().size(),
+                "4 条既有 + 8 条心血管 = 12；数量漂移意味着引擎的输入集与声明不符");
 
         // 精确集合而非 size：拼错一个字母会让集合少一个元素，多注册一个则多一个 ——
         // size 断言只能拦住后者之一半。
-        assertEquals(Set.of("bloodGlucose", "systolicBP", "diastolicBP", "bmi"),
+        assertEquals(
+                Set.of("bloodGlucose", "systolicBP", "diastolicBP", "bmi",
+                        "totalCholesterol", "triglycerides", "hdlCholesterol", "ldlCholesterol"),
                 registry.consumedKeys(),
-                "consumedKeys 必须与引擎实际读取的指标一一对应");
+                "consumedKeys 必须与引擎实际读取的指标一一对应（8 个键，恰好不多不少）");
     }
 
     @Test
-    @DisplayName("四条规则的疾病/方向/阈值/分值逐条精确")
+    @DisplayName("十二条规则的疾病/方向/阈值/分值逐条精确")
     void eachRuleCarriesTheMigratedValues() {
+        // ---- 既有 4 条（16-01）----
         assertRule("bloodGlucose", "糖尿病", RiskThresholdRegistry.Direction.ABOVE, "6.1", 30);
         assertRule("systolicBP", "高血压", RiskThresholdRegistry.Direction.ABOVE, "130", 35);
         assertRule("diastolicBP", "高血压", RiskThresholdRegistry.Direction.ABOVE, "85", 30);
         assertRule("bmi", "糖尿病", RiskThresholdRegistry.Direction.ABOVE, "24.0", 25);
+
+        // ---- 心血管 8 条（本计划）----
+        assertRule("bmi", "心血管", RiskThresholdRegistry.Direction.ABOVE, "24.0", 20);
+        assertRule("systolicBP", "心血管", RiskThresholdRegistry.Direction.ABOVE, "130", 30);
+        assertRule("diastolicBP", "心血管", RiskThresholdRegistry.Direction.ABOVE, "85", 15);
+        assertRule("bloodGlucose", "心血管", RiskThresholdRegistry.Direction.ABOVE, "6.1", 10);
+        assertRule("totalCholesterol", "心血管", RiskThresholdRegistry.Direction.ABOVE, "5.2", 20);
+        assertRule("triglycerides", "心血管", RiskThresholdRegistry.Direction.ABOVE, "1.7", 10);
+        assertRule("hdlCholesterol", "心血管", RiskThresholdRegistry.Direction.BELOW, "1.0", 15);
+        assertRule("ldlCholesterol", "心血管", RiskThresholdRegistry.Direction.ABOVE, "3.4", 15);
+    }
+
+    @Test
+    @DisplayName("HDL 是唯一的 BELOW，其余 11 条都是 ABOVE")
+    void onlyHdlIsLowerBound() {
+        // 下限型不是风格选择：它决定归因句说「低于」还是「超过」。多一条 BELOW 会让某类指标
+        // 对偏高的人说反话，少一条则 HDL 偏低的人被告知「超过」了它实际低于的阈值。
+        assertRule("hdlCholesterol", "心血管", RiskThresholdRegistry.Direction.BELOW, "1.0", 15);
+
+        List<RiskThresholdRegistry.RiskThresholdRule> belowRules = registry.allRules().stream()
+                .filter(rule -> rule.direction() == RiskThresholdRegistry.Direction.BELOW)
+                .toList();
+        assertEquals(1, belowRules.size(),
+                "只有 HDL 是下限型；其余 11 条都是上限型，实际为: " + belowRules);
+        assertEquals("hdlCholesterol", belowRules.get(0).metricKey());
+    }
+
+    @Test
+    @DisplayName("同一个指标在高血压与心血管的分值不同 —— 键是 (指标, 疾病) 二元组")
+    void sameMetricScoresDifferentlyPerDisease() {
+        // 35 vs 30 与 30 vs 15：若实现退化成「单指标阈值」，两处必然相等，这两条断言立刻红。
+        assertEquals(35, registry.ruleFor("systolicBP", "高血压").orElseThrow().points());
+        assertEquals(30, registry.ruleFor("systolicBP", "心血管").orElseThrow().points());
+        assertEquals(30, registry.ruleFor("diastolicBP", "高血压").orElseThrow().points());
+        assertEquals(15, registry.ruleFor("diastolicBP", "心血管").orElseThrow().points());
+        assertEquals(25, registry.ruleFor("bmi", "糖尿病").orElseThrow().points());
+        assertEquals(20, registry.ruleFor("bmi", "心血管").orElseThrow().points());
+        assertEquals(30, registry.ruleFor("bloodGlucose", "糖尿病").orElseThrow().points());
+        assertEquals(10, registry.ruleFor("bloodGlucose", "心血管").orElseThrow().points());
     }
 
     @Test
@@ -103,18 +147,36 @@ class RiskThresholdRegistryTest {
     }
 
     @Test
-    @DisplayName("rulesFor 返回不可变列表，且保持声明顺序")
+    @DisplayName("rulesFor 返回不可变列表；每个键的第一条规则就是面板展示的那条")
     void rulesForIsImmutableAndOrdered() {
-        List<RiskThresholdRegistry.RiskThresholdRule> rules = registry.rulesFor("bmi");
-        assertEquals(1, rules.size());
+        List<RiskThresholdRegistry.RiskThresholdRule> bmiRules = registry.rulesFor("bmi");
+        assertEquals(2, bmiRules.size(), "bmi 有糖尿病与心血管两条规则");
         assertThrows(UnsupportedOperationException.class,
-                () -> rules.add(rules.get(0)), "rulesFor 必须返回不可变列表");
+                () -> bmiRules.add(bmiRules.get(0)), "rulesFor 必须返回不可变列表");
 
-        List<String> declared = registry.allRules().stream()
+        // 面板只描述每个键的第一条（UI-SPEC 5.2 禁止拼接多个疾病名），所以「第一条是谁」
+        // 是用户可见的文案契约，不是无关的声明顺序。逐键钉住：
+        assertEquals("心血管", registry.rulesFor("bmi").get(0).disease(),
+                "bmi 的第一条必须是心血管 —— 面板要读「心血管评估：超过 24.0 kg/m² 计入 20 分」");
+        assertEquals("糖尿病", registry.rulesFor("bloodGlucose").get(0).disease(),
+                "血糖的第一条必须是糖尿病 —— 面板那条 6.1/30 的文案是既有的");
+        assertEquals("高血压", registry.rulesFor("systolicBP").get(0).disease());
+        assertEquals("高血压", registry.rulesFor("diastolicBP").get(0).disease());
+
+        // 血脂四项各只有一条规则，都是心血管。
+        for (String lipid : List.of("totalCholesterol", "triglycerides",
+                "hdlCholesterol", "ldlCholesterol")) {
+            assertEquals(1, registry.rulesFor(lipid).size(), lipid + " 应当只有心血管一条规则");
+            assertEquals("心血管", registry.rulesFor(lipid).get(0).disease());
+        }
+
+        // 声明顺序的粗粒度守卫：有规则的键恰好这 8 个（顺序可能与上面逐键断言不同，
+        // 但键集必须一致 —— 派生自同一份声明，不是第二份列表）。
+        List<String> declaredKeys = registry.allRules().stream()
                 .map(RiskThresholdRegistry.RiskThresholdRule::metricKey)
+                .distinct()
                 .toList();
-        assertEquals(List.of("bloodGlucose", "systolicBP", "diastolicBP", "bmi"), declared,
-                "声明顺序就是 riskNote 的取用顺序，血糖必须在 BMI 之前");
+        assertEquals(8, declaredKeys.size(), "实际声明顺序: " + declaredKeys);
     }
 
     private void assertRule(String key, String disease, RiskThresholdRegistry.Direction direction,

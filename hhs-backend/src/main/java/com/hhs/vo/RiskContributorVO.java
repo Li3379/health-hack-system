@@ -48,7 +48,7 @@ public record RiskContributorVO(
     public static final String STATE_ASSUMED = "ASSUMED";
 
     /**
-     * Build a contributor for a factor that was evaluated against a threshold.
+     * Build a contributor for a factor that was evaluated against an upper-bound threshold.
      *
      * @param key       stable factor key
      * @param label     user-facing name
@@ -67,6 +67,38 @@ public record RiskContributorVO(
         String explanation = hit
                 ? label + " " + value + "，超过参考值 " + threshold + "，因此计入 " + points + " 分"
                 : label + " " + value + "，未超过参考值 " + threshold + "，未加分";
+        return new RiskContributorVO(key, label, state, value, threshold, points, explanation);
+    }
+
+    /**
+     * Build a contributor for a factor whose risky side is <em>below</em> its threshold.
+     *
+     * <p>Some metrics are protective: HDL cholesterol is normal when high and risky when low
+     * (reference says {@code >= 1.00 mmol/L}). Rendering those through {@link #threshold} would
+     * tell a person at 0.90 that they "exceeded" the very bound they undershot. This factory is
+     * the mirror image.</p>
+     *
+     * <p>It deliberately performs <em>no</em> comparison. Which side is risky is declared once,
+     * as {@code Direction} on the registry rule; duplicating the comparison here would create a
+     * third threshold implementation that could disagree with the other two.</p>
+     *
+     * @param key       stable factor key
+     * @param label     user-facing name
+     * @param value     display-formatted value, or {@code null} when absent
+     * @param threshold display-formatted lower-bound threshold
+     * @param breached  whether the value is below the threshold
+     * @param points    points awarded
+     * @return the contributor
+     */
+    public static RiskContributorVO below(String key, String label, String value,
+                                          String threshold, boolean breached, int points) {
+        if (value == null) {
+            return missing(key, label);
+        }
+        String state = breached ? STATE_CONTRIBUTED : STATE_NORMAL;
+        String explanation = breached
+                ? label + " " + value + "，低于参考值 " + threshold + "，因此计入 " + points + " 分"
+                : label + " " + value + "，未低于参考值 " + threshold + "，未加分";
         return new RiskContributorVO(key, label, state, value, threshold, points, explanation);
     }
 

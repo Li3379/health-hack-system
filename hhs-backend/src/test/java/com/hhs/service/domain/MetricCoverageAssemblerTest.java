@@ -99,7 +99,7 @@ class MetricCoverageAssemblerTest {
     }
 
     @Test
-    @DisplayName("只有真正参与评估的四个指标带 riskNote")
+    @DisplayName("只有真正参与评估的八个指标带 riskNote")
     void onlyEngineInputsCarryRiskNote() {
         List<MetricCoverageVO> rows = assembler.assemble(List.of());
 
@@ -108,14 +108,22 @@ class MetricCoverageAssemblerTest {
                 .map(MetricCoverageVO::key)
                 .sorted()
                 .toList();
-        assertEquals(List.of("bloodGlucose", "bmi", "diastolicBP", "systolicBP"), withNote,
+        // 字面量：钉住「今天恰好是这 8 个」。16-01 当时写成 4 键，本计划扩到 8 键 ——
+        // 这行不跟着改就会在规则表扩到 8 条的那一刻变成永久红。
+        assertEquals(List.of("bloodGlucose", "bmi", "diastolicBP", "hdlCholesterol",
+                        "ldlCholesterol", "systolicBP", "totalCholesterol",
+                        "triglycerides"),
+                withNote,
                 "riskNote 必须与引擎实际读取的指标一致，多一个会误导用户，少一个会漏报");
 
         // 同源派生：面板声称参与评估的键，必须恰好是注册表声明的那一组。
-        assertEquals(riskThresholds.consumedKeys().stream().sorted().toList(), withNote,
-                "面板的 riskNote 键集必须与 RiskThresholdRegistry.consumedKeys() 完全一致");
+        // 与上面那条字面量断言并存不是重复 —— 字面量证明「今天的键集正确」，
+        // 这一条证明「下一阶段扩规则时测试自己会说话」，任何一侧漂移都会红。
+        List<String> derivedFromRegistry = riskThresholds.consumedKeys().stream().sorted().toList();
+        assertEquals(derivedFromRegistry, withNote,
+                "面板的 riskNote 键集必须与注册表声明的那一组完全一致，而不是各自维护");
 
-        // 反向：这些指标确实不被引擎读取，绝不能声称它们参与评估。
+        // 反向：这些指标确实不被引擎读取，绝不能声称它们参与评估（D-08 的守卫）。
         for (String unused : List.of("heartRate", "steps", "sleepDuration", "uricAcid")) {
             assertNull(find(rows, unused).riskNote(),
                     unused + " 不参与风险评估，不得标注 riskNote");

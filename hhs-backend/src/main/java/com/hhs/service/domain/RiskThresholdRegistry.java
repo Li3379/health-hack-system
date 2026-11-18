@@ -83,16 +83,58 @@ public class RiskThresholdRegistry {
         }
     }
 
+    /**
+     * Declare every rule, in a hand-picked order that must not be "tidied" into another one.
+     *
+     * <p>The coverage panel describes <em>only the first</em> rule of a metric (joining diseases
+     * would blow the 24-character cell), so the order inside one key is user-visible copy, not
+     * incidental. Three of the four shared keys therefore list the long-standing assessment
+     * first and the cardiovascular one second:</p>
+     *
+     * <ul>
+     *   <li>{@code bloodGlucose} — 糖尿病 first: the panel reads
+     *       {@code 糖尿病评估：超过 6.1 mmol/L 计入 30 分}.</li>
+     *   <li>{@code systolicBP} / {@code diastolicBP} — 高血压 first: the panel reads
+     *       {@code 高血压评估：超过 130 mmHg 计入 35 分}.</li>
+     *   <li>{@code bmi} — 心血管 first (the one key where the older rule is second): the panel
+     *       reads {@code 心血管评估：超过 24.0 kg/m² 计入 20 分}. Declaring the diabetes rule
+     *       first here would silently rewrite that sentence to 25 分.</li>
+     * </ul>
+     *
+     * <p>The four lipids carry exactly one rule each (心血管) and are kept adjacent so the block
+     * can be reviewed as a unit.</p>
+     */
     private void registerAllRules() {
-        // 声明顺序就是 riskNote 的取用顺序（面板只描述第一条），因此 bmi 放在最后：
-        // 血糖那条才是糖尿病面板该显示的那句话。
         rule("bloodGlucose", "糖尿病", Direction.ABOVE, "6.1", 30);
+        rule("bloodGlucose", "心血管", Direction.ABOVE, "6.1", 10);
+
         rule("systolicBP", "高血压", Direction.ABOVE, "130", 35);
+        rule("systolicBP", "心血管", Direction.ABOVE, "130", 30);
+
         rule("diastolicBP", "高血压", Direction.ABOVE, "85", 30);
+        rule("diastolicBP", "心血管", Direction.ABOVE, "85", 15);
+
         // 24.0 是既有行为，不是「严于参考上限」的例子：元数据参考上限是 23.9，这条更松 0.1。
         // 改成 23.9 会让 BMI 23.9–24.0 区间的人新增计分，属未授权行为变化，故保留 24.0 并
         // 明确不宣称严于参考上限（AC-3 的可执行断言只对收缩压/舒张压成立）。
+        // 心血管那条排在糖尿病之前，理由见本方法 javadoc（面板只描述第一条）。
+        rule("bmi", "心血管", Direction.ABOVE, "24.0", 20);
         rule("bmi", "糖尿病", Direction.ABOVE, "24.0", 25);
+
+        // ---- 心血管自有输入（D-01）：血脂四项 + 上表的血压/血糖/BMI ----
+        // 权重合计 150 > 100，因此「全部异常」的用户会真实触发封顶折算（不变量 A）。
+        // 本表每项都是产品判断，不是临床指南的引用；改动任何一条都要先看
+        // RiskAssessmentAssumptionsTest 的封顶用例（手算 150）是否仍成立。
+        //
+        // 年龄基线 5 分写在引擎里（age > 55 → 15，否则 5），不在本表 —— 年龄不是
+        // health_metric，没有 canonical key。基线 5 让「单项严重血压」能跨 MEDIUM
+        // （5 + 30 = 35），孤立肥胖（5+20=25）、孤立高胆固醇（5+20=25）、孤立低 HDL
+        // （5+15=20）仍是 LOW —— 这是有意设计：单项血脂异常不构成与 2 级高血压同等的近期风险。
+        rule("totalCholesterol", "心血管", Direction.ABOVE, "5.2", 20);
+        rule("triglycerides", "心血管", Direction.ABOVE, "1.7", 10);
+        // 唯一的 BELOW：HDL 是「越高越好」，低于阈值才是风险。
+        rule("hdlCholesterol", "心血管", Direction.BELOW, "1.0", 15);
+        rule("ldlCholesterol", "心血管", Direction.ABOVE, "3.4", 15);
     }
 
     /**
