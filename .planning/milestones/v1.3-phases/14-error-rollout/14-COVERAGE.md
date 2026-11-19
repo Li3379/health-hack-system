@@ -1,1 +1,0 @@
-No external API integration: Phase 14 is a pure internal refactor migrating 87 existing frontend error call sites to the unified showError helper; zero new endpoints, zero schema changes, zero new external services.

@@ -141,3 +141,20 @@ certs/
 # autoresearch session state (ledger, benchmark, charter) — never committed
 .auto/
 autoresearch-dashboard.html
+
+# ====================
+# Non-Code & Project Documentation Artifacts
+# ====================
+.bishe/
+.planning/
+.qa-artifacts/
+.gsd/
+.serena/
+*.docx
+*.pptx
+*.pdf
+docs/作品介绍文档.*
+docs/演示脚本.md
+docs/deployment/write_cicd.py
+docs/architecture-diagram.*
+
