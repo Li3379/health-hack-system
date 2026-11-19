@@ -197,6 +197,8 @@ jobs:
           username: ${{ secrets.ECS_USER }}
           key: ${{ secrets.ECS_SSH_KEY }}
           envs: OWNER,IMAGE_TAG
+          command_timeout: 30m
+          timeout: 60s
           script: |
             set -euo pipefail
 
@@ -227,8 +229,26 @@ jobs:
             # Pull latest code (non-fatal — images come from GHCR, not git)
             if [ -d .git ]; then
               echo "=== Pulling latest code ==="
+              git checkout -- . 2>/dev/null || true
               git pull origin master || echo "WARNING: git pull failed (images still pulled from GHCR)"
               rm -f docker-compose.override.yml
+            fi
+
+            # Ensure TLS self-signed certificate exists for frontend HTTPS
+            if [ -f "./scripts/gen-selfsigned-cert.sh" ]; then
+              echo "=== Ensuring TLS certificate ==="
+              bash ./scripts/gen-selfsigned-cert.sh || true
+            fi
+
+            # Run idempotent database migrations if MySQL is already running
+            if docker ps -q -f name=hhs-mysql-1 | grep -q .; then
+              echo "=== Running database migrations ==="
+              for sql in ./hhs-backend/src/main/resources/sql/migration/*.sql; do
+                if [ -f "$sql" ]; then
+                  echo "Applying migration: $sql"
+                  docker exec -i hhs-mysql-1 sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" hhs' < "$sql" 2>/dev/null || true
+                fi
+              done
             fi
 
             # Verify schema.sql exists for DB initialization
@@ -244,9 +264,10 @@ jobs:
             echo "=== Logging in to GHCR ==="
             echo ${{ secrets.GHCR_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-            # Force pull latest images
+            # Force pull latest images with retry
             echo "=== Pulling latest images ==="
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml pull
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml pull || \
+              (echo "Pull failed, retrying after 5s..." && sleep 5 && docker compose -f docker-compose.yml -f docker-compose.prod.yml pull)
 
             # Stop old containers and start new ones
             # Note: up -d returns non-zero when a dependency health check fails,
@@ -290,7 +311,7 @@ jobs:
           sleep 30
           for i in $(seq 1 6); do
             echo "Health check attempt $i/6..."
-            if curl -sf http://${{ secrets.ECS_HOST }}/actuator/health; then
+            if curl -skf -m 10 http://${{ secrets.ECS_HOST }}/actuator/health || curl -skf -m 10 https://${{ secrets.ECS_HOST }}/actuator/health; then
               echo "Deployment successful - backend is healthy"
               exit 0
             fi
