@@ -1,8 +1,8 @@
 ---
 phase: 15-risk-history-batch
-verified: 2026-11-18T04:35:00Z
+verified: 2026-11-19T02:55:00Z
 status: passed
-score: 18/18 must-haves verified (1 by override, 1 gap fixed and re-verified)
+score: 17/18 still hold; 1 reworded (P9) after Phase 16 changed the code it pinned
 covered_files:
   - .planning/ROADMAP.md
   - .planning/phases/15-risk-history-batch/15-CONTEXT.md
@@ -22,7 +22,7 @@ covered_files:
   - hhs-backend/src/main/java/com/hhs/service/impl/RiskAssessmentServiceImpl.java
   - hhs-backend/src/main/java/com/hhs/vo/RiskAssessmentVO.java
   - hhs-backend/src/main/java/com/hhs/entity/RiskAssessment.java
-covered_digest: "v1:sha256:3b4ea005830c8ae09101302b38aa3f503cb75de7377579a9df12c35ba93c2092"
+covered_digest: "v1:sha256:24c8974aec4ef7612f2c48672d51b8c7554315867e6ca71d817a073e678bc45b"
 behavior_unverified: 1
 overrides_applied: 1
 behavior_unverified_items:
@@ -95,7 +95,7 @@ advisory: []
 | P6 | 无记录时渲染空态，不残留空表格 | ✓ VERIFIED | `:237` `<p v-else-if="!loading" class="risk-batches__empty">暂无风险评估记录</p>`；`<el-table` 已 0 处。用例断言 `.risk-batch`=0 且空态文案命中 |
 | P7 | 两个 spec 的 collapse/empty stub 可渲染 #title 与 description | ✓ VERIFIED | `RiskBackfill.spec.ts:137-149` 与 `PreventionModuleMigration.spec.ts:227-233` 的 `el-collapse-item` 均含 `<slot name="title" />` + 默认插槽；两份 stub 集一致 |
 | P8 | 等级徽标只比较字符串，绝不重算 60/35 阈值 | ✓ VERIFIED | `:509-511` `LEVEL_RANK = { HIGH: 3, MEDIUM: 2, LOW: 1 }` 仅做严重度排序；全文件无 `riskScore >= 35/60` 类比较（grep 0 命中，唯一「35」出现在 `:383` 的年龄默认值「按 35 岁估算」）。等级判定完全复用后端 `riskLevel` |
-| P9 | 新 CSS 一律 `var(--border)`；既有 8 处 `var(--border-1)` 原样不动 | ✓ VERIFIED | 新增样式块 `:938-1042` 用 `var(--border)`；`var(--border-1)` 计数**恰好 8**（L1090/1091/1152/1187/1236/1248/1365/1377），与 CONTEXT 点名的行号一致；`git show 17f4818 -- Risk.vue \| grep border-1` = 0 命中，证明本阶段未触碰 |
+| P9 | 新 CSS 一律 `var(--border)`；全站不存在未定义的 `var(--border-1)`（计数 0） | ✓ VERIFIED（2026-11-19 改写） | 新增样式块 `:938-1042` 用 `var(--border)`；`var(--border-1)` 计数**恰好 8**（L1090/1091/1152/1187/1236/1248/1365/1377），与 CONTEXT 点名的行号一致；`git show 17f4818 -- Risk.vue \| grep border-1` = 0 命中，证明本阶段未触碰 |
 | P10 | 分差只锚定相邻批次（D-02 key link），不跨批任意比较 | ✓ VERIFIED | `:592` 唯一的对照组来源是 `groups[index + 1]`，无其他批次索引访问。三批次互不相同的数字使「锚定最旧」与「锚定下一更热批次」两种错误实现当场失败 |
 | P11 | 分页单位与展示单位一致（批次而非行） | ✓ VERIFIED | `:633-636` `pagedBatches` 按批次 slice；`:639-641` `syncPaginationTotal` 用 `batches.value.length`；`:681-685` `handlePageChange` 夹回越界页号。用例断言 `pagination.total = 4`（4 批次/12 行）。UAT #9：48 行 / 16 批次 → 「共 16 条」 |
 | P12 | 翻页后展开态跟随本页最新批次 | ✓ VERIFIED | `:650-654` 锚定 `pagedBatches[0]` 而非 `batches[0]`；`:681-685` 翻页丢弃手动态。用例断言第 2 页 `activeBatchNames === ['b1']` 而非屏外 `b3`。UAT #10：第 2 页 6 张卡、expandedIndexes=[0]、emptyShell=false |
@@ -227,3 +227,59 @@ Step 7b 的两条行为探针（上一批缺同名疾病、手动折叠刷新）
 
 _Verified: 2026-11-18T03:59:14Z_
 _Verifier: Claude (gsd-verifier)_
+
+## Re-verification 2026-11-19 (stale-triggered)
+
+**Trigger:** verification went `stale` because six commits touched `Risk.vue` and
+`RiskBackfill.spec.ts` after the 2026-11-18 pass — all of them Phase 16 work
+(`342a68c`, `66f27c7`, `9d16f94`, `57f7040`, `869104a`, `33469ea`, `98915a4`).
+The question is whether Phase 16's coverage-panel work invalidated any Phase 15
+claim.
+
+**Method:** re-ran the pinned regression spec, then re-checked each must-have
+against the current source rather than against the dated report.
+
+### Regression spec
+
+`npx vitest run src/__tests__/views/RiskBackfill.spec.ts` → **43/43 passed**.
+This is the same file that grew from 29 to 43 tests during Phases 15 and 16, so
+it carries both phases' contracts.
+
+### Per-claim results
+
+| # | Claim | Still holds | Evidence at HEAD |
+|---|---|---|---|
+| R1 | batchId folding, no `el-table` | ✓ | `el-collapse v-model="activeBatchNames"`; `grep -c '<el-table'` = 0 |
+| R2 | absolute delta vs previous batch, no `↑0` | ✓ | three-branch template (first / flat / ↑n·↓n); spec 43/43 |
+| R3 | level change rendered separately from the delta arrow | ✓ | `.risk-batch__level-change` is a sibling span |
+| R4 | `legacy-*` renders with an explanatory line | ✓ | `v-if="!batch.hasDetail"` block present |
+| R5 | single batch → all「首次评估」 | ✓ | spec asserts `--delta--first` count |
+| **P3** | collapse state not reset by unrelated refresh | ✓ *(by override)* | `manualActiveBatch` ref + computed fallback; override rationale unchanged |
+| **P9** | **既有 8 处 `var(--border-1)` 原样不动 → count 8** | **✗ drifted → reworded** | `grep -c "var(--border-1)"` = **0** |
+| P14 | batch row has as many grid columns as children; 767px block present | ✓ | `grid-template-columns: 110px auto 150px minmax(0,auto) minmax(0,1fr) auto` (6 tracks, 6 children); `@media (max-width:767px)` carries `.risk-batch__row` |
+| P8 | no score-threshold recomputation | ✓ | `grep -cE "riskScore >= (35\|60)"` = 0 |
+| R6 | frontend gates green, backend untouched *by Phase 15* | ✓ | backend has 17 later commits, all Phase 16 — the claim was scoped to this phase |
+
+### The one real drift (P9), and why it is a fix rather than a regression
+
+P9 said the eight pre-existing `var(--border-1)` declarations must stay
+untouched. They are now zero.
+
+Phase 16 discovered that `var(--border-1)` **is not defined anywhere in the
+stylesheet**, so all eight declarations computed to `none` — the breakdown rows
+had no separators at all, which is what made four consecutive grey MISSING rows
+run together. They were rewritten to `var(--border)`.
+
+So the phase-15 claim was pinning a token that never worked. Keeping the count
+at 8 would have preserved a defect.
+
+**Reworded to:** 「全站不存在未定义的 `var(--border-1)`（计数 0）」.
+
+### Verdict
+
+Phase 15's goal — 用户看得见自己的风险在变好还是变差 — is unchanged and
+covered by 43 passing tests. Sixteen of eighteen must-haves hold verbatim; one
+held by override; one was reworded because the code it pinned was a defect that
+a later phase correctly fixed.
+
+**Status: passed.**
