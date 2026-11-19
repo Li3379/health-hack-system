@@ -158,3 +158,19 @@ docs/演示脚本.md
 docs/deployment/write_cicd.py
 docs/architecture-diagram.*
 
+# ====================
+# AI Agent Instructions & Review Reports
+# ====================
+**/AGENTS.md
+AGENTS.md
+CLAUDE.md
+REVIEW.md
+TEST_PLAN_FRONTEND.md
+VERIFICATION.md
+hhs-backend/docs/performance-report.md
+docs/device-sync-configuration-guide.md
+docs/modules/DEVICE-SYNC.md
+docs/V2-ITERATION-PLAN.md
+docs/V2-TASK-CHECKLIST.md
+
+
