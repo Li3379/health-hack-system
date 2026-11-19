@@ -19,10 +19,16 @@ public class RiskScorer {
     private final RiskAssessmentMapper riskAssessmentMapper;
 
     /**
-     * Calculate score based on risk assessment level
+     * Calculate the risk dimension's contribution to the overall health score.
+     *
+     * <p>Reads {@code riskScore} directly instead of mapping {@code riskLevel}. The
+     * level is itself derived from the score (>=60 HIGH, >=35 MEDIUM), so mapping it
+     * back collapsed the whole range onto three values: a user at 5 and a user at 34
+     * both returned 100, and 60 and 100 both returned 40. Inverting the score keeps
+     * the continuum the assessment actually produced.</p>
      *
      * @param userId the user ID
-     * @return score from 0-100
+     * @return score from 0-100; 70 when the user has no assessment (neutral)
      */
     public int calculate(Long userId) {
         List<RiskAssessment> risks = riskAssessmentMapper.selectList(
@@ -37,11 +43,12 @@ public class RiskScorer {
         }
 
         RiskAssessment risk = risks.get(0);
-        return switch (risk.getRiskLevel()) {
-            case "LOW" -> 100;
-            case "MEDIUM" -> 70;
-            case "HIGH" -> 40;
-            default -> 70;
-        };
+        Integer score = risk.getRiskScore();
+        if (score == null) {
+            // A row with no score cannot be inverted; fall back to the neutral value
+            // rather than inventing a penalty.
+            return 70;
+        }
+        return 100 - Math.max(0, Math.min(100, score));
     }
 }

@@ -27,7 +27,20 @@ public class ScoreUpdatedEventListener {
     private final ScoreHistoryService scoreHistoryService;
     private final ObjectMapper objectMapper;
 
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    /**
+     * Persist the score snapshot once the publishing transaction has settled.
+     *
+     * <p>{@code fallbackExecution = true} is load-bearing. The publisher,
+     * {@code HealthScoreServiceImpl.getScore()}, is a pure read and carries no
+     * {@code @Transactional}; without this flag Spring silently skips an
+     * {@code AFTER_COMMIT} listener when no transaction is active, so the history
+     * row was never written and {@code health_score_history} stayed empty however
+     * often the score endpoint was called. With the flag, a transactional caller
+     * still gets the post-commit guarantee, and a non-transactional caller runs
+     * immediately — correct here, because the score has already been computed and
+     * cached by the time the event is published.</p>
+     */
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onScoreUpdated(ScoreUpdatedEvent event) {
         try {
             String factorsJson = null;
