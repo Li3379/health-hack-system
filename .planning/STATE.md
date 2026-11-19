@@ -8,7 +8,7 @@ stopped_at: v1.4 archived 2026-11-19 — ready for the next milestone
 last_updated: "2026-11-19T01:50:05.512Z"
 last_activity: 2026-11-19
 last_activity_desc: Milestone v1.4 completed and archived
-state_head: 18d98ba68347b6d0cc5f560a4f6a511b0ff50a43
+state_head: 9b19a64374282eb56754dbaad7d48416aa8e22c4
 progress:
   total_phases: 4
   completed_phases: 4
