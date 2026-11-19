@@ -623,7 +623,7 @@ describe.skipIf(!LEDGER_DIR)('台账对账 — 87 行、每行七列非空', () 
 
   it('③ 九份片段全部存在且被合并（缺一份要大声失败，不能只合并在场的那几份）', () => {
     for (const plan of LEDGER_FRAGMENT_PLANS) {
-      const fragment = resolve(LEDGER_DIR, `14-LEDGER-${plan}.md`)
+      const fragment = resolve(LEDGER_DIR!, `14-LEDGER-${plan}.md`)
       expect(() => readFileSync(fragment, 'utf8'), `缺少片段 14-LEDGER-${plan}.md`).not.toThrow()
     }
     expect(LEDGER_FRAGMENT_PLANS).toHaveLength(9)
