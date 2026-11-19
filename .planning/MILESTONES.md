@@ -1,5 +1,15 @@
 # Milestones
 
+## v1.4 v1.4 (Shipped: 2026-11-19)
+
+**Phases completed:** 4 phases, 7 plans, 0 tasks
+
+**Key accomplishments:**
+
+- (none recorded)
+
+---
+
 ## v1.3 引导式配置与友好错误反馈 (Shipped: 2026-11-17)
 
 **Phases completed:** 4 phases, 41 plans, 44 tasks
@@ -19,6 +29,7 @@
 **Audit:** `.planning/milestones/v1.3-MILESTONE-AUDIT.md` — 29/29 requirements, 4/4 phases verified, 26/26 wiring, status `passed`.
 
 **Closeout note:** The audit's integration pass found three real defects and they were fixed before archiving, not deferred:
+
 - `prevention/Profile.vue` save went fully silent when the profile row had been deleted elsewhere (`ee4d534` made the envelope 404 honest → `notFound` → `showError`'s zero-toast default, and that page has no `ErrorState`). Added `presentStates`.
 - The same page's create-mode guard tested `err.status === 404` / `err.code`, both permanently false for an HTTP-200 envelope with no `errorCode`, so create mode never auto-opened. Now reads the normalized `kind`.
 - Route-level 404 inherited `requiresAuth` from its parent layout record, bouncing unauthenticated unknown URLs to `/login`. Now sets `requiresAuth: false` explicitly, with the test asserting `resolve().meta` rather than the unmerged record.

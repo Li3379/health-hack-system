@@ -6,7 +6,7 @@
 - ✅ **v1.1 智能健康指标填报引导与友好校验** — Phases 4-7 (completed 2026-11-05)
 - ✅ **v1.2 全站健康与保健指标录入标准化与体验对齐** — Phases 8-10 ([archive](milestones/v1.2-ROADMAP.md)) (completed 2026-11-05)
 - ✅ **v1.3 引导式配置与友好错误反馈** — Phases 11-14 ([archive](milestones/v1.3-ROADMAP.md)) (completed 2026-11-17)
-- 🚧 **v1.4 风险评估可信化与引擎收敛** — Phases 15-18 (all phases complete 2026-11-19, awaiting archive)
+- ✅ **v1.4 风险评估可信化与引擎收敛** — Phases 15-18 ([archive](milestones/v1.4-ROADMAP.md)) (completed 2026-11-19)
 
 ## Phases
 
@@ -54,134 +54,15 @@ Audit: [milestones/v1.3-MILESTONE-AUDIT.md](milestones/v1.3-MILESTONE-AUDIT.md) 
 </details>
 
 <details>
-<summary>🚧 v1.4 风险评估可信化与引擎收敛 (Phases 15-18) — all phases done, awaiting archive</summary>
+<summary>✅ v1.4 风险评估可信化与引擎收敛 (Phases 15-18) — SHIPPED 2026-11-19</summary>
 
-- [x] **Phase 15: 风险历史按批次折叠与趋势** — 把已写入的 `batchId` 用起来：历史按「一次评估」折叠，显示各项相对上次的分数变化
-- [x] **Phase 16: 风险评估引擎输入重组** — 用现有 23 项指标重新设计三种疾病的评估（心血管用血脂/血压/BMI/年龄，不再只是前两项折半），不新增疾病 (completed 2026-11-19)
-- [x] **Phase 17: 告警语义收敛** — 成功标准 3 已达成 (completed 2026-11-19)。原目标类 `IntelligentAlertService` 已在 `19db185` 随 `service/alert/` 整包删除，但**目标本身仍然违反**：`ThresholdComparator` 是平行的第二套五区间实现（8 处比较、无任何测试），`ThresholdEvaluator.findExceededThreshold` 是第三份。已通过 `ThresholdRangeChecker.bandOf` 单一判定源收口，删除 `ThresholdComparator`，并通过 `autoresearch/threshold-single-source` 分支以机械指标 `dup_sites` 10→0 验证；顺带修复「交叉区间下 severity 与 direction 自相矛盾」的既有缺陷
-- [x] **Phase 18: 技术债清理与收尾** — 死代码与重复实现已清零 (completed 2026-11-19)：删除 `RiskAnalyzer`（与 `RiskScorer` 逐字重复的评分实现）、删除 `PushStrategyService`（被 `PushChannelManager` 取代）、消除 4 文件 6 处指标 key 别名落空。**未做**：`RiskScorer` 改读归因快照、`FileUploadController` 英文细查、未消费字典键清理，另新发现 `AiParseServiceImpl.isOxygenCritical` 冗余判定 —— 已记入 18-SUMMARY.md
+- [x] Phase 15: 风险历史按批次折叠与趋势 (2/2 plans) — completed 2026-11-18
+- [x] Phase 16: 风险评估引擎输入重组 (5/5 plans) — completed 2026-11-19
+- [x] Phase 17: 告警语义收敛 — completed 2026-11-19（autoresearch 闭环，无 PLAN）
+- [x] Phase 18: 技术债清理与收尾 — completed 2026-11-19（autoresearch 闭环，无 PLAN）
 
-**Success criteria**
+Full detail: [milestones/v1.4-ROADMAP.md](milestones/v1.4-ROADMAP.md)
 
-1. 风险历史按批次可折叠，每个批次显示时间与三条疾病，并标注相对上一批次的分数变化（上升/下降/持平）
-2. 三种疾病的评估都使用其临床相关的全部已有指标，且每项输入的贡献在详情里可核对（各项之和 = 总分）
-3. 全站只有一套阈值区间语义：`ThresholdRangeChecker.classify` 是唯一判定源，无第二份比较实现
-4. 无无引用类、无用户可见英文异常原文、无未消费字典键；后端与前端门禁全绿
-
-
-### Phase 15: 风险历史按批次折叠与趋势
-
-**Goal**: 把已写入的 `batchId` 真正呈现给用户 —— 风险评估历史按「一次评估」折叠成批次卡片，并显示各项相对上一批次的分数与等级变化，让用户看得见自己的风险在变好还是变差
-
-**Depends on**: Nothing（`batchId` 与 `contributors` 快照已在 v1.3 收尾改动中写入数据库与 API，本阶段为纯前端呈现）
-
-**Requirements**: 无独立 REQ-ID（v1.4 未新建 REQUIREMENTS.md，本阶段范围由 `15-CONTEXT.md` 的验收标准界定）
-
-**Success Criteria** (what must be TRUE):
-
-  1. 风险页历史区域按 `batchId` 折叠，每个批次一个可展开面板；最近批次默认展开，其余默认折叠
-  2. 每项疾病显示与上一批次同疾病的分数差（↑ / ↓ / 持平 / 首次评估），不出现「↑0」这类噪音
-  3. 跨等级阈值时额外显示等级变化（如「低风险 → 中风险」），与分数箭头分开呈现
-  4. `legacy-*` 批次正常渲染，`contributors` 为空时不渲染明细且给出说明
-  5. 只有 1 个批次时全部显示「首次评估」
-  6. 前端门禁全绿（`test:run` + `build`），后端零改动
-
-**UI hint**: yes
-
-**Plans:** 2 plans
-
-Plans:
-**Wave 1**
-
-- [ ] 15-01-PLAN.md — 批次折叠端到端贯通（tracer）：batchId 分组、可折叠面板、legacy 兼容、两 spec 补齐 collapse stub
-
-**Wave 2** *(blocked on Wave 1 completion)*
-
-- [ ] 15-02-PLAN.md — 相邻批次分差与等级变化徽标、批次卡片样式、趋势测试锚点
-
-### Phase 16: 风险评估引擎输入重组
-
-**Goal**: 用系统已有的 23 项指标重新设计三种疾病的评估模型 —— 让每种病使用其临床上相关的全部已有输入，而不是把前两种病折半相加当作第三种；不新增疾病，不改表结构
-
-**Depends on**: Phase 15（风险页已能呈现逐项归因，重组后的输入会直接反映在评分构成里）
-
-**Requirements**: 无独立 REQ-ID（v1.4 未新建 REQUIREMENTS.md，范围由本阶段 CONTEXT.md 界定）
-
-**Success Criteria** (what must be TRUE):
-
-  1. 三种疾病各自的评分由与其临床相关的指标驱动，且每项输入的贡献可在详情弹窗逐项核对（各项之和 = 总分）
-  2. 心血管疾病不再是「糖尿病分与高血压分折半」的派生值，而是用血压、血脂、BMI、年龄等自身相关输入独立评估
-  3. 缺失的输入标 `MISSING` 而非按「正常」计零分；用户能区分「没测」与「正常」
-  4. 指标覆盖面板的 `riskNote` 与实际读取的指标一致 —— 面板说参与评估的，引擎真的读；反之亦然
-  5. 评估结果的历史快照（`contributors` JSON）仍然冻结当时依据，读时不重算
-  6. 后端门禁全绿（`mvn verify -DskipITs` + `checkstyle:check`），前端门禁全绿
-
-**UI hint**: yes
-
-**Plans:** 5/5 plans complete
-
-Plans:
-**Wave 1**
-
-- [x] 16-01-PLAN.md — `RiskThresholdRegistry` 落地与阈值搬家（tracer）：规则表 + `consumedKeys()` 单一声明、引擎 4 处阈值改读、`riskNote` 由规则渲染、删除 `RISK_CONSUMERS`（心血管 8 条规则在 16-03 追加）
-- [x] 16-02-PLAN.md — 三处呈现缺陷与测试脚手架：`--border-1` 归零、`--text-3` 5 改 2 留、弹窗首列 88px、API mock 补 `getMetricCoverage` + 覆盖行 fixture
-
-**Wave 2** *(blocked on Wave 1 completion)*
-
-- [x] 16-03-PLAN.md — 心血管独立评估：9 条自有归因（含血脂四项 MISSING）、删除 `halve`、方向感知的归因工厂、两个血压别名、封顶折算与阈值区分性夹具
-- [x] 16-04-PLAN.md — 覆盖面板分组互斥与摘要措辞：`missingMetrics` 谓词、`usedMissing`、摘要第三段「纳入评估范围」、空态下一步、两套词表各自渲染
-
-**Wave 3** *(blocked on Wave 2 completion)*
-
-- [x] 16-05-PLAN.md — 面板与引擎同源收口：`public static format` 共享、`classify` 按风险阈值、`assemble` 增加 profile 与 bmi 双源取值、摘要第二段「超出评估阈值」、五条门禁同批全绿
-
-### Phase 17: 告警语义收敛
-
-**Goal**: 全站只有一套阈值区间语义 —— `ThresholdRangeChecker.classify` 是唯一判定源，没有第二份比较实现。原目标类 `IntelligentAlertService` 已在 `19db185` 随 `service/alert/` 整包删除，但本阶段要达成的标准仍然被违反：`ThresholdComparator` 是一套平行的五区间实现（8 处比较、零测试），`ThresholdEvaluator.findExceededThreshold` 是第三份
-
-**Depends on**: Nothing（纯后端判定源收敛，不改 API、不改表、不影响用户可见文案）
-
-**Requirements**: ROADMAP v1.4 成功标准 3（无独立 REQ-ID，v1.4 未新建 REQUIREMENTS.md）
-
-**Success Criteria** (what must be TRUE):
-
-  1. 全库不存在「边界 getter + 关系比较」的组合（`ThresholdRangeChecker` 自身的两个原语除外）
-  2. `ThresholdComparator` 整类删除，其唯一的活方法交由 band 投影取代
-  3. `ThresholdEvaluator` 的 severity、direction 与被超越边界值三者由同一个 band 派生，不可能互相矛盾
-  4. 合法阈值序下新实现与旧实现逐点等价；非法阈值序（`warningLow > warningHigh`）下不再产出自相矛盾的告警
-  5. 后端门禁全绿（708 测试 + checkstyle 0）
-
-**UI hint**: no
-
-**Plans:** 0 GSD plans（经 autoresearch 机械指标闭环完成，证据在 `17-SUMMARY.md`）
-
-Plans:
-
-**Note**: 本阶段未走 `plan-phase` → `execute-phase` 流程，而是用 autoresearch 循环驱动：指标 `dup_sites` 10 → 0，正确性闸门为 702 项测试 + checkstyle，注入 band 反转可令 5 条测试变红（闸门有牙齿）。详细证据见 `.planning/phases/17-alert-semantics/17-SUMMARY.md`
-
-### Phase 18: 技术债清理与收尾
-
-**Goal**: 清除无引用的类与重复实现，并消除指标 key 别名的静默落空 —— 后者是同一模式在本仓库的第三次复发（硬编码别名查 `metric_key` 恒落空，不报错只降级）
-
-**Depends on**: Phase 17（判定源收敛后，格式化与评分路径才适合统一）
-
-**Requirements**: ROADMAP v1.4 成功标准 4（无无引用类、无用户可见英文异常原文、无未消费字典键）
-
-**Success Criteria** (what must be TRUE):
-
-  1. 无零引用的容器管理类（`RiskAnalyzer` 与 `RiskScorer` 逐字重复、`PushStrategyService` 已被 `PushChannelManager` 取代）
-  2. 全库不存在以遗留别名（`glucose` / `temperature` 等）作为匹配臂的 switch 分支
-  3. 指标 key 匹配前统一经 `MetricKeyNormalizer.toCanonicalKey` 归一化，历史别名与新数据都能命中
-  4. 冗余布尔判定（其条件已被同一 `if` 中的另一判定完全涵盖）归零
-  5. 后端门禁全绿（708 测试 + checkstyle 0）
-
-**UI hint**: no
-
-**Plans:** 0 GSD plans（经 autoresearch 三段闭环完成，证据在 `18-SUMMARY.md`）
-
-Plans:
-
-**Note**: 同样未走 GSD 计划流程。三段指标：`alias_sites` 6 → 0（4 文件 6 处）、`dead_code` 3 → 0、`redundant_guards` 1 → 0。另有一段 `dup_bodies` 1 → 1 被主动 **discard**（提取代价高于收益），回访条件记录在 `.auto/prompt.md`。详细证据见 `.planning/phases/17-alert-semantics/18-SUMMARY.md` 与 `18-metric-key-aliases.md`
 </details>
 
 

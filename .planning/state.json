@@ -15,7 +15,7 @@
     },
     {
       "number": "17",
-      "name": "告警语义收敛（目标类已删除，改由 ThresholdRangeChecker.bandOf 单一判定源收口）",
+      "name": "告警语义收敛",
       "status": "complete"
     },
     {
@@ -25,9 +25,9 @@
     }
   ],
   "next": {
-    "command": "/gsd:audit-milestone",
-    "label": "Audit v1.4",
-    "reason": "All 4 phases complete — audit before archiving"
+    "command": "/gsd:new-milestone",
+    "label": "Start a new milestone",
+    "reason": "All phases complete — start a new milestone"
   },
-  "updated_at": "2026-11-18T16:20:32.815Z"
+  "updated_at": "2026-11-19T01:50:05.601Z"
 }

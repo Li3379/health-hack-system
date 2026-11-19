@@ -2,27 +2,27 @@
 gsd_state_version: "1.0"
 milestone: v1.4
 milestone_name: 风险评估可信化与引擎收敛
-current_phase: 18 — 技术债清理与收尾（已完成，v1.4 待归档）
-current_phase_name: 技术债清理与收尾
-status: planning
-stopped_at: v1.4 all 4 phases complete — ready for milestone audit/archive
-last_updated: "2026-11-18T16:20:32.712Z"
+current_phase: none — v1.4 archived
+status: completed
+stopped_at: v1.4 archived 2026-11-19 — ready for the next milestone
+last_updated: "2026-11-19T01:50:05.512Z"
 last_activity: 2026-11-19
-last_activity_desc: Phase 18 complete (dead code zeroed); v1.4 ready to archive
-state_head: b320f297f36fd22aa157047c2cc9661cb7ff25c9
+last_activity_desc: Milestone v1.4 completed and archived
+state_head: 18d98ba68347b6d0cc5f560a4f6a511b0ff50a43
 progress:
   total_phases: 4
   completed_phases: 4
   total_plans: 7
   completed_plans: 7
+current_phase_name: none
 ---
 
 # State: Health Hack System
 
 **Created:** 2026-05-28
 **Current Milestone:** v1.4 风险评估可信化与引擎收敛
-**Current Phase:** v1.4 完成，待归档
-**Status:** Ready to plan
+**Current Phase:** — (v1.4 archived)
+**Status:** Between milestones — v1.4 shipped 2026-11-19
 
 ## Project Reference
 
@@ -68,10 +68,10 @@ See: `.planning/PROJECT.md`
 
 ## Current Position
 
-Phase: 16 (风险评估引擎输入重组) — COMPLETE
-Plan: Not started
-Status: All plans executed; five gates green; ready for /gsd:verify-work
-Last activity: 2026-11-19 — Phase 16 complete, transitioned to Phase 17
+Phase: Milestone v1.4 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-11-19 — Milestone v1.4 completed and archived
 
 ## Accumulated Context
 
