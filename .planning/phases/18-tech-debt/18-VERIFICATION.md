@@ -2,15 +2,16 @@
 phase: 18-tech-debt
 verified: 2026-11-19T03:10:00Z
 status: passed
-score: 4/5 success criteria verified, 1 partially (see SC4)
+score: 4/5 success criteria verified outright, 1 partially (SC4: guards done, dictionary keys not attempted)
 covered_files:
   - .planning/ROADMAP.md
   - .planning/phases/18-tech-debt/18-SUMMARY.md
   - .planning/phases/18-tech-debt/18-metric-key-aliases.md
   - hhs-backend/src/main/java/com/hhs/service/domain/MetricDisplayFormatter.java
   - hhs-backend/src/main/java/com/hhs/service/impl/AiParseServiceImpl.java
+  - hhs-backend/src/main/java/com/hhs/controller/FileUploadController.java
   - hhs-backend/src/test/java/com/hhs/service/domain/MetricDisplayFormatterTest.java
-covered_digest: "v1:sha256:35a8fccb4cbff59cb88e04fc49be11d70a3011d638ed3a831ea079643187e7ba"
+covered_digest: "v1:sha256:6418fd119db2f5e6aca4567f0c3635cd2c87327a6568443309b5889c86b8e517"
 behavior_unverified: 0
 overrides_applied: 1
 gaps: []
@@ -115,9 +116,23 @@ eight false inversions; checking the record declaration fixed it.
 - **`RiskScorer` reading the `contributors` snapshot** — currently still maps
   `riskLevel`, not the frozen snapshot. This is a product decision (whether the
   snapshot supersedes the level mapping), not a mechanical cleanup.
-- **`FileUploadController` English-leak sweep** — inconclusive; no
-  `Result.failure(n, "English")` form found, but other paths were not exhaustively
-  checked.
+- ~~**`FileUploadController` English-leak sweep**~~ — **DONE.** The leak was not
+  an English literal (all four literal messages are Chinese) but a concatenated
+  exception message:
+
+  ```java
+  return Result.failure(500, "文件上传失败：" + e.getMessage());
+  ```
+
+  `java.io` messages are English and may embed host paths
+  (`/uploads/...: Permission denied`), so this rendered raw Java exception text
+  to the user. Now `"文件上传失败，请稍后重试"`, with the operator detail left in
+  the preceding `log.error`.
+
+  A repo-wide sweep for the same shape — `getMessage()` concatenated into any
+  user-facing `Result.failure` / `BusinessException` / `setMessage` — found
+  **exactly one** occurrence, this one. `FileUploadController` has no test at
+  all, which is how it survived.
 - **未消费字典键** — no mechanical criterion defined; not attempted.
 - **Segment 5's `dup_bodies`** — one accepted instance remains.
 
