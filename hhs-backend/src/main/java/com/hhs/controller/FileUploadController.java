@@ -101,7 +101,10 @@ public class FileUploadController {
 
         } catch (IOException e) {
             log.error("文件上传失败", e);
-            return Result.failure(500, "文件上传失败：" + e.getMessage());
+            // Never surface e.getMessage(): java.io messages are English and
+            // may embed host paths ("/uploads/...: Permission denied"). The
+            // operator detail already went to the log line above.
+            return Result.failure(500, "文件上传失败，请稍后重试");
         }
     }
 }
