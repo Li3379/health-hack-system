@@ -1,13 +1,17 @@
 -- =====================================================
 -- HHS Database Schema
--- Version: 3.5.0
+-- Version: 3.6.0
 -- Created: 2026-02-27
--- Updated: 2026-03-19
+-- Updated: 2026-11-19
 -- Description: Unified schema for all HHS tables
 -- Character Set: utf8mb4
 -- Collation: utf8mb4_unicode_ci
 --
 -- Change Log:
+--   v3.6.0 (2026-11-19): risk_assessment gains batch_id / contributors, mirroring
+--                        migration/v1.4_risk_snapshot.sql. A fresh deploy built only
+--                        from this file lacked both columns and GET
+--                        /api/prevention/risk-assessment answered 500.
 --   v3.5.0 (2026-03-19): Added device_platform_config table for OAuth configuration management
 --   v3.4.0 (2026-03-19): Added record_time column to health_metric for precise timestamp conflict resolution
 --   v3.3.0 (2026-03-05): Added push_history table for multi-channel push tracking
@@ -330,9 +334,12 @@ CREATE TABLE IF NOT EXISTS `risk_assessment` (
     `risk_level` VARCHAR(16) NOT NULL COMMENT 'Risk level: LOW-low/MEDIUM-medium/HIGH-high',
     `risk_score` INT DEFAULT NULL COMMENT 'Risk score (0-100)',
     `suggestion` TEXT DEFAULT NULL COMMENT 'Suggestion measures',
+    `batch_id` VARCHAR(32) DEFAULT NULL COMMENT 'Assessment batch id; rows produced by one run share it',
+    `contributors` JSON DEFAULT NULL COMMENT 'Frozen per-factor scoring breakdown at assessment time',
     `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT 'Creation time',
     KEY `idx_user_id` (`user_id`),
     KEY `idx_risk_level` (`risk_level`),
+    KEY `idx_batch_id` (`batch_id`),
     CONSTRAINT `fk_risk_assessment_user` FOREIGN KEY (`user_id`) REFERENCES `sys_user` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Risk assessment record table';
 

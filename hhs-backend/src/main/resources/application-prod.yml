@@ -38,9 +38,6 @@ spring:
           auth: true
           ssl:
             enable: true
-          starttls:
-            enable: true
-            required: true
     default-encoding: UTF-8
 
 mybatis-plus:

@@ -57,7 +57,7 @@ public class EmailPushChannel implements PushChannel {
         try {
             sendEmail(email, alert, user);
             return PushResult.success(getChannelType());
-        } catch (MessagingException e) {
+        } catch (Exception e) {
             log.error("Failed to send email to {}: {}", email, e.getMessage());
             return PushResult.failed(getChannelType(), e.getMessage());
         }

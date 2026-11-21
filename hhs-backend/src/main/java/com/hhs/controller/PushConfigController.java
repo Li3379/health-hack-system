@@ -234,7 +234,7 @@ public class PushConfigController {
             return Result.success(response);
         } else {
             log.warn("Test push failed for user {} channel {}: {}", userId, type, result.getMessage());
-            return Result.failure(400, "推送发送失败，请稍后重试");
+            return Result.failure(400, "推送失败: " + (result.getMessage() != null ? result.getMessage() : "请检查配置后重试"));
         }
     }
 
