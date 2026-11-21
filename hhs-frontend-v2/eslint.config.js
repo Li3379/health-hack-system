@@ -19,7 +19,9 @@ export default [
       '.idea/',
       'public/',
       'auto-imports.d.ts',
-      'components.d.ts'
+      'components.d.ts',
+      'vite.config.js',
+      'vite.config.d.ts'
     ]
   },
 
