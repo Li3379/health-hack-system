@@ -114,6 +114,8 @@ hhs-backend/uploads/
 
 # Frontend build output
 hhs-frontend-v2/dist/
+hhs-frontend-v2/vite.config.js
+hhs-frontend-v2/vite.config.d.ts
 
 # IDE output directory
 out/
@@ -155,6 +157,8 @@ docs/
 *.pptx
 *.pdf
 scripts/generate-docx.js
+/package.json
+/package-lock.json
 gen_*.py
 record_*.py
 test_txt.txt
