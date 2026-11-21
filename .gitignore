@@ -145,6 +145,7 @@ autoresearch-dashboard.html
 # ====================
 # Non-Code & Project Documentation Artifacts
 # ====================
+docs/
 .bishe/
 .planning/
 .qa-artifacts/
@@ -153,10 +154,12 @@ autoresearch-dashboard.html
 *.docx
 *.pptx
 *.pdf
-docs/作品介绍文档.*
-docs/演示脚本.md
-docs/deployment/write_cicd.py
-docs/architecture-diagram.*
+scripts/generate-docx.js
+gen_*.py
+record_*.py
+test_txt.txt
+test_*.txt
+*.tsbuildinfo
 
 # ====================
 # AI Agent Instructions & Review Reports
