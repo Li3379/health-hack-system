@@ -181,3 +181,13 @@ docs/V2-ITERATION-PLAN.md
 docs/V2-TASK-CHECKLIST.md
 
 
+
+# ====================
+# Local data dumps (legacy table backups before destructive SQL)
+# ====================
+.local-backup/
+
+# ====================
+# Local agent tooling output (workflow run scripts, per-session)
+# ====================
+.zcode/
