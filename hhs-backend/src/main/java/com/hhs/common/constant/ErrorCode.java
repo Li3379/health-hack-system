@@ -66,6 +66,13 @@ public enum ErrorCode {
     RESOURCE_FILE_PARSE_ERROR(400, "resource.file_parse_error", "文件解析失败", "File parsing failed"),
 
     // ========================================
+    // Request errors (REQUEST_*)
+    // ========================================
+    REQUEST_METHOD_NOT_ALLOWED(405, "request.method_not_allowed", "请求方法不被支持", "Request method not supported"),
+    REQUEST_MEDIA_TYPE_NOT_SUPPORTED(415, "request.media_type_not_supported", "请求内容类型不支持", "Unsupported media type"),
+    REQUEST_NOT_ACCEPTABLE(406, "request.not_acceptable", "无法按请求的格式返回结果", "Not acceptable"),
+
+    // ========================================
     // Validation errors (VALIDATION_*)
     // ========================================
     VALIDATION_INVALID_PARAMETER(400, "validation.invalid_parameter", "参数校验失败", "Invalid parameter"),

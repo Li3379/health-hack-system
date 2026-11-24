@@ -10,6 +10,7 @@ import jakarta.validation.Path;
 import jakarta.validation.ValidationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
@@ -17,6 +18,9 @@ import org.springframework.security.authentication.AuthenticationCredentialsNotF
 import org.springframework.validation.ObjectError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.HttpMediaTypeNotAcceptableException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
@@ -233,6 +237,60 @@ public class GlobalExceptionHandler {
     public Result<Void> handleHttpMessageNotReadableException(HttpMessageNotReadableException ex) {
         log.warn("Request body parsing failed: {}", ex.getMessage());
         return Result.failure(400, "validation.request_body_invalid", "请求内容格式有误，请检查后重试");
+    }
+
+    /**
+     * Handle an unsupported request {@code Content-Type} (415).
+     *
+     * <p>Same root cause as the 405 handler below: without this, the exception falls through to
+     * {@link #handleException(Exception)} and a client contract error is reported as a 500
+     * "service unavailable". The endpoint is healthy — the caller sent the wrong body format.
+     * Logged at warn, because nothing on the server is broken.</p>
+     */
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<Result<Void>> handleMediaTypeNotSupported(HttpMediaTypeNotSupportedException ex) {
+        log.warn("Unsupported media type: {} - supported={}", ex.getContentType(), ex.getSupportedMediaTypes());
+        Result<Void> body = Result.failure(415, ErrorCode.REQUEST_MEDIA_TYPE_NOT_SUPPORTED.getCode(),
+            "请求内容类型不支持，请检查提交格式");
+        return ResponseEntity.status(415).body(body);
+    }
+
+    /**
+     * Handle a response format the client will not accept (406).
+     *
+     * <p>Also a client-side contract error: the request was well-formed and the server can
+     * produce the resource, just not in any of the media types listed in {@code Accept}.</p>
+     */
+    @ExceptionHandler(HttpMediaTypeNotAcceptableException.class)
+    public ResponseEntity<Result<Void>> handleMediaTypeNotAcceptable(HttpMediaTypeNotAcceptableException ex) {
+        log.warn("Not acceptable: {}", ex.getMessage());
+        Result<Void> body = Result.failure(406, ErrorCode.REQUEST_NOT_ACCEPTABLE.getCode(),
+            "无法按请求的格式返回结果");
+        return ResponseEntity.status(406).body(body);
+    }
+
+    /**
+     * Handle unsupported HTTP methods.
+     *
+     * <p>Without this handler the exception falls through to {@link #handleException(Exception)},
+     * which reports a 500 "service unavailable". That misleads both users and operators: the
+     * endpoint exists and is healthy, the client simply used the wrong verb. Logged at warn —
+     * this is a client mistake, not a server fault.</p>
+     *
+     * <p>RFC 9110 §15.5.6 requires the {@code Allow} header on a 405, so the caller can see
+     * which verbs the resource does support.</p>
+     */
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<Result<Void>> handleMethodNotSupported(HttpRequestMethodNotSupportedException ex) {
+        log.warn("Method not allowed: {} - supported={}", ex.getMethod(), ex.getSupportedHttpMethods());
+        Result<Void> body = Result.failure(405, ErrorCode.REQUEST_METHOD_NOT_ALLOWED.getCode(),
+            "请求方法不被支持，请刷新页面后重试");
+        ResponseEntity.BodyBuilder builder = ResponseEntity.status(405);
+        Set<HttpMethod> supported = ex.getSupportedHttpMethods();
+        if (supported != null && !supported.isEmpty()) {
+            builder.allow(supported.toArray(new HttpMethod[0]));
+        }
+        return builder.body(body);
     }
 
     /**
