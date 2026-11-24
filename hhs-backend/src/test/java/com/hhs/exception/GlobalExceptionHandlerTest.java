@@ -7,11 +7,16 @@ import com.hhs.vo.FieldErrorVO;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.MethodParameter;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.validation.BeanPropertyBindingResult;
 import org.springframework.validation.FieldError;
 import org.springframework.validation.ObjectError;
+import org.springframework.web.HttpMediaTypeNotAcceptableException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 
 import java.lang.reflect.Method;
@@ -202,6 +207,107 @@ class GlobalExceptionHandlerTest {
         assertThat(body.getCode()).isEqualTo(500);
         assertThat(body.getMessage()).isEqualTo(SYSTEM_FALLBACK);
         assertThat(objectMapper.writeValueAsString(body)).doesNotContain("db down");
+    }
+
+    // ------------------------------------------------------------------
+    // 415 Unsupported Media Type / 406 Not Acceptable
+    // ------------------------------------------------------------------
+
+    @Test
+    @DisplayName("unsupported Content-Type → 415 + request.media_type_not_supported（不是 500）")
+    void handleMediaTypeNotSupported_returns415() {
+        HttpMediaTypeNotSupportedException ex =
+            new HttpMediaTypeNotSupportedException("text/plain", List.of(MediaType.APPLICATION_JSON));
+
+        ResponseEntity<Result<Void>> response = handler.handleMediaTypeNotSupported(ex);
+
+        assertThat(response.getStatusCode().value()).isEqualTo(415);
+        Result<Void> body = response.getBody();
+        assertThat(body).isNotNull();
+        assertThat(body.getCode()).isEqualTo(415);
+        assertThat(body.getErrorCode())
+            .isEqualTo(ErrorCode.REQUEST_MEDIA_TYPE_NOT_SUPPORTED.getCode())
+            // 反例：曾经落到 Exception 兜底，报 system.error + 500
+            .isNotEqualTo(ErrorCode.SYSTEM_ERROR.getCode());
+        assertThat(body.getMessage()).doesNotContain("服务暂时不可用");
+    }
+
+    @Test
+    @DisplayName("unacceptable Accept → 406 + request.not_acceptable（不是 500）")
+    void handleMediaTypeNotAcceptable_returns406() {
+        HttpMediaTypeNotAcceptableException ex =
+            new HttpMediaTypeNotAcceptableException(List.of(MediaType.APPLICATION_JSON));
+
+        ResponseEntity<Result<Void>> response = handler.handleMediaTypeNotAcceptable(ex);
+
+        assertThat(response.getStatusCode().value()).isEqualTo(406);
+        Result<Void> body = response.getBody();
+        assertThat(body).isNotNull();
+        assertThat(body.getCode()).isEqualTo(406);
+        assertThat(body.getErrorCode())
+            .isEqualTo(ErrorCode.REQUEST_NOT_ACCEPTABLE.getCode())
+            .isNotEqualTo(ErrorCode.SYSTEM_ERROR.getCode());
+    }
+
+    // ------------------------------------------------------------------
+    // 405 Method Not Allowed
+    // ------------------------------------------------------------------
+
+    @Test
+    @DisplayName("unsupported method → 405 + Allow header + request.method_not_allowed")
+    void handleMethodNotSupported_returns405WithAllowHeader() {
+        HttpRequestMethodNotSupportedException ex =
+            new HttpRequestMethodNotSupportedException("GET", List.of("PUT", "DELETE"));
+
+        ResponseEntity<Result<Void>> response = handler.handleMethodNotSupported(ex);
+
+        assertThat(response.getStatusCode().value()).isEqualTo(405);
+        // RFC 9110 §15.5.6 requires Allow on a 405; without it clients cannot self-correct.
+        assertThat(response.getHeaders().getAllow())
+            .containsExactlyInAnyOrder(HttpMethod.PUT, HttpMethod.DELETE);
+
+        Result<Void> body = response.getBody();
+        assertThat(body).isNotNull();
+        assertThat(body.getCode()).isEqualTo(405);
+        // 语义错误的反例：曾经复用 validation.invalid_parameter，那不是参数校验失败。
+        assertThat(body.getErrorCode())
+            .isEqualTo(ErrorCode.REQUEST_METHOD_NOT_ALLOWED.getCode())
+            .isNotEqualTo(ErrorCode.VALIDATION_INVALID_PARAMETER.getCode());
+    }
+
+    @Test
+    @DisplayName("405 without known supported methods omits Allow instead of sending an empty one")
+    void handleMethodNotSupported_omitsAllowWhenUnknown() {
+        HttpRequestMethodNotSupportedException ex =
+            new HttpRequestMethodNotSupportedException("PATCH");
+
+        ResponseEntity<Result<Void>> response = handler.handleMethodNotSupported(ex);
+
+        assertThat(response.getStatusCode().value()).isEqualTo(405);
+        assertThat(response.getHeaders().getAllow()).isNullOrEmpty();
+    }
+
+    @Test
+    @DisplayName("HttpRequestMethodNotSupportedException 只被一个 handler 声明 —— 重复会致启动失败")
+    void methodNotSupportedHasExactlyOneHandler() {
+        // 复审用 ExceptionHandlerMethodResolver 探针证明：同一异常两个 handler 会让
+        // RequestMappingHandlerAdapter 启动期抛 IllegalStateException: Ambiguous @ExceptionHandler。
+        // 这里用反射直接数一遍，成本更低且不需要 Spring 上下文。
+        long count = java.util.Arrays.stream(GlobalExceptionHandler.class.getDeclaredMethods())
+            .filter(m -> {
+                org.springframework.web.bind.annotation.ExceptionHandler ann =
+                    m.getAnnotation(org.springframework.web.bind.annotation.ExceptionHandler.class);
+                if (ann == null) {
+                    return false;
+                }
+                return java.util.Arrays.asList(ann.value())
+                    .contains(HttpRequestMethodNotSupportedException.class);
+            })
+            .count();
+
+        assertThat(count)
+            .as("HttpRequestMethodNotSupportedException 的 handler 数量")
+            .isEqualTo(1);
     }
 
     @Test

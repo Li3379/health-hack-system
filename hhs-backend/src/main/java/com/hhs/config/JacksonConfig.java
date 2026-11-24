@@ -1,5 +1,6 @@
 package com.hhs.config;
 
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
@@ -39,6 +40,9 @@ public class JacksonConfig {
                 new LocalDateSerializer(DateTimeFormatter.ofPattern(DATE_FORMAT)));
             // 禁用数组格式的时间戳输出
             builder.featuresToDisable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+            // 忽略请求体中的未知字段，与 Spring Boot 默认行为保持一致。
+            // 客户端版本错配或提前上线前端字段时不应直接 400。
+            builder.featuresToDisable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
         };
     }
 
@@ -66,6 +70,12 @@ public class JacksonConfig {
 
         // 禁用将日期时间写为时间戳（数组格式）
         objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+
+        // 关键：裸 new ObjectMapper() 默认开启 FAIL_ON_UNKNOWN_PROPERTIES，
+        // 而 Spring Boot 默认是关闭的。这个 @Primary bean 会被 WebMvcConfig
+        // 注入到 MappingJackson2HttpMessageConverter，覆盖掉框架的宽松默认，
+        // 导致客户端多传任一字段就返回 400（曾实际发生：moodType/goalType/progressValue）。
+        objectMapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
 
         return objectMapper;
     }
