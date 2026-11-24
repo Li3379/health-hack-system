@@ -3,7 +3,12 @@
     <el-card shadow="never" class="filter-bar">
       <el-form :inline="true" :model="filters">
         <el-form-item label="指标类型">
-          <el-select v-model="filters.metricKey" placeholder="全部指标" clearable style="width: 200px">
+          <el-select
+            v-model="filters.metricKey"
+            placeholder="全部指标"
+            clearable
+            style="width: 200px"
+          >
             <el-option
               v-for="item in metricMetaStore.healthMetrics"
               :key="item.canonicalKey"
@@ -33,9 +38,7 @@
       <template #header>
         <div class="header-actions">
           <span>健康指标记录</span>
-          <el-button type="primary" :icon="Plus" @click="showAddDialog">
-            添加健康指标
-          </el-button>
+          <el-button type="primary" :icon="Plus" @click="showAddDialog">添加健康指标</el-button>
         </div>
       </template>
 
@@ -48,6 +51,24 @@
         </el-table-column>
         <el-table-column prop="value" label="测量值" width="120" />
         <el-table-column prop="unit" label="单位" width="100" />
+        <el-table-column prop="status" label="状态" width="110">
+          <template #default="{ row }">
+            <el-tag
+              v-if="row.statusText"
+              size="small"
+              :type="
+                row.status?.startsWith('CRITICAL')
+                  ? 'danger'
+                  : row.status?.startsWith('WARNING')
+                    ? 'warning'
+                    : 'success'
+              "
+            >
+              {{ row.statusText }}
+            </el-tag>
+            <span v-else>-</span>
+          </template>
+        </el-table-column>
         <el-table-column prop="trend" label="趋势" width="100">
           <template #default="{ row }">
             <el-tag

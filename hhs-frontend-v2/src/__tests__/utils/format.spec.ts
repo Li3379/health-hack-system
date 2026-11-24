@@ -9,7 +9,9 @@ import {
   formatDate,
   formatTime,
   formatFileSize,
-  formatNumber
+  formatNumber,
+  getAlertLevelColor,
+  getAlertLevelLabel
 } from '@/utils/format'
 import { useMetricMetaStore } from '@/stores/metricMeta'
 
@@ -183,6 +185,22 @@ describe('format utils', () => {
       expect(getMetricUnit('   ')).toBe('')
       // @ts-expect-error testing invalid input
       expect(getMetricUnit(null)).toBe('')
+    })
+  })
+
+  describe('alert level formatters', () => {
+    it('getAlertLevelLabel returns Chinese labels, not el-tag types', () => {
+      expect(getAlertLevelLabel('HIGH')).toBe('严重')
+      expect(getAlertLevelLabel('MEDIUM')).toBe('警告')
+      expect(getAlertLevelLabel('LOW')).toBe('提示')
+      expect(getAlertLevelLabel('UNKNOWN')).toBe('UNKNOWN')
+    })
+
+    it('getAlertLevelColor keeps returning el-tag types', () => {
+      expect(getAlertLevelColor('HIGH')).toBe('danger')
+      expect(getAlertLevelColor('MEDIUM')).toBe('warning')
+      expect(getAlertLevelColor('LOW')).toBe('info')
+      expect(getAlertLevelColor('UNKNOWN')).toBe('info')
     })
   })
 

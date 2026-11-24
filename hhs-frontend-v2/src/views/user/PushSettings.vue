@@ -35,11 +35,16 @@
                   <div>
                     <div class="channel-name">{{ config.channelLabel }}</div>
                     <div class="channel-desc">
-                      {{ getChannelDesc(config.channelType) }}
+                      {{ getChannelDesc(config.channelType, config.availability) }}
                     </div>
                   </div>
                 </div>
-                <el-switch v-model="config.enabled" @change="handleToggle(config)" />
+                <!-- 已启用但服务端不可用时必须仍可关闭，否则开关会永久锁死在开启位。 -->
+                <el-switch
+                  v-model="config.enabled"
+                  :disabled="!config.availability && !config.enabled"
+                  @change="handleToggle(config)"
+                />
               </div>
 
               <el-collapse-transition>
@@ -98,7 +103,15 @@
                   <el-tag :type="config.isConfigured ? 'success' : 'info'" size="small">
                     {{ config.isConfigured ? '已配置' : '未配置' }}
                   </el-tag>
-                  <el-tag v-if="config.offlineSupported" type="warning" size="small">
+                  <el-tag v-if="!config.availability" type="danger" size="small">
+                    服务端未开通
+                  </el-tag>
+                  <!-- 只在服务端确实开通时才声称支持离线投递，否则等于向用户承诺一件做不到的事 -->
+                  <el-tag
+                    v-else-if="config.offlineSupported"
+                    type="warning"
+                    size="small"
+                  >
                     支持离线推送
                   </el-tag>
                 </template>
@@ -153,6 +166,9 @@
                   </el-tag>
                 </div>
                 <div class="history-message">{{ item.message || '无消息' }}</div>
+                <div v-if="item.status === 'FAILED'" class="history-hint">
+                  {{ getFailureHint(item.message) }}
+                </div>
               </div>
             </el-timeline-item>
           </el-timeline>
@@ -300,12 +316,14 @@ function getChannelIcon(type: string) {
   return icons[type] || Bell
 }
 
-function getChannelDesc(type: string) {
+function getChannelDesc(type: string, availability = true) {
+  // 服务端未注册该渠道时，不能说「支持离线推送」——那是在承诺一件做不到的事。
+  // WebSocket 不依赖服务端外部通道，措辞不受 availability 影响。
   const descs: Record<string, string> = {
     WEBSOCKET: '实时在线推送。开关控制是否接收告警推送，连接状态在"实时监控"页面管理',
-    EMAIL: '邮件通知，支持离线推送',
-    WECOM: '企业微信机器人，支持离线推送',
-    FEISHU: '飞书机器人，支持离线推送'
+    EMAIL: availability ? '邮件通知，支持离线推送' : '邮件通知，需服务端配置后方可投递',
+    WECOM: availability ? '企业微信机器人，支持离线推送' : '企业微信机器人，需服务端配置后方可投递',
+    FEISHU: availability ? '飞书机器人，支持离线推送' : '飞书机器人，需服务端配置后方可投递'
   }
   return descs[type] || ''
 }
@@ -329,6 +347,13 @@ function getConfigPlaceholder(type: string) {
 }
 
 async function handleToggle(config: PushConfig) {
+  // 服务端没注册该渠道时，后端会以 400 拒绝开启；在这里先挡住，避免一次注定失败的请求。
+  if (config.enabled && !config.availability) {
+    ElMessage.warning('服务端未开通该推送渠道，请联系管理员')
+    config.enabled = false
+    return
+  }
+
   // 离线通道启用时必须有配置值（WebSocket 是实时通道，不需要配置值）
   if (config.enabled && config.offlineSupported && !config.configValue) {
     ElMessage.warning(`请先输入${getConfigLabel(config.channelType)}`)
@@ -408,6 +433,32 @@ function getStatusLabel(status: string) {
     SKIPPED: '跳过'
   }
   return labels[status] || status
+}
+
+/**
+ * 把后端推送失败原文翻成用户能懂、且知道该找谁的中文提示。
+ *
+ * 后端 `push_history.message` 目前落的是英文原文（如 "Authentication failed"），
+ * 直接展示会让用户不知道该改配置还是找管理员。只匹配已知的几类失败，
+ * 认不出来的一律保留原文并标注「失败原因：」，绝不伪装成已知错误。
+ */
+function getFailureHint(message?: string | null) {
+  const raw = (message || '').trim()
+  if (!raw) return '失败原因：未返回具体原因，请稍后重试'
+  const lower = raw.toLowerCase()
+
+  // 先判更具体的主机名错误：主机名里可能带 "auth"（如 smtp.auth.…），
+  // 反过来先判 auth 会把它错标成凭据问题。
+  if (lower.includes('unknown host')) {
+    return '邮件服务器地址错误，请联系管理员'
+  }
+  if (lower.includes('connection refused') || lower.includes('timeout')) {
+    return '邮件服务器连接失败，请稍后重试'
+  }
+  if (lower.includes('authentication failed') || lower.includes('535') || lower.includes('auth')) {
+    return '邮箱凭据无效，请联系管理员'
+  }
+  return `失败原因：${raw}`
 }
 </script>
 
@@ -531,5 +582,12 @@ function getStatusLabel(status: string) {
 .history-message {
   font-size: 12px;
   color: #909399;
+}
+
+.history-hint {
+  margin-top: 2px;
+  font-size: 12px;
+  color: #f56c6c;
+  line-height: 1.5;
 }
 </style>

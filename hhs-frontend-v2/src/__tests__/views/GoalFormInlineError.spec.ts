@@ -65,7 +65,6 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 
 const createMock = goalsApi.create as unknown as Mock
 const listMock = goalsApi.list as unknown as Mock
-const removeMock = goalsApi.remove as unknown as Mock
 const confirmMock = ElMessageBox.confirm as unknown as Mock
 
 type MessageSpy = Mock & Record<'error' | 'success' | 'warning' | 'info', Mock>
@@ -95,29 +94,6 @@ function errorToastCount(): number {
     ([options]) => (options as { type?: string } | undefined)?.type === 'error'
   ).length
   return objectCalls + ElMessageMock.error.mock.calls.length
-}
-
-interface VNodeLike {
-  type?: unknown
-  props?: Record<string, unknown>
-  children?: unknown
-}
-
-/** 深度遍历 VNode，返回第一个带指定 class 片段的节点（同 ErrorLayerSample.spec.ts:110）。 */
-function findNodeByClass(node: unknown, className: string): VNodeLike | undefined {
-  if (!node || typeof node === 'string' || !Array.isArray((node as VNodeLike).children)) {
-    return undefined
-  }
-  const target = node as VNodeLike
-  for (const child of target.children as unknown[]) {
-    if (!child || typeof child !== 'object') continue
-    const candidate = child as VNodeLike
-    const classes = String(candidate.props?.class ?? '')
-    if (classes.includes(className)) return candidate
-    const nested = findNodeByClass(candidate, className)
-    if (nested) return nested
-  }
-  return undefined
 }
 
 /**
@@ -246,7 +222,6 @@ describe('goals/Index.vue — 400 字段校验的内联 + 汇总双呈现（ERR-
     vi.clearAllMocks()
     nextClientInvalid = undefined
     createMock.mockReset()
-    removeMock.mockReset()
     listMock.mockReset()
     listMock.mockResolvedValue({ code: 200, message: 'success', data: [] })
     confirmMock.mockReset()
@@ -422,48 +397,7 @@ describe('goals/Index.vue — 400 字段校验的内联 + 汇总双呈现（ERR-
     wrapper.unmount()
   })
 
-  it('删除确认框以 AbortError 取消：零提示，且不发 DELETE（ERR-08）', async () => {
-    // 用 AbortError 而不是字符串 'cancel'：旧的手写判断 `e !== 'cancel'` 对字符串
-    // 恰好能用，因此字符串形态**证明不了**任何事 —— 它对 AbortError 判成真失败并弹红灯。
-    confirmMock.mockRejectedValueOnce(Object.assign(new Error('canceled'), { name: 'AbortError' }))
-
-    const wrapper = mountGoals()
-    await flushPromises()
-
-    const vm = wrapper.vm as any
-    await vm.handleDelete(1)
-    await flushPromises()
-
-    expect(toastCount()).toBe(0)
-    expect(goalsApi.remove).not.toHaveBeenCalled()
-
-    wrapper.unmount()
-  })
-
-  it('删除已被删除的行（RESOURCE_NOT_FOUND 信封）：恰好一条提示，且文案是后端消息（B1 回归）', async () => {
-    // 真实形态：BusinessException(RESOURCE_NOT_FOUND) → HTTP 200 + 信封 code 500 + errorCode。
-    // 缺 presentStates 时 showError 在 resolveMessage 之前就返回 → 0 条，这正是 B1 的缺陷。
-    removeMock.mockRejectedValueOnce({
-      response: {
-        status: 200,
-        data: { code: 500, errorCode: 'resource.not_found', message: '记录不存在' }
-      }
-    })
-
-    const wrapper = mountGoals()
-    await flushPromises()
-
-    const vm = wrapper.vm as any
-    await vm.handleDelete(1)
-    await flushPromises()
-
-    expect(errorToastCount()).toBe(1)
-    // 断言文案而不只是条数：证明 presentStates 真的走到了 resolveMessage，
-    // 一条「分类了但没解析」的路径不会有本节点。
-    const options = ElMessageMock.mock.calls[0][0] as { message: unknown }
-    const textNode = findNodeByClass(options.message, 'error-toast__text')
-    expect(textNode?.children).toBe('记录不存在')
-
-    wrapper.unmount()
-  })
+  // 删除功能的相关用例（AbortError 取消、RESOURCE_NOT_FOUND 信封）已随功能一并移除：
+  // 后端 DELETE /api/goals/{id} 端点已回滚，前端「删除」按钮与 handleDelete 也撤掉了，
+  // 保留这两个用例只会测一个不存在的方法。
 })

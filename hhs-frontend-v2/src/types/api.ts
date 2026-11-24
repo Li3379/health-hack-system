@@ -90,6 +90,9 @@ export interface HealthMetricVO {
   recordDate: string
   trend?: string
   createTime: string
+  status?: string
+  statusText?: string
+  alertLevel?: string
 }
 
 export interface HealthMetricTrendVO {

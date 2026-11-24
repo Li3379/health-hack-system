@@ -166,8 +166,15 @@ export const getAlertLevelColor = (level: string): string => {
   return map[level] || 'info'
 }
 
-// 获取预警级别标签（别名）
-export const getAlertLevelLabel = getAlertLevelColor
+// 获取预警级别标签（注意：不是 el-tag type，Alerts.vue 的级别列要显示中文）
+export const getAlertLevelLabel = (level: string): string => {
+  const map: Record<string, string> = {
+    HIGH: '严重',
+    MEDIUM: '警告',
+    LOW: '提示'
+  }
+  return map[level] || level
+}
 
 // 获取预警类型标签
 export const getAlertTypeLabel = (type: string): string => {

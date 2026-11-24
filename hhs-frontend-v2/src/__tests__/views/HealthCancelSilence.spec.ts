@@ -71,6 +71,7 @@ const getAlertsMock = alertApi.getAlerts as unknown as Mock
 const getUnreadCountMock = alertApi.getUnreadCount as unknown as Mock
 const deleteAlertMock = alertApi.deleteAlert as unknown as Mock
 const markAllAsReadMock = alertApi.markAllAsRead as unknown as Mock
+const getStatisticsMock = alertApi.getStatistics as unknown as Mock
 const confirmMock = ElMessageBox.confirm as unknown as Mock
 
 type MessageSpy = Mock & Record<'error' | 'success' | 'warning' | 'info', Mock>
@@ -194,6 +195,11 @@ describe('health/Alerts.vue — 取消零提示且不发请求，真实失败恰
     vi.clearAllMocks()
     getAlertsMock.mockResolvedValue(okList())
     getUnreadCountMock.mockResolvedValue({ code: 200, message: 'success', data: 0 })
+    getStatisticsMock.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: { total: 0, pending: 0, critical: 0, warning: 0, normal: 0, unread: 0 }
+    })
     deleteAlertMock.mockResolvedValue({ code: 200, message: 'success' })
     markAllAsReadMock.mockResolvedValue({ code: 200, message: 'success', data: 0 })
     confirmMock.mockReset()
