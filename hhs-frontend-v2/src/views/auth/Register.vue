@@ -250,22 +250,25 @@ onMounted(() => {
   )
 
   // Form fields: alternating slide with spring
+  // 交互控件只能用 opacity 做入场：autoAlpha 会打 visibility:hidden，
+  // 入场期间输入框与按钮既无法命中测试也无法获得焦点（同 Login.vue）。
   tl.fromTo('.register-form .el-form-item',
-    { x: (i: number) => (i % 2 === 0 ? -50 : 50), autoAlpha: 0 },
-    { x: 0, autoAlpha: 1, stagger: 0.08, duration: DUR.mid, ease: EASE.back, clearProps: 'transform,autoAlpha,visibility,opacity' },
+    { x: (i: number) => (i % 2 === 0 ? -50 : 50), opacity: 0 },
+    { x: 0, opacity: 1, stagger: 0.08, duration: DUR.mid, ease: EASE.back, clearProps: 'transform,opacity' },
     '-=0.2'
   )
 
   // Button: spring pop
   tl.fromTo('.register-button',
-    { scale: 0.5, autoAlpha: 0 },
-    { scale: 1, autoAlpha: 1, duration: DUR.mid, ease: EASE.back, clearProps: 'transform,autoAlpha,visibility,opacity' },
+    { scale: 0.5, opacity: 0 },
+    { scale: 1, opacity: 1, duration: DUR.mid, ease: EASE.back, clearProps: 'transform,opacity' },
     '-=0.1'
   )
 
+  // Footer（含「立即登录」router-link，属于交互控件，同样不能用 autoAlpha）
   tl.fromTo('.footer-links',
-    { autoAlpha: 0, y: 15 },
-    { autoAlpha: 1, y: 0, duration: DUR.fast, clearProps: 'transform,autoAlpha,visibility,opacity' },
+    { opacity: 0, y: 15 },
+    { opacity: 1, y: 0, duration: DUR.fast, clearProps: 'transform,opacity' },
     '-=0.1'
   )
 
