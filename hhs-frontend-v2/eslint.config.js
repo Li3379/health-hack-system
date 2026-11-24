@@ -17,6 +17,10 @@ export default [
       '*.log*',
       '.vscode/',
       '.idea/',
+      // Local agent tooling output (workflow run scripts). Regenerated per
+      // session, never committed, and full of Node-only globals that would
+      // otherwise fail `no-undef`.
+      '**/.zcode/',
       'public/',
       'auto-imports.d.ts',
       'components.d.ts',
