@@ -83,7 +83,7 @@ CREATE TABLE IF NOT EXISTS `health_metric` (
     `unit` VARCHAR(32) DEFAULT NULL COMMENT 'Unit',
     `record_date` DATE NOT NULL COMMENT 'Record date',
     `record_time` DATETIME DEFAULT NULL COMMENT 'Precise timestamp for conflict resolution (v3.4.0)',
-    `trend` VARCHAR(16) DEFAULT 'NORMAL' COMMENT 'Trend: NORMAL/HIGH/LOW',
+    `trend` VARCHAR(16) DEFAULT 'STABLE' COMMENT 'Trend direction: UP, DOWN, STABLE',
     `category` ENUM('HEALTH', 'WELLNESS') DEFAULT 'HEALTH' COMMENT 'Metric category: HEALTH-medical/WELLNESS-lifestyle',
     `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT 'Creation time',
     KEY `idx_user_id` (`user_id`),
@@ -135,7 +135,7 @@ PARTITION BY RANGE (YEAR(created_at) * 100 + MONTH(created_at)) (
 CREATE TABLE IF NOT EXISTS `health_alert` (
     `id` BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT 'Alert ID',
     `user_id` BIGINT NOT NULL COMMENT 'User ID',
-    `alert_type` VARCHAR(50) NOT NULL COMMENT 'Alert type: CRITICAL-severe/WARNING-warning/INFO-tip/TREND-trend/RECOVERY-recovery',
+    `alert_type` VARCHAR(50) NOT NULL COMMENT 'Alert type: CRITICAL-severe/WARNING-warning/NORMAL-normal',
     `alert_level` VARCHAR(20) NOT NULL COMMENT 'Alert level: HIGH-high/MEDIUM-medium/LOW-low',
     `title` VARCHAR(200) DEFAULT NULL COMMENT 'Alert title',
     `message` TEXT DEFAULT NULL COMMENT 'Alert message',

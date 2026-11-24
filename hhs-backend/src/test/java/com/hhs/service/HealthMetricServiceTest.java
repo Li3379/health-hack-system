@@ -2,15 +2,20 @@ package com.hhs.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.hhs.common.enums.MetricCategory;
 import com.hhs.domain.event.MetricRecordedEvent;
 import com.hhs.dto.HealthMetricRequest;
 import com.hhs.entity.HealthMetric;
-import com.hhs.common.enums.MetricCategory;
+import com.hhs.entity.UserThreshold;
 import com.hhs.exception.BusinessException;
 import com.hhs.mapper.HealthMetricMapper;
 import com.hhs.mapper.RealtimeMetricMapper;
+import com.hhs.service.domain.HealthMetricMetaRegistry;
 import com.hhs.service.domain.MetricCategoryService;
+import com.hhs.service.domain.MetricDefinition;
 import com.hhs.service.domain.MetricDisplayFormatter;
+import com.hhs.service.domain.ThresholdEvaluator;
+import com.hhs.service.domain.ThresholdRangeChecker;
 import com.hhs.service.impl.HealthMetricServiceImpl;
 import com.hhs.vo.HealthMetricTrendVO;
 import com.hhs.vo.HealthMetricVO;
@@ -31,6 +36,7 @@ import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -61,6 +67,15 @@ class HealthMetricServiceTest {
     @Mock
     private MetricCategoryService metricCategoryService;
 
+    @Mock
+    private HealthMetricMetaRegistry metricRegistry;
+
+    @Mock
+    private ThresholdEvaluator thresholdEvaluator;
+
+    @Mock
+    private ThresholdRangeChecker rangeChecker;
+
     @InjectMocks
     private HealthMetricServiceImpl healthMetricService;
 
@@ -71,9 +86,12 @@ class HealthMetricServiceTest {
     @BeforeEach
     void setUp() {
         // Set up lenient mocks for optional dependencies
-        lenient().when(metricDisplayFormatter.getDisplayName(anyString())).thenAnswer(invocation -> invocation.getArgument(0));
+        lenient().when(metricDisplayFormatter.getDisplayName(anyString()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
         lenient().when(metricDisplayFormatter.getUnit(anyString())).thenReturn("bpm");
-        lenient().when(metricCategoryService.determineCategory(anyString())).thenReturn(MetricCategory.HEALTH);
+        lenient().when(metricCategoryService.determineCategory(anyString()))
+                .thenReturn(MetricCategory.HEALTH);
+        lenient().when(metricRegistry.getDefinition(anyString())).thenReturn(Optional.empty());
 
         testRequest = new HealthMetricRequest();
         testRequest.setUserId(testUserId);
@@ -395,5 +413,193 @@ class HealthMetricServiceTest {
         // Then: Verify graceful handling
         verify(healthMetricMapper, times(1)).selectById(999L);
         verify(healthMetricMapper, never()).deleteById((Serializable) any());
+    }
+
+    @Test
+    @DisplayName("测试1.18：自动趋势计算 - 无历史记录时默认 STABLE")
+    void testAutoTrend_NoHistory_ReturnsStable() {
+        when(healthMetricMapper.selectList(any(LambdaQueryWrapper.class)))
+                .thenReturn(Collections.emptyList());
+        when(healthMetricMapper.insert(any(HealthMetric.class))).thenAnswer(invocation -> {
+            HealthMetric metric = invocation.getArgument(0);
+            metric.setId(10L);
+            return 1;
+        });
+        HealthMetricRequest req = new HealthMetricRequest();
+        req.setMetricKey("heartRate");
+        req.setValue(new BigDecimal("75.0"));
+        req.setRecordDate(LocalDate.now());
+
+        HealthMetricVO vo = healthMetricService.add(testUserId, req);
+        assertEquals("STABLE", vo.trend());
+    }
+
+    @Test
+    @DisplayName("测试1.19：自动趋势计算 - 高于前值判定为 UP")
+    void testAutoTrend_HigherValue_ReturnsUp() {
+        HealthMetric previous = new HealthMetric();
+        previous.setId(5L);
+        previous.setUserId(testUserId);
+        previous.setMetricKey("heartRate");
+        previous.setValue(new BigDecimal("70.0"));
+        previous.setRecordDate(LocalDate.now().minusDays(1));
+
+        when(healthMetricMapper.selectList(any(LambdaQueryWrapper.class)))
+                .thenReturn(Collections.emptyList())
+                .thenReturn(List.of(previous));
+
+        when(healthMetricMapper.insert(any(HealthMetric.class))).thenAnswer(invocation -> {
+            HealthMetric metric = invocation.getArgument(0);
+            metric.setId(11L);
+            return 1;
+        });
+
+        HealthMetricRequest req = new HealthMetricRequest();
+        req.setMetricKey("heartRate");
+        req.setValue(new BigDecimal("80.0"));
+        req.setRecordDate(LocalDate.now());
+
+        HealthMetricVO vo = healthMetricService.add(testUserId, req);
+        assertEquals("UP", vo.trend());
+    }
+
+    @Test
+    @DisplayName("测试1.20：自动趋势计算 - 低于前值判定为 DOWN")
+    void testAutoTrend_LowerValue_ReturnsDown() {
+        HealthMetric previous = new HealthMetric();
+        previous.setId(5L);
+        previous.setUserId(testUserId);
+        previous.setMetricKey("heartRate");
+        previous.setValue(new BigDecimal("80.0"));
+        previous.setRecordDate(LocalDate.now().minusDays(1));
+
+        when(healthMetricMapper.selectList(any(LambdaQueryWrapper.class)))
+                .thenReturn(Collections.emptyList())
+                .thenReturn(List.of(previous));
+
+        when(healthMetricMapper.insert(any(HealthMetric.class))).thenAnswer(invocation -> {
+            HealthMetric metric = invocation.getArgument(0);
+            metric.setId(12L);
+            return 1;
+        });
+
+        HealthMetricRequest req = new HealthMetricRequest();
+        req.setMetricKey("heartRate");
+        req.setValue(new BigDecimal("72.0"));
+        req.setRecordDate(LocalDate.now());
+
+        HealthMetricVO vo = healthMetricService.add(testUserId, req);
+        assertEquals("DOWN", vo.trend());
+    }
+
+    @Test
+    @DisplayName("测试1.21：显式传入有效趋势参数时予以保留")
+    void testAutoTrend_ExplicitTrendRespected() {
+        when(healthMetricMapper.selectList(any(LambdaQueryWrapper.class)))
+                .thenReturn(Collections.emptyList());
+        when(healthMetricMapper.insert(any(HealthMetric.class))).thenAnswer(invocation -> {
+            HealthMetric metric = invocation.getArgument(0);
+            metric.setId(13L);
+            return 1;
+        });
+
+        HealthMetricRequest req = new HealthMetricRequest();
+        req.setMetricKey("heartRate");
+        req.setValue(new BigDecimal("80.0"));
+        req.setRecordDate(LocalDate.now());
+        req.setTrend("DOWN");
+
+        HealthMetricVO vo = healthMetricService.add(testUserId, req);
+        assertEquals("DOWN", vo.trend());
+    }
+
+    @Test
+    @DisplayName("测试1.22：指标状态计算 - 危急偏高判定")
+    void testStatus_CriticalHigh() {
+        UserThreshold threshold = new UserThreshold();
+        threshold.setMetricKey("systolicBloodPressure");
+        when(thresholdEvaluator.getThresholdForUser(testUserId, "systolicBloodPressure"))
+                .thenReturn(threshold);
+        when(rangeChecker.bandOf(eq(185.0), eq(threshold)))
+                .thenReturn(ThresholdRangeChecker.Band.CRITICAL_HIGH);
+
+        HealthMetric metric = new HealthMetric();
+        metric.setId(20L);
+        metric.setUserId(testUserId);
+        metric.setMetricKey("systolicBloodPressure");
+        metric.setValue(new BigDecimal("185.0"));
+        metric.setUnit("mmHg");
+        metric.setRecordDate(LocalDate.now());
+        metric.setTrend("UP");
+
+        when(healthMetricMapper.selectList(any(LambdaQueryWrapper.class)))
+                .thenReturn(List.of(metric));
+
+        List<HealthMetricVO> list =
+                healthMetricService.list(testUserId, "systolicBloodPressure", null, null);
+        assertFalse(list.isEmpty());
+        HealthMetricVO vo = list.get(0);
+        assertEquals("CRITICAL_HIGH", vo.status());
+        assertEquals("危急偏高", vo.statusText());
+        assertEquals("HIGH", vo.alertLevel());
+    }
+
+    @Test
+    @DisplayName("测试1.23：指标状态计算 - 元数据默认范围警告偏高")
+    void testStatus_MetaRegistryFallback_WarningHigh() {
+        when(thresholdEvaluator.getThresholdForUser(testUserId, "bloodGlucose")).thenReturn(null);
+        MetricDefinition def = mock(MetricDefinition.class);
+        when(def.normalMax()).thenReturn(new BigDecimal("6.1"));
+        when(metricRegistry.getDefinition("bloodGlucose")).thenReturn(Optional.of(def));
+
+        HealthMetric metric = new HealthMetric();
+        metric.setId(21L);
+        metric.setUserId(testUserId);
+        metric.setMetricKey("bloodGlucose");
+        metric.setValue(new BigDecimal("8.5"));
+        metric.setUnit("mmol/L");
+        metric.setRecordDate(LocalDate.now());
+        metric.setTrend("STABLE");
+
+        when(healthMetricMapper.selectList(any(LambdaQueryWrapper.class)))
+                .thenReturn(List.of(metric));
+
+        List<HealthMetricVO> list =
+                healthMetricService.list(testUserId, "bloodGlucose", null, null);
+        assertFalse(list.isEmpty());
+        HealthMetricVO vo = list.get(0);
+        assertEquals("WARNING_HIGH", vo.status());
+        assertEquals("偏高", vo.statusText());
+        assertEquals("MEDIUM", vo.alertLevel());
+    }
+
+    @Test
+    @DisplayName("测试1.24：指标状态计算 - 元数据默认范围警告偏低")
+    void testStatus_MetaRegistryFallback_WarningLow() {
+        when(thresholdEvaluator.getThresholdForUser(testUserId, "bloodGlucose")).thenReturn(null);
+        MetricDefinition def = mock(MetricDefinition.class);
+        when(def.normalMax()).thenReturn(new BigDecimal("6.1"));
+        when(def.normalMin()).thenReturn(new BigDecimal("3.9"));
+        when(metricRegistry.getDefinition("bloodGlucose")).thenReturn(Optional.of(def));
+
+        HealthMetric metric = new HealthMetric();
+        metric.setId(22L);
+        metric.setUserId(testUserId);
+        metric.setMetricKey("bloodGlucose");
+        metric.setValue(new BigDecimal("3.2"));
+        metric.setUnit("mmol/L");
+        metric.setRecordDate(LocalDate.now());
+        metric.setTrend("STABLE");
+
+        when(healthMetricMapper.selectList(any(LambdaQueryWrapper.class)))
+                .thenReturn(List.of(metric));
+
+        List<HealthMetricVO> list =
+                healthMetricService.list(testUserId, "bloodGlucose", null, null);
+        assertFalse(list.isEmpty());
+        HealthMetricVO vo = list.get(0);
+        assertEquals("WARNING_LOW", vo.status());
+        assertEquals("偏低", vo.statusText());
+        assertEquals("MEDIUM", vo.alertLevel());
     }
 }
