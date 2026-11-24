@@ -180,23 +180,25 @@ onMounted(() => {
   )
 
   // Form fields: alternating left/right with stagger
+  // 交互控件只能用 opacity 做入场：autoAlpha 会打 visibility:hidden，
+  // 入场期间输入框与按钮既无法命中测试也无法获得焦点（见 LoginEntranceInteraction.spec.ts）。
   tl.fromTo('.login-form .el-form-item',
-    { x: (i: number) => (i % 2 === 0 ? -60 : 60), autoAlpha: 0 },
-    { x: 0, autoAlpha: 1, stagger: 0.08, duration: DUR.mid, ease: EASE.back, clearProps: 'transform,autoAlpha,visibility,opacity' },
+    { x: (i: number) => (i % 2 === 0 ? -60 : 60), opacity: 0 },
+    { x: 0, opacity: 1, stagger: 0.08, duration: DUR.mid, ease: EASE.back, clearProps: 'transform,opacity' },
     '-=0.2'
   )
 
   // Button: spring pop
   tl.fromTo('.login-btn',
-    { scale: 0.5, autoAlpha: 0 },
-    { scale: 1, autoAlpha: 1, duration: DUR.mid, ease: EASE.back, clearProps: 'transform,autoAlpha,visibility,opacity' },
+    { scale: 0.5, opacity: 0 },
+    { scale: 1, opacity: 1, duration: DUR.mid, ease: EASE.back, clearProps: 'transform,opacity' },
     '-=0.1'
   )
 
-  // Footer
+  // Footer（含「立即注册」router-link，属于交互控件，同样不能用 autoAlpha）
   tl.fromTo('.form-footer',
-    { autoAlpha: 0, y: 15 },
-    { autoAlpha: 1, y: 0, duration: DUR.fast, clearProps: 'transform,autoAlpha,visibility,opacity' },
+    { opacity: 0, y: 15 },
+    { opacity: 1, y: 0, duration: DUR.fast, clearProps: 'transform,opacity' },
     '-=0.1'
   )
 
