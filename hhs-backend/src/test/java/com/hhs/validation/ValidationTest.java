@@ -332,7 +332,7 @@ public class ValidationTest {
         Set<ConstraintViolation<AlertVO>> violations = validator.validate(alert);
         assertFalse(violations.isEmpty());
         assertTrue(violations.stream()
-            .anyMatch(v -> v.getMessage().contains("危急、警告、提示、趋势或恢复")));
+            .anyMatch(v -> v.getMessage().contains("危急、警告或提示")));
     }
 
     @Test

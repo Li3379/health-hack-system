@@ -34,14 +34,27 @@ public class PushConfigVO {
 
     private Boolean isConfigured;
 
+    /**
+     * Whether the server is capable of delivering on this channel at all.
+     *
+     * <p>User-side config ({@link #isConfigured}) is necessary but not sufficient: a channel
+     * bean gated by {@code @ConditionalOnExpression} (today only EMAIL, on
+     * {@code spring.mail.host}) is never registered, so nothing can be sent even with a valid
+     * value. Mirrors {@code PushChannelManager.hasChannel(ChannelType)}.</p>
+     */
+    private Boolean availability;
+
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;
 
     /**
      * Create VO from entity
+     *
+     * @param entity          stored configuration, may be null
+     * @param serverAvailable whether the server registered a channel for this type
      */
-    public static PushConfigVO fromEntity(com.hhs.entity.UserPushConfig entity) {
+    public static PushConfigVO fromEntity(com.hhs.entity.UserPushConfig entity, boolean serverAvailable) {
         PushConfigVO vo = new PushConfigVO();
         if (entity != null) {
             vo.setId(entity.getId());
@@ -66,6 +79,8 @@ public class PushConfigVO {
         // Check if configured (has meaningful config value)
         vo.setIsConfigured(entity != null && entity.getConfigValue() != null
                 && !entity.getConfigValue().isBlank());
+
+        vo.setAvailability(serverAvailable);
 
         return vo;
     }
@@ -94,14 +109,18 @@ public class PushConfigVO {
 
     /**
      * Create default VO for a channel type (not yet configured)
+     *
+     * @param channelType     the channel
+     * @param serverAvailable whether the server registered a channel for this type
      */
-    public static PushConfigVO defaultForChannel(ChannelType channelType) {
+    public static PushConfigVO defaultForChannel(ChannelType channelType, boolean serverAvailable) {
         PushConfigVO vo = new PushConfigVO();
         vo.setChannelType(channelType.name());
         vo.setChannelLabel(channelType.getLabel());
         vo.setOfflineSupported(channelType.isOfflineSupported());
         vo.setEnabled(false);
         vo.setIsConfigured(false);
+        vo.setAvailability(serverAvailable);
         return vo;
     }
 }

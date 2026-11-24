@@ -21,7 +21,7 @@ public class HealthAlert {
     private Long userId;
 
     /**
-     * Alert type: CRITICAL, WARNING, INFO, TREND, RECOVERY
+     * Alert type: CRITICAL, WARNING, NORMAL
      */
     private String alertType;
 

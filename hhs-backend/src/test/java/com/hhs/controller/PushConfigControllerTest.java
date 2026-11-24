@@ -390,4 +390,76 @@ class PushConfigControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(200));
     }
+
+    // ==================== Server availability ====================
+
+    @Test
+    @DisplayName("Should expose availability from hasChannel on the list endpoint")
+    @WithMockUser(username = "admin")
+    void testGetAllConfigsExposesAvailability() throws Exception {
+        when(userPushConfigMapper.selectList(any())).thenReturn(List.of(testConfig));
+        when(pushChannelManager.hasChannel(ChannelType.EMAIL)).thenReturn(false);
+
+        mockMvc.perform(get("/api/push/config"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[?(@.channelType=='EMAIL')].availability").value(false))
+                .andExpect(jsonPath("$.data[?(@.channelType=='WECOM')].availability").value(true));
+    }
+
+    @Test
+    @DisplayName("Should expose availability on the single-channel endpoint")
+    @WithMockUser(username = "admin")
+    void testGetSpecificConfigExposesAvailability() throws Exception {
+        when(userPushConfigMapper.findByUserIdAndChannelType(1L, "EMAIL")).thenReturn(testConfig);
+        when(pushChannelManager.hasChannel(ChannelType.EMAIL)).thenReturn(false);
+
+        mockMvc.perform(get("/api/push/config/EMAIL"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.availability").value(false));
+    }
+
+    @Test
+    @DisplayName("Should refuse to enable a channel the server never registered")
+    @WithMockUser(username = "admin")
+    void testRejectEnablingUnregisteredChannel() throws Exception {
+        PushConfigRequest request = new PushConfigRequest();
+        request.setConfigValue("new@example.com");
+        request.setEnabled(true);
+
+        when(pushChannelManager.hasChannel(ChannelType.EMAIL)).thenReturn(false);
+        when(userPushConfigMapper.findByUserIdAndChannelType(1L, "EMAIL")).thenReturn(null);
+
+        mockMvc.perform(put("/api/push/config/EMAIL")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(400));
+
+        verify(userPushConfigMapper, never()).insert(any());
+        verify(userPushConfigMapper, never()).updateById(any());
+    }
+
+    @Test
+    @DisplayName("Should still allow disabling a channel the server no longer registers")
+    @WithMockUser(username = "admin")
+    void testAllowDisablingUnregisteredChannel() throws Exception {
+        // An existing enabled=1 row on an environment that lost the capability must stay
+        // closable, otherwise the switch is stuck on forever.
+        PushConfigRequest request = new PushConfigRequest();
+        request.setEnabled(false);
+
+        when(pushChannelManager.hasChannel(ChannelType.EMAIL)).thenReturn(false);
+        when(userPushConfigMapper.findByUserIdAndChannelType(1L, "EMAIL")).thenReturn(testConfig);
+        when(userPushConfigMapper.updateById(any())).thenReturn(1);
+
+        mockMvc.perform(put("/api/push/config/EMAIL")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(200));
+
+        verify(userPushConfigMapper).updateById(any());
+    }
 }

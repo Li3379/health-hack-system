@@ -11,7 +11,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -87,6 +92,78 @@ public class ThresholdEvaluator {
         }
 
         return convertToUserThreshold(rules.get(0));
+    }
+
+    /**
+     * Batch variant of {@link #getThresholdForUser(Long, String)}.
+     *
+     * <p>Rendering a page of metrics used to call the single-key lookup once per row, and each
+     * lookup issues two queries (user_threshold then alert_rule) — a 20-row page cost 40 extra
+     * round trips. This loads every threshold the page needs in exactly two queries and resolves
+     * alias groups in memory.
+     *
+     * @param userId the user ID
+     * @param metricKeys any mix of canonical keys and aliases
+     * @return map of canonical key to its applicable threshold; absent keys have no threshold
+     */
+    public Map<String, UserThreshold> getThresholdsForUser(Long userId, Set<String> metricKeys) {
+        if (userId == null || metricKeys == null || metricKeys.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        // canonical key -> full alias set, and the flat alias list for the IN clauses
+        Map<String, Set<String>> aliasesByCanonical = new LinkedHashMap<>();
+        Set<String> allAliases = new LinkedHashSet<>();
+        for (String key : metricKeys) {
+            if (key == null || key.isBlank()) {
+                continue;
+            }
+            String canonical = MetricKeyNormalizer.toCanonicalKey(key);
+            Set<String> aliases = MetricKeyNormalizer.getAliases(canonical);
+            aliasesByCanonical.put(canonical, aliases);
+            allAliases.addAll(aliases);
+        }
+        if (allAliases.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        Map<String, UserThreshold> resolved = new LinkedHashMap<>();
+        Set<String> satisfiedByUser = new HashSet<>();
+
+        // Personalized thresholds win. Rows come back newest-intent-first, so the first row
+        // seen for a canonical key is the one that should be used (same precedence as the
+        // single-key lookup).
+        List<UserThreshold> userThresholds = userThresholdMapper.selectList(
+                new LambdaQueryWrapper<UserThreshold>()
+                        .eq(UserThreshold::getUserId, userId)
+                        .in(UserThreshold::getMetricKey, allAliases)
+                        .orderByDesc(UserThreshold::getUpdatedAt)
+                        .orderByDesc(UserThreshold::getId)
+        );
+        for (UserThreshold row : userThresholds) {
+            String canonical = MetricKeyNormalizer.toCanonicalKey(row.getMetricKey());
+            if (aliasesByCanonical.containsKey(canonical) && resolved.putIfAbsent(canonical, row) == null) {
+                satisfiedByUser.add(canonical);
+            }
+        }
+
+        // Only fall back to default alert rules for keys with no personalized threshold.
+        if (satisfiedByUser.size() < aliasesByCanonical.size()) {
+            List<AlertRule> rules = alertRuleMapper.selectList(
+                    new LambdaQueryWrapper<AlertRule>()
+                            .in(AlertRule::getMetricKey, allAliases)
+                            .eq(AlertRule::getEnabled, true)
+                            .orderByDesc(AlertRule::getId)
+            );
+            for (AlertRule rule : rules) {
+                String canonical = MetricKeyNormalizer.toCanonicalKey(rule.getMetricKey());
+                if (aliasesByCanonical.containsKey(canonical) && !satisfiedByUser.contains(canonical)) {
+                    resolved.putIfAbsent(canonical, convertToUserThreshold(rule));
+                }
+            }
+        }
+
+        return resolved;
     }
 
     /**

@@ -30,10 +30,11 @@ public class AlertController {
         @RequestParam(defaultValue = "1") int page,
         @RequestParam(defaultValue = "20") int size,
         @RequestParam(required = false) String alertType,
+        @RequestParam(required = false) String alertLevel,
         @RequestParam(required = false) Boolean isRead) {
         Long userId = SecurityUtils.getCurrentUserId();
         log.debug("Get alerts request: userId={}, page={}, size={}", userId, page, size);
-        Page<AlertVO> alerts = alertService.getUserAlerts(userId, page, size, alertType, isRead);
+        Page<AlertVO> alerts = alertService.getUserAlerts(userId, page, size, alertType, alertLevel, isRead);
         return Result.success(alerts);
     }
 

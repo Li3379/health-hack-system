@@ -3,14 +3,17 @@ package com.hhs.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.hhs.domain.event.AlertCreatedEvent;
 import com.hhs.dto.AlertVO;
 import com.hhs.entity.HealthAlert;
 import com.hhs.exception.BusinessException;
 import com.hhs.mapper.HealthAlertMapper;
 import com.hhs.service.AlertService;
-import com.hhs.websocket.HealthWebSocketHandler;
+import com.hhs.service.domain.MetricDisplayFormatter;
+import com.hhs.service.domain.MetricKeyNormalizer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,7 +30,8 @@ import java.util.stream.Collectors;
 public class AlertServiceImpl implements AlertService {
 
     private final HealthAlertMapper healthAlertMapper;
-    private final HealthWebSocketHandler webSocketHandler;
+    private final ApplicationEventPublisher eventPublisher;
+    private final MetricDisplayFormatter displayFormatter;
 
     /**
      * Create a new health alert
@@ -39,13 +43,22 @@ public class AlertServiceImpl implements AlertService {
     @Override
     @Transactional(timeout = 30)
     public Long createAlert(HealthAlert alert) {
+        // Write side for the suggestion column. Until this ran, nothing ever assigned it, so
+        // health_alert.suggestion stayed NULL and every push channel fell through to its
+        // "请关注您的健康状况" default. Only fills when the caller left it empty — a real
+        // suggestion (once an AI/template writer exists) must win.
+        if (alert.getSuggestion() == null || alert.getSuggestion().isBlank()) {
+            alert.setSuggestion(defaultSuggestionFor(alert.getMetricKey()));
+        }
         alert.setCreatedAt(LocalDateTime.now());
         alert.setIsRead(false);
         alert.setIsAcknowledged(false);
         healthAlertMapper.insert(alert);
 
-        // Push to WebSocket
-        webSocketHandler.sendAlertToUser(alert.getUserId(), convertToVO(alert));
+        // Push is published, not called: AlertPushListener fans the alert out to every
+        // configured channel after this transaction commits. Sending here as well would
+        // double-deliver the frame to online users (WebSocket is one of those channels).
+        eventPublisher.publishEvent(new AlertCreatedEvent(alert.getUserId(), convertToVO(alert)));
 
         log.info("Created alert: userId={}, type={}, metricKey={}",
             alert.getUserId(), alert.getAlertType(), alert.getMetricKey());
@@ -59,13 +72,14 @@ public class AlertServiceImpl implements AlertService {
      * @param userId User ID
      * @param page Page number
      * @param size Page size
-     * @param alertType Filter by alert type (CRITICAL, WARNING, INFO)
+     * @param alertType Filter by alert type (CRITICAL, WARNING, NORMAL)
+     * @param alertLevel Filter by alert level (HIGH, MEDIUM, LOW)
      * @param isRead Filter by read status
      * @return Paginated alerts
      */
     @Override
     @Transactional(timeout = 30, readOnly = true)
-    public Page<AlertVO> getUserAlerts(Long userId, int page, int size, String alertType, Boolean isRead) {
+    public Page<AlertVO> getUserAlerts(Long userId, int page, int size, String alertType, String alertLevel, Boolean isRead) {
         Page<HealthAlert> pageParam = new Page<>(page, size);
         LambdaQueryWrapper<HealthAlert> queryWrapper = new LambdaQueryWrapper<HealthAlert>()
             .eq(HealthAlert::getUserId, userId)
@@ -74,6 +88,9 @@ public class AlertServiceImpl implements AlertService {
         // Apply filters if provided
         if (alertType != null && !alertType.isEmpty()) {
             queryWrapper.eq(HealthAlert::getAlertType, alertType);
+        }
+        if (alertLevel != null && !alertLevel.isEmpty()) {
+            queryWrapper.eq(HealthAlert::getAlertLevel, alertLevel);
         }
         if (isRead != null) {
             queryWrapper.eq(HealthAlert::getIsRead, isRead);
@@ -178,7 +195,7 @@ public class AlertServiceImpl implements AlertService {
      * Get alert statistics for a user
      *
      * @param userId User ID
-     * @return Statistics map containing total, pending, critical, warning counts
+     * @return Statistics map containing total, pending, critical, warning, normal counts
      */
     @Override
     @Transactional(timeout = 30, readOnly = true)
@@ -196,13 +213,19 @@ public class AlertServiceImpl implements AlertService {
         Long critical = healthAlertMapper.selectCount(
             new LambdaQueryWrapper<HealthAlert>()
                 .eq(HealthAlert::getUserId, userId)
-                .eq(HealthAlert::getAlertLevel, "CRITICAL")
+                .eq(HealthAlert::getAlertType, "CRITICAL")
         );
 
         Long warning = healthAlertMapper.selectCount(
             new LambdaQueryWrapper<HealthAlert>()
                 .eq(HealthAlert::getUserId, userId)
-                .eq(HealthAlert::getAlertLevel, "WARNING")
+                .eq(HealthAlert::getAlertType, "WARNING")
+        );
+
+        Long normal = healthAlertMapper.selectCount(
+            new LambdaQueryWrapper<HealthAlert>()
+                .eq(HealthAlert::getUserId, userId)
+                .eq(HealthAlert::getAlertType, "NORMAL")
         );
 
         java.util.Map<String, Object> stats = new java.util.HashMap<>();
@@ -210,6 +233,7 @@ public class AlertServiceImpl implements AlertService {
         stats.put("pending", pending);
         stats.put("critical", critical);
         stats.put("warning", warning);
+        stats.put("normal", normal);
         stats.put("unread", getUnreadCount(userId));
 
         return stats;
@@ -252,6 +276,31 @@ public class AlertServiceImpl implements AlertService {
         vo.setIsAcknowledged(alert.getIsAcknowledged());
         vo.setAcknowledgedAt(alert.getAcknowledgedAt());
         vo.setCreatedAt(alert.getCreatedAt());
+        vo.setAiAnalysis(alert.getAiAnalysis());
+        vo.setSuggestion(alert.getSuggestion());
         return vo;
+    }
+
+    /**
+     * Build a generic follow-up suggestion for an alert that arrived without one.
+     *
+     * <p>Deliberately returns {@code null} for an unknown metric key. {@link
+     * MetricDisplayFormatter#getDisplayName(String)} passes unrecognised keys through verbatim,
+     * so naively interpolating it would emit "请复查 heartRateXyz 并咨询医生" — an English
+     * identifier leaking into user-facing Chinese copy. A null suggestion keeps the push
+     * channels on their existing fallback text instead.</p>
+     *
+     * @param metricKey the alert's metric key, may be null
+     * @return the suggestion sentence, or null when the key is not a recognised metric
+     */
+    private String defaultSuggestionFor(String metricKey) {
+        if (metricKey == null || metricKey.isBlank()) {
+            return null;
+        }
+        String canonicalKey = MetricKeyNormalizer.toCanonicalKey(metricKey);
+        if (!MetricKeyNormalizer.isCanonicalKey(canonicalKey)) {
+            return null;
+        }
+        return "请复查" + displayFormatter.getDisplayName(canonicalKey) + "并咨询医生";
     }
 }
