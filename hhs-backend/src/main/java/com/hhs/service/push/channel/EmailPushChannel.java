@@ -115,13 +115,9 @@ public class EmailPushChannel implements PushChannel {
             html.append("</div>");
         }
 
-        // AI Analysis
-        if (alert.getAiAnalysis() != null && !alert.getAiAnalysis().isEmpty()) {
-            html.append("<div style='background:#e3f2fd;padding:15px;border-radius:5px;margin:15px 0;'>");
-            html.append("<h4 style='margin-top:0;'>AI分析</h4>");
-            html.append(String.format("<p>%s</p>", escapeHtml(alert.getAiAnalysis())));
-            html.append("</div>");
-        }
+        // AI Analysis block intentionally absent: nothing in the codebase ever calls
+        // setAiAnalysis on an AlertVO, so the branch could never render. Re-add it together
+        // with a writer (convertToVO / ThresholdEvaluator), not on its own.
 
         // Footer
         html.append("<p style='color:#999;font-size:12px;margin-top:20px;'>");

@@ -25,11 +25,12 @@ public interface AlertService {
      * @param userId User ID
      * @param page Page number
      * @param size Page size
-     * @param alertType Filter by alert type (CRITICAL, WARNING, INFO)
+     * @param alertType Filter by alert type (CRITICAL, WARNING, NORMAL)
+     * @param alertLevel Filter by alert level (HIGH, MEDIUM, LOW)
      * @param isRead Filter by read status
      * @return Paginated alerts
      */
-    Page<AlertVO> getUserAlerts(Long userId, int page, int size, String alertType, Boolean isRead);
+    Page<AlertVO> getUserAlerts(Long userId, int page, int size, String alertType, String alertLevel, Boolean isRead);
 
     /**
      * Get unread alerts count
@@ -78,7 +79,7 @@ public interface AlertService {
      * Get alert statistics for a user
      *
      * @param userId User ID
-     * @return Statistics map containing total, pending, critical, warning counts
+     * @return Statistics map containing total, pending, critical, warning, normal counts
      */
     java.util.Map<String, Object> getStatistics(Long userId);
 

@@ -16,11 +16,11 @@ public class AlertVO {
     private Long id;
 
     /**
-     * Alert type: CRITICAL, WARNING, INFO, TREND, RECOVERY
+     * Alert type: CRITICAL, WARNING, NORMAL
      */
     @NotBlank(message = "提醒类型不能为空")
     @Size(min = 1, max = 50, message = "提醒类型长度需在 1 至 50 个字符之间")
-    @Pattern(regexp = "^(CRITICAL|WARNING|INFO|TREND|RECOVERY)$", message = "提醒类型只能是危急、警告、提示、趋势或恢复")
+    @Pattern(regexp = "^(CRITICAL|WARNING|NORMAL)$", message = "提醒类型只能是危急、警告或提示")
     private String alertType;
 
     /**

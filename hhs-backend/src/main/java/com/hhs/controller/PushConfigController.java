@@ -59,10 +59,11 @@ public class PushConfigController {
         List<PushConfigVO> result = new ArrayList<>();
         for (ChannelType channelType : ChannelType.values()) {
             UserPushConfig config = configMap.get(channelType.name());
+            boolean serverAvailable = pushChannelManager.hasChannel(channelType);
             if (config != null) {
-                result.add(PushConfigVO.fromEntity(config));
+                result.add(PushConfigVO.fromEntity(config, serverAvailable));
             } else {
-                result.add(PushConfigVO.defaultForChannel(channelType));
+                result.add(PushConfigVO.defaultForChannel(channelType, serverAvailable));
             }
         }
 
@@ -86,9 +87,10 @@ public class PushConfigController {
 
         UserPushConfig config = userPushConfigMapper.findByUserIdAndChannelType(userId, type.name());
 
+        boolean serverAvailable = pushChannelManager.hasChannel(type);
         PushConfigVO vo = config != null
-                ? PushConfigVO.fromEntity(config)
-                : PushConfigVO.defaultForChannel(type);
+                ? PushConfigVO.fromEntity(config, serverAvailable)
+                : PushConfigVO.defaultForChannel(type, serverAvailable);
 
         return Result.success(vo);
     }
@@ -115,6 +117,14 @@ public class PushConfigController {
             if (request.getConfigValue() == null || request.getConfigValue().isBlank()) {
                 return Result.failure(400, "开启该推送渠道前，请先填写配置内容");
             }
+        }
+
+        // Server capability gate: enabling a channel that was never registered (e.g. EMAIL when
+        // spring.mail.host is blank) can only produce silent non-delivery, so refuse it up front.
+        // Turning a channel *off* stays allowed — otherwise an existing enabled row would be
+        // impossible to disable on an environment that has since lost the capability.
+        if (Boolean.TRUE.equals(request.getEnabled()) && !pushChannelManager.hasChannel(type)) {
+            return Result.failure(400, "服务端未开通该推送渠道，无法开启");
         }
 
         // SSRF hardening: webhook channels receive a server-issued POST, so the URL is validated
@@ -159,7 +169,7 @@ public class PushConfigController {
             log.info("Updated push config for user {} channel {}", userId, type);
         }
 
-        return Result.success(PushConfigVO.fromEntity(config));
+        return Result.success(PushConfigVO.fromEntity(config, pushChannelManager.hasChannel(type)));
     }
 
     /**
