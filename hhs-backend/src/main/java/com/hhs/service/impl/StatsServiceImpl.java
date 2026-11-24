@@ -11,6 +11,7 @@ import com.hhs.mapper.HealthAlertMapper;
 import com.hhs.mapper.HealthMetricMapper;
 import com.hhs.mapper.HealthScoreHistoryMapper;
 import com.hhs.service.StatsService;
+import com.hhs.service.domain.MetricKeyNormalizer;
 import com.hhs.vo.DashboardSummaryVO;
 import com.hhs.vo.MonthlyStatsVO;
 import com.hhs.vo.TodayStatsVO;
@@ -29,6 +30,7 @@ import java.time.LocalTime;
 import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 /**
  * 统计服务实现
@@ -432,10 +434,16 @@ public class StatsServiceImpl implements StatsService {
      * Build trend for a specific metric key
      */
     private TrendDataVO buildMetricTrend(Long userId, String metricKey, LocalDate startDate, LocalDate endDate) {
+        // Normalize before matching: frontend chart requests carry snake_case keys
+        // (heart_rate, sleep_duration) while rows are stored under canonical camelCase.
+        // A bare eq() silently returned an empty series, which rendered as a blank chart.
+        Set<String> aliases = MetricKeyNormalizer.getAliases(metricKey);
+        String displayName = MetricKeyNormalizer.toCanonicalKey(metricKey);
+
         List<HealthMetric> metrics = healthMetricMapper.selectList(
             new LambdaQueryWrapper<HealthMetric>()
                 .eq(HealthMetric::getUserId, userId)
-                .eq(HealthMetric::getMetricKey, metricKey)
+                .in(HealthMetric::getMetricKey, aliases)
                 .ge(HealthMetric::getRecordDate, startDate)
                 .le(HealthMetric::getRecordDate, endDate)
                 .orderByAsc(HealthMetric::getRecordDate)
@@ -457,8 +465,8 @@ public class StatsServiceImpl implements StatsService {
         }
 
         return TrendDataVO.builder()
-                .metricKey(metricKey)
-                .metricDisplayName(metricKey)
+                .metricKey(displayName)
+                .metricDisplayName(displayName)
                 .unit(unit != null ? unit : "")
                 .dates(dates)
                 .values(values)

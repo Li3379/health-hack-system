@@ -8,6 +8,7 @@ import com.hhs.domain.event.MetricRecordedEvent;
 import com.hhs.dto.HealthMetricRequest;
 import com.hhs.entity.HealthMetric;
 import com.hhs.entity.RealtimeMetric;
+import com.hhs.entity.UserThreshold;
 import com.hhs.exception.BusinessException;
 import com.hhs.mapper.HealthMetricMapper;
 import com.hhs.mapper.RealtimeMetricMapper;
@@ -17,21 +18,27 @@ import com.hhs.service.domain.MetricCategoryService;
 import com.hhs.service.domain.MetricDefinition;
 import com.hhs.service.domain.MetricDisplayFormatter;
 import com.hhs.service.domain.MetricKeyNormalizer;
+import com.hhs.service.domain.ThresholdEvaluator;
+import com.hhs.service.domain.ThresholdRangeChecker;
 import com.hhs.vo.HealthMetricTrendVO;
 import com.hhs.vo.HealthMetricVO;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -45,8 +52,32 @@ public class HealthMetricServiceImpl implements HealthMetricService {
     private final MetricDisplayFormatter metricDisplayFormatter;
     private final MetricCategoryService metricCategoryService;
     private final HealthMetricMetaRegistry metricRegistry;
+    private final ThresholdEvaluator thresholdEvaluator;
+    private final ThresholdRangeChecker rangeChecker;
 
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+
+    /**
+     * Alternative spellings of units that mean the same thing. Keys and values are lower-cased
+     * so {@link #canonicalizeUnit(String)} can compare case-insensitively.
+     */
+    private static final Map<String, String> UNIT_ALIASES = Map.of(
+            "bpm", "次/分",
+            "beats/min", "次/分",
+            "bpm(次/分)", "次/分",
+            "次/min", "次/分"
+    );
+
+    public HealthMetricServiceImpl(
+            HealthMetricMapper healthMetricMapper,
+            RealtimeMetricMapper realtimeMetricMapper,
+            ApplicationEventPublisher eventPublisher,
+            MetricDisplayFormatter metricDisplayFormatter,
+            MetricCategoryService metricCategoryService,
+            HealthMetricMetaRegistry metricRegistry) {
+        this(healthMetricMapper, realtimeMetricMapper, eventPublisher, metricDisplayFormatter,
+                metricCategoryService, metricRegistry, null, null);
+    }
 
     @Autowired
     public HealthMetricServiceImpl(
@@ -55,13 +86,17 @@ public class HealthMetricServiceImpl implements HealthMetricService {
             ApplicationEventPublisher eventPublisher,
             MetricDisplayFormatter metricDisplayFormatter,
             MetricCategoryService metricCategoryService,
-            @Autowired(required = false) HealthMetricMetaRegistry metricRegistry) {
+            @Autowired(required = false) HealthMetricMetaRegistry metricRegistry,
+            @Autowired(required = false) ThresholdEvaluator thresholdEvaluator,
+            @Autowired(required = false) ThresholdRangeChecker rangeChecker) {
         this.healthMetricMapper = healthMetricMapper;
         this.realtimeMetricMapper = realtimeMetricMapper;
         this.eventPublisher = eventPublisher;
         this.metricDisplayFormatter = metricDisplayFormatter;
         this.metricCategoryService = metricCategoryService;
         this.metricRegistry = metricRegistry != null ? metricRegistry : new HealthMetricMetaRegistry();
+        this.thresholdEvaluator = thresholdEvaluator;
+        this.rangeChecker = rangeChecker;
     }
 
     /**
@@ -76,43 +111,136 @@ public class HealthMetricServiceImpl implements HealthMetricService {
     @Transactional(timeout = 30)
     @CacheEvict(value = {"metrics:latest", "metrics:latest:all"}, allEntries = true)
     public HealthMetricVO add(Long userId, HealthMetricRequest request) {
-        String canonicalKey = MetricKeyNormalizer.toCanonicalKey(request.getMetricKey());
-        request.setMetricKey(canonicalKey);
-
-        // Auto-correct unit based on metric key
-        String normalizedUnit = normalizeUnit(canonicalKey, request.getUnit());
-
-        // Auto-assign category based on metric key
-        MetricCategory category = metricCategoryService.determineCategory(canonicalKey);
-
-        HealthMetric e = new HealthMetric();
-        e.setUserId(userId);
-        e.setProfileId(null);
-        e.setMetricKey(canonicalKey);
-        e.setValue(request.getValue());
-        e.setUnit(normalizedUnit);
-        e.setRecordDate(request.getRecordDate());
-        e.setTrend(request.getTrend() != null ? request.getTrend() : "NORMAL");
-        e.setCategory(category);
-        healthMetricMapper.insert(e);
-
-        // Publish event for alert generation and cache invalidation
-        RealtimeMetric realtimeMetric = toRealtimeMetric(e);
-        eventPublisher.publishEvent(new MetricRecordedEvent(userId, realtimeMetric));
-
-        log.info("Metric recorded for user: {}, key: {}, value: {}, category: {}", userId, e.getMetricKey(), e.getValue(), category);
-        return toVO(e);
+        HealthMetric persisted = persistMetric(userId, request);
+        return toVO(persisted);
     }
 
     /**
-     * Normalize unit based on metric key - ensures consistent units
+     * Shared write path for both entry points ({@link #add} and {@link #create}).
+     *
+     * <p>These two used to diverge: {@code add()} skipped the {@code realtime_metric} write,
+     * relied on the database default for {@code create_time}, and carried its own duplicate
+     * guard; {@code create()} did the opposite. The consequence was that metrics recorded
+     * through the AI/OCR/prevention entry points never reached {@code realtime_metric} and
+     * therefore never influenced the health score.
+     *
+     * <p>The duplicate guard is intentionally "same user + same key + same date + same value
+     * → overwrite" rather than a time-window check. A wall-clock window compared
+     * {@code create_time} against {@code LocalDateTime.now()}, but rows written through the
+     * database default were stored in UTC while application-written rows used the JVM zone,
+     * so the comparison never matched and the guard silently did nothing.
+     */
+    private HealthMetric persistMetric(Long userId, HealthMetricRequest request) {
+        String requestedKey = request.getMetricKey();
+        String canonicalKey = MetricKeyNormalizer.toCanonicalKey(requestedKey);
+        request.setMetricKey(canonicalKey);
+
+        String normalizedUnit = normalizeUnit(canonicalKey, request.getUnit());
+        MetricCategory category = metricCategoryService.determineCategory(canonicalKey);
+
+        HealthMetric existing = findSameDayEntry(userId, canonicalKey, request);
+        if (existing != null) {
+            String trend = determineTrend(userId, canonicalKey, request.getValue(),
+                    request.getRecordDate(), request.getTrend(), existing.getId());
+
+            existing.setValue(request.getValue());
+            existing.setUnit(normalizedUnit);
+            existing.setTrend(trend);
+            existing.setCategory(category);
+            existing.setCreateTime(LocalDateTime.now());
+            healthMetricMapper.updateById(existing);
+
+            RealtimeMetric updated = toRealtimeMetric(existing);
+            replaceRealtimeMetric(existing);
+            eventPublisher.publishEvent(new MetricRecordedEvent(userId, updated));
+
+            log.info("Metric re-recorded (overwrote same-day entry): id={}, userId={}, key={}, value={}, category={}",
+                    existing.getId(), userId, canonicalKey, request.getValue(), category);
+            return existing;
+        }
+
+        String trend = determineTrend(userId, canonicalKey, request.getValue(),
+                request.getRecordDate(), request.getTrend(), null);
+
+        HealthMetric metric = new HealthMetric();
+        metric.setUserId(userId);
+        metric.setProfileId(null);
+        metric.setMetricKey(canonicalKey);
+        metric.setValue(request.getValue());
+        metric.setUnit(normalizedUnit);
+        metric.setRecordDate(request.getRecordDate());
+        metric.setTrend(trend);
+        metric.setCategory(category);
+        // Set explicitly instead of relying on the column default: the MySQL container runs in
+        // UTC while the JVM runs in Asia/Shanghai, so the default wrote a timestamp 8 hours
+        // behind every application-written row in the same table.
+        metric.setCreateTime(LocalDateTime.now());
+        healthMetricMapper.insert(metric);
+
+        RealtimeMetric realtimeMetric = toRealtimeMetric(metric);
+        realtimeMetricMapper.insert(realtimeMetric);
+        eventPublisher.publishEvent(new MetricRecordedEvent(userId, realtimeMetric));
+
+        log.info("Metric recorded for user: {}, key: {}, value: {}, category: {}, realtimeMetricId: {}",
+                userId, canonicalKey, metric.getValue(), category, realtimeMetric.getId());
+        return metric;
+    }
+
+    /**
+     * Find an existing entry for the same user/metric/date combination.
+     *
+     * <p>Only the value decides whether this is a re-record of the same reading; a different
+     * value on the same date is a legitimate second measurement and must be inserted.
+     */
+    private HealthMetric findSameDayEntry(Long userId, String canonicalKey, HealthMetricRequest request) {
+        if (userId == null || request.getRecordDate() == null || request.getValue() == null) {
+            return null;
+        }
+        List<HealthMetric> matches = healthMetricMapper.selectList(
+                new LambdaQueryWrapper<HealthMetric>()
+                        .eq(HealthMetric::getUserId, userId)
+                        .in(HealthMetric::getMetricKey, MetricKeyNormalizer.getAliases(canonicalKey))
+                        .eq(HealthMetric::getRecordDate, request.getRecordDate())
+                        .eq(HealthMetric::getValue, request.getValue())
+                        .orderByDesc(HealthMetric::getId)
+                        .last("LIMIT 1")
+        );
+        return matches.isEmpty() ? null : matches.get(0);
+    }
+
+    /**
+     * Drop the realtime row that mirrors an existing health metric before it is replaced.
+     */
+    private void replaceRealtimeMetric(HealthMetric metric) {
+        if (metric.getRecordDate() == null) {
+            return;
+        }
+        LocalDateTime startTime = metric.getRecordDate().atStartOfDay();
+        LocalDateTime endTime = startTime.plusDays(1);
+        realtimeMetricMapper.deleteByHealthMetric(
+                metric.getUserId(), metric.getMetricKey(), startTime, endTime);
+        realtimeMetricMapper.insert(toRealtimeMetric(metric));
+    }
+
+    /**
+     * Normalize unit based on metric key - ensures consistent units.
+     *
+     * <p>Legacy rows carry English abbreviations (`bpm`) while the registry declares Chinese
+     * units (`次/分`). Both describe the same measurement, so a client echoing the legacy value
+     * back would otherwise fork the history into two unit groups and split trend charts.
      */
     private String normalizeUnit(String metricKey, String providedUnit) {
-        String standardUnit = metricRegistry.getDefinition(metricKey)
-                .map(MetricDefinition::unit)
-                .filter(u -> !u.isBlank())
-                .orElseGet(() -> metricDisplayFormatter.getUnit(metricKey));
+        String standardUnit = metricRegistry != null
+                ? metricRegistry.getDefinition(metricKey)
+                        .map(MetricDefinition::unit)
+                        .filter(u -> !u.isBlank())
+                        .orElseGet(() -> metricDisplayFormatter != null ? metricDisplayFormatter.getUnit(metricKey) : "")
+                : (metricDisplayFormatter != null ? metricDisplayFormatter.getUnit(metricKey) : "");
         if (providedUnit == null || providedUnit.isBlank()) {
+            return standardUnit;
+        }
+        String canonicalUnit = canonicalizeUnit(providedUnit);
+        if (!canonicalUnit.isEmpty() && canonicalUnit.equals(canonicalizeUnit(standardUnit))) {
             return standardUnit;
         }
         // Allow user-provided unit but log warning if different from standard
@@ -121,6 +249,17 @@ public class HealthMetricServiceImpl implements HealthMetricService {
                     providedUnit, metricKey, standardUnit);
         }
         return providedUnit;
+    }
+
+    /**
+     * Map alternative spellings of the same unit onto one comparable form.
+     */
+    private String canonicalizeUnit(String unit) {
+        if (unit == null) {
+            return "";
+        }
+        String trimmed = unit.trim();
+        return UNIT_ALIASES.getOrDefault(trimmed.toLowerCase(Locale.ROOT), trimmed.toLowerCase(Locale.ROOT));
     }
 
     // Helper method to convert HealthMetric to RealtimeMetric for event publishing
@@ -165,8 +304,10 @@ public class HealthMetricServiceImpl implements HealthMetricService {
         }
         wrapper.orderByDesc(HealthMetric::getRecordDate);
 
-        return healthMetricMapper.selectList(wrapper).stream()
-                .map(this::toVO)
+        List<HealthMetric> entities = healthMetricMapper.selectList(wrapper);
+        Map<String, UserThreshold> thresholds = loadThresholdsFor(entities);
+        return entities.stream()
+                .map(entity -> toVO(entity, thresholds))
                 .collect(Collectors.toList());
     }
 
@@ -234,11 +375,91 @@ public class HealthMetricServiceImpl implements HealthMetricService {
     }
 
     private HealthMetricVO toVO(HealthMetric e) {
+        return toVO(e, null);
+    }
+
+    /**
+     * Convert a metric to its VO.
+     *
+     * @param prefetchedThresholds thresholds already loaded for a batch, or {@code null} to
+     *                              resolve this single row's threshold on demand
+     */
+    private HealthMetricVO toVO(HealthMetric e, Map<String, UserThreshold> prefetchedThresholds) {
+        String rawTrend = e.getTrend();
+        String trend = (rawTrend == null || rawTrend.isBlank() || "NORMAL".equalsIgnoreCase(rawTrend) || "normal".equalsIgnoreCase(rawTrend) || "stable".equalsIgnoreCase(rawTrend))
+                ? "STABLE"
+                : rawTrend.toUpperCase();
+
+        String status = "NORMAL";
+        String statusText = "正常";
+        String alertLevel = "NONE";
+
+        if (e.getValue() != null && e.getUserId() != null && e.getMetricKey() != null) {
+            UserThreshold threshold;
+            if (prefetchedThresholds != null) {
+                threshold = prefetchedThresholds.get(MetricKeyNormalizer.toCanonicalKey(e.getMetricKey()));
+                // Fall back to the single-row lookup when the batch could not resolve this key,
+                // so a partial prefetch never silently downgrades an abnormal value to "normal".
+                if (threshold == null && thresholdEvaluator != null) {
+                    threshold = thresholdEvaluator.getThresholdForUser(e.getUserId(), e.getMetricKey());
+                }
+            } else {
+                threshold = thresholdEvaluator != null
+                        ? thresholdEvaluator.getThresholdForUser(e.getUserId(), e.getMetricKey())
+                        : null;
+            }
+            if (threshold != null && rangeChecker != null) {
+                ThresholdRangeChecker.Band band = rangeChecker.bandOf(e.getValue().doubleValue(), threshold);
+                switch (band) {
+                    case CRITICAL_HIGH -> {
+                        status = "CRITICAL_HIGH";
+                        statusText = "危急偏高";
+                        alertLevel = "HIGH";
+                    }
+                    case CRITICAL_LOW -> {
+                        status = "CRITICAL_LOW";
+                        statusText = "危急偏低";
+                        alertLevel = "HIGH";
+                    }
+                    case WARNING_HIGH -> {
+                        status = "WARNING_HIGH";
+                        statusText = "偏高";
+                        alertLevel = "MEDIUM";
+                    }
+                    case WARNING_LOW -> {
+                        status = "WARNING_LOW";
+                        statusText = "偏低";
+                        alertLevel = "MEDIUM";
+                    }
+                    default -> {
+                        status = "NORMAL";
+                        statusText = "正常";
+                        alertLevel = "NONE";
+                    }
+                }
+            } else if (metricRegistry != null) {
+                var defOpt = metricRegistry.getDefinition(e.getMetricKey());
+                if (defOpt.isPresent()) {
+                    MetricDefinition def = defOpt.get();
+                    if (def.normalMax() != null && e.getValue().compareTo(def.normalMax()) > 0) {
+                        status = "WARNING_HIGH";
+                        statusText = "偏高";
+                        alertLevel = "MEDIUM";
+                    } else if (def.normalMin() != null && e.getValue().compareTo(def.normalMin()) < 0) {
+                        status = "WARNING_LOW";
+                        statusText = "偏低";
+                        alertLevel = "MEDIUM";
+                    }
+                }
+            }
+        }
+
         return new HealthMetricVO(
                 e.getId(), e.getUserId(), e.getProfileId(), e.getMetricKey(),
-                metricDisplayFormatter.getDisplayName(e.getMetricKey()),
-                e.getValue(), e.getUnit(), e.getRecordDate(), e.getTrend(),
-                e.getCategory(), e.getCreateTime()
+                metricDisplayFormatter != null ? metricDisplayFormatter.getDisplayName(e.getMetricKey()) : e.getMetricKey(),
+                e.getValue(), e.getUnit(), e.getRecordDate(), trend,
+                e.getCategory(), e.getCreateTime(),
+                status, statusText, alertLevel
         );
     }
 
@@ -293,14 +514,34 @@ public class HealthMetricServiceImpl implements HealthMetricService {
 
         Page<HealthMetric> result = healthMetricMapper.selectPage(pageParam, wrapper);
 
+        // Prefetch every threshold this page needs in two queries instead of two per row.
+        Map<String, UserThreshold> thresholds = loadThresholdsFor(result.getRecords());
+
         // Convert to VO page
         Page<HealthMetricVO> voPage = new Page<>(result.getCurrent(), result.getSize(), result.getTotal());
         List<HealthMetricVO> records = result.getRecords().stream()
-                .map(this::toVO)
+                .map(entity -> toVO(entity, thresholds))
                 .collect(Collectors.toList());
         voPage.setRecords(records);
 
         return voPage;
+    }
+
+    /**
+     * Resolve the thresholds for a batch of metrics with a single batched lookup.
+     */
+    private Map<String, UserThreshold> loadThresholdsFor(List<HealthMetric> metrics) {
+        if (thresholdEvaluator == null || metrics == null || metrics.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        Set<String> keys = metrics.stream()
+                .map(HealthMetric::getMetricKey)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        if (keys.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        return thresholdEvaluator.getThresholdsForUser(metrics.get(0).getUserId(), keys);
     }
 
     /**
@@ -313,36 +554,7 @@ public class HealthMetricServiceImpl implements HealthMetricService {
     @Transactional(timeout = 30)
     public HealthMetric create(HealthMetricRequest request) {
         log.info("Creating metric for user: {}", request.getUserId());
-        String canonicalKey = MetricKeyNormalizer.toCanonicalKey(request.getMetricKey());
-        request.setMetricKey(canonicalKey);
-
-        // Auto-correct unit based on metric key
-        String normalizedUnit = normalizeUnit(canonicalKey, request.getUnit());
-
-        // Auto-assign category based on metric key
-        MetricCategory category = metricCategoryService.determineCategory(canonicalKey);
-
-        HealthMetric metric = new HealthMetric();
-        BeanUtils.copyProperties(request, metric, "profileId");
-        metric.setProfileId(null);
-        metric.setMetricKey(canonicalKey);
-        metric.setUnit(normalizedUnit);
-        metric.setTrend(request.getTrend() != null ? request.getTrend() : "NORMAL");
-        metric.setCategory(category);
-        metric.setCreateTime(LocalDateTime.now());
-
-        healthMetricMapper.insert(metric);
-
-        // 同时写入实时指标表，供健康评分使用
-        RealtimeMetric realtimeMetric = toRealtimeMetric(metric);
-        realtimeMetricMapper.insert(realtimeMetric);
-
-        // Publish event for alert generation and cache invalidation
-        eventPublisher.publishEvent(new MetricRecordedEvent(request.getUserId(), realtimeMetric));
-
-        log.info("Metric created: id={}, userId={}, type={}, value={}, category={}, realtimeMetricId={}",
-                metric.getId(), request.getUserId(), metric.getMetricKey(), metric.getValue(), category, realtimeMetric.getId());
-        return metric;
+        return persistMetric(request.getUserId(), request);
     }
 
     /**
@@ -370,12 +582,14 @@ public class HealthMetricServiceImpl implements HealthMetricService {
         // Auto-assign category based on metric key
         MetricCategory category = metricCategoryService.determineCategory(canonicalKey);
 
+        String trend = determineTrend(metric.getUserId(), canonicalKey, request.getValue(), request.getRecordDate(), request.getTrend(), id);
+
         // Update fields from request (userId should not be changed)
         metric.setMetricKey(canonicalKey);
         metric.setValue(request.getValue());
         metric.setUnit(normalizedUnit);
         metric.setRecordDate(request.getRecordDate());
-        metric.setTrend(request.getTrend() != null ? request.getTrend() : "NORMAL");
+        metric.setTrend(trend);
         metric.setCategory(category);
 
         healthMetricMapper.updateById(metric);
@@ -422,5 +636,56 @@ public class HealthMetricServiceImpl implements HealthMetricService {
 
         healthMetricMapper.deleteById(id);
         log.info("Metric deleted: id={}, userId={}", id, metric.getUserId());
+    }
+
+    /**
+     * Determine trend direction: respect explicit valid UP/DOWN/STABLE,
+     * otherwise auto-calculate against the previous most recent measurement.
+     */
+    private String determineTrend(Long userId, String canonicalKey, BigDecimal currentValue,
+                                  LocalDate recordDate, String requestedTrend, Long excludeId) {
+        if (requestedTrend != null && !requestedTrend.isBlank()) {
+            String upper = requestedTrend.trim().toUpperCase();
+            if ("UP".equals(upper) || "DOWN".equals(upper) || "STABLE".equals(upper)) {
+                return upper;
+            }
+        }
+
+        if (userId == null || canonicalKey == null || currentValue == null) {
+            return "STABLE";
+        }
+
+        Set<String> aliases = MetricKeyNormalizer.getAliases(canonicalKey);
+        LambdaQueryWrapper<HealthMetric> wrapper = new LambdaQueryWrapper<HealthMetric>()
+                .eq(HealthMetric::getUserId, userId)
+                .in(HealthMetric::getMetricKey, aliases);
+        if (excludeId != null) {
+            wrapper.ne(HealthMetric::getId, excludeId);
+        }
+        if (recordDate != null) {
+            wrapper.le(HealthMetric::getRecordDate, recordDate);
+        }
+        wrapper.orderByDesc(HealthMetric::getRecordDate)
+                .orderByDesc(HealthMetric::getId)
+                .last("LIMIT 1");
+
+        List<HealthMetric> previousList = healthMetricMapper.selectList(wrapper);
+        if (previousList.isEmpty()) {
+            return "STABLE";
+        }
+
+        HealthMetric previous = previousList.get(0);
+        if (previous.getValue() == null) {
+            return "STABLE";
+        }
+
+        int comp = currentValue.compareTo(previous.getValue());
+        if (comp > 0) {
+            return "UP";
+        } else if (comp < 0) {
+            return "DOWN";
+        } else {
+            return "STABLE";
+        }
     }
 }

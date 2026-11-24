@@ -87,7 +87,7 @@ public class WellnessServiceImpl implements WellnessService {
         metric.setValue(request.getValue());
         metric.setUnit(unit);
         metric.setRecordDate(request.getRecordDate());
-        metric.setTrend("normal");
+        metric.setTrend("STABLE");
         metric.setCategory(MetricCategory.WELLNESS);
         metric.setCreateTime(LocalDateTime.now());
 
@@ -328,11 +328,16 @@ public class WellnessServiceImpl implements WellnessService {
     }
 
     private HealthMetricVO toVO(HealthMetric e) {
+        String rawTrend = e.getTrend();
+        String trend = (rawTrend == null || rawTrend.isBlank() || "NORMAL".equalsIgnoreCase(rawTrend) || "normal".equalsIgnoreCase(rawTrend) || "stable".equalsIgnoreCase(rawTrend))
+                ? "STABLE"
+                : rawTrend.toUpperCase();
         return new HealthMetricVO(
                 e.getId(), e.getUserId(), e.getProfileId(), e.getMetricKey(),
                 metricDisplayFormatter.getDisplayName(e.getMetricKey()),
-                e.getValue(), e.getUnit(), e.getRecordDate(), e.getTrend(),
-                e.getCategory(), e.getCreateTime()
+                e.getValue(), e.getUnit(), e.getRecordDate(), trend,
+                e.getCategory(), e.getCreateTime(),
+                "NORMAL", "正常", "NONE"
         );
     }
 
