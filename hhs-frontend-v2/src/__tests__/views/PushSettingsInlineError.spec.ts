@@ -91,7 +91,11 @@ const globalStubs = {
     template: '<div class="el-card"><slot name="header" /><slot /></div>'
   },
   'el-collapse-transition': { template: '<div><slot /></div>' },
-  'el-switch': { template: '<input type="checkbox" class="el-switch" />', props: ['modelValue'] },
+  // disabled 必须真的落到 DOM 上：S3 的「不会把用户锁死在开关里」就是靠它观察的。
+  'el-switch': {
+    template: '<input type="checkbox" class="el-switch" :disabled="disabled" />',
+    props: ['modelValue', 'disabled']
+  },
   'el-tag': { template: '<span class="el-tag"><slot /></span>', props: ['type', 'size'] },
   'el-empty': { template: '<div class="el-empty">{{ description }}</div>', props: ['description'] },
   'el-timeline': { template: '<div class="el-timeline"><slot /></div>' },
@@ -137,6 +141,7 @@ function pushConfig(overrides: Record<string, unknown>) {
     enabled: true,
     offlineSupported: true,
     isConfigured: true,
+    availability: true,
     createdAt: '',
     updatedAt: '',
     ...overrides
@@ -279,6 +284,42 @@ describe('PushSettings.vue — 每通道独立的内联投影（ERR-03 / ERR-05�
     //    加载失败也没有把投影表清空。
     expect(vm.pushStore.saveError).not.toBeNull()
     expect(vm.pushStore.saveError.channelType).toBe('EMAIL')
+
+    wrapper.unmount()
+  })
+
+  it('服务端未开通：未启用的开关禁用且拒绝开启；已启用的仍可关闭（不锁死）', async () => {
+    getConfigsMock.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: [
+        // 未启用 + 服务端未开通 → 开关禁用，用户点不了（后端也会 400）。
+        pushConfig({ id: 1, channelType: 'EMAIL', enabled: false, availability: false }),
+        // 已启用 + 服务端未开通 → 必须仍可关闭，否则用户被永久锁在开启状态。
+        pushConfig({ id: 2, channelType: 'WECOM', channelLabel: '企业微信', enabled: true, availability: false })
+      ]
+    })
+
+    const wrapper = mount(PushSettings, mountOptions)
+    await flushPromises()
+
+    const switches = wrapper.findAll('.el-switch')
+    expect(switches).toHaveLength(2)
+    // EMAIL：未启用 → 禁用
+    expect((switches[0].element as HTMLInputElement).disabled).toBe(true)
+    // WECOM：已启用 → 不禁用（否则无法关闭）
+    expect((switches[1].element as HTMLInputElement).disabled).toBe(false)
+
+    // handleToggle 直接调用（绕过禁用态）也必须拒绝开启，且不产生 PUT。
+    const vm = wrapper.vm as any
+    const emailConfig = vm.pushStore.configs.find((c: any) => c.channelType === 'EMAIL')
+    emailConfig.enabled = true
+    await vm.handleToggle(emailConfig)
+    await flushPromises()
+
+    expect(emailConfig.enabled).toBe(false)
+    expect(updateConfigMock).not.toHaveBeenCalled()
+    expect(ElMessageMock.warning).toHaveBeenCalled()
 
     wrapper.unmount()
   })

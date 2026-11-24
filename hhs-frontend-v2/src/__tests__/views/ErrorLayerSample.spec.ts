@@ -158,6 +158,7 @@ describe('ErrorLayerSample — push store 单一出口与返回值契约', () =>
         enabled: true,
         offlineSupported: true,
         isConfigured: true,
+        availability: true,
         createdAt: '',
         updatedAt: ''
       }

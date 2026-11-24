@@ -10,6 +10,8 @@ export interface PushConfig {
   enabled: boolean
   offlineSupported: boolean
   isConfigured: boolean
+  /** 服务端是否具备该渠道的投递能力（对应后端 PushChannelManager.hasChannel） */
+  availability: boolean
   createdAt: string
   updatedAt: string
 }

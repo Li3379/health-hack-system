@@ -70,9 +70,23 @@ vi.mock('vue-router', () => ({
 }))
 
 vi.mock('@/composables/useGsap', () => {
-  const timeline = { fromTo: () => timeline }
+  const fromToCalls: Array<{
+    target: unknown
+    fromVars: Record<string, unknown>
+    toVars: Record<string, unknown>
+  }> = []
+  const timeline: Record<string, unknown> = {}
+  timeline.fromTo = (
+    target: unknown,
+    fromVars: Record<string, unknown>,
+    toVars: Record<string, unknown>
+  ) => {
+    fromToCalls.push({ target, fromVars, toVars })
+    return timeline
+  }
   return {
-    gsap: { timeline: () => timeline },
+    gsap: { timeline: () => timeline, to: vi.fn() },
+    __fromToCalls: fromToCalls,
     staggerReveal: vi.fn(),
     countUp: vi.fn(),
     cleanupScrollTriggers: vi.fn(),
@@ -560,6 +574,32 @@ describe('DashboardProfileBanner.spec.ts — 仪表盘档案引导表面', () =>
       expect(labelledBy).toBeTruthy()
       // 标题含动态数值，静态 aria-label 会立刻过期
       expect(wrapper.find(`#${labelledBy as string}`).text()).toContain('档案完整度 40%')
+      wrapper.unmount()
+    })
+
+    it('入场动画用 opacity 而不是 autoAlpha 处理可点击的 .quick-actions', async () => {
+      // .quick-actions 里是两个 el-button（:10-17）。autoAlpha 会打 visibility:hidden，
+      // 入场期间按钮既点不中也不能聚焦（同 Login.vue 的 S5 修复）。
+      type FromToCall = {
+        target: unknown
+        fromVars: Record<string, unknown>
+        toVars: Record<string, unknown>
+      }
+      const recorded = (gsapTools as unknown as { __fromToCalls: FromToCall[] }).__fromToCalls
+      recorded.length = 0
+
+      const wrapper = mountDashboard()
+      await flushPromises()
+
+      const quickActionCalls = recorded.filter(call => call.target === '.quick-actions')
+      expect(quickActionCalls).toHaveLength(1)
+      const call = quickActionCalls[0]
+      expect(call.fromVars.autoAlpha).toBeUndefined()
+      expect(call.fromVars.opacity).toBe(0)
+      expect(call.toVars.autoAlpha).toBeUndefined()
+      expect(String(call.toVars.clearProps)).not.toContain('visibility')
+      expect(String(call.toVars.clearProps)).not.toContain('autoAlpha')
+
       wrapper.unmount()
     })
   })

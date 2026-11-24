@@ -4,7 +4,7 @@ import type { AlertVO, PageResult } from '@/types/api'
 
 export const alertApi = {
   // 获取预警列表
-  getAlerts(params: { page?: number; size?: number; alertType?: string; isRead?: boolean }) {
+  getAlerts(params: { page?: number; size?: number; alertType?: string; alertLevel?: string; isRead?: boolean }) {
     return request.get<PageResult<AlertVO>>('/api/alerts', { params })
   },
 

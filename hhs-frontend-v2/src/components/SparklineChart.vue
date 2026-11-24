@@ -8,6 +8,7 @@ import * as echarts from 'echarts/core'
 import { LineChart } from 'echarts/charts'
 import { GridComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
+import { resolveCssColor, toRgba } from '@/utils/cssColor'
 
 echarts.use([LineChart, GridComponent, CanvasRenderer])
 
@@ -21,12 +22,28 @@ const chartRef = ref<HTMLElement>()
 let chartInstance: echarts.ECharts | null = null
 const handleResize = () => chartInstance?.resize()
 
+/**
+ * canvas 只认真实颜色值 —— `var(--accent-cool)40` 会让 `addColorStop` 抛
+ * SyntaxError 并导致整张图不渲染。这里把 CSS 变量解析成当前主题的实际颜色，
+ * 再自己拼 alpha；变量读不到时 resolveCssColor 兜底，不会抛异常。
+ */
+const buildSeriesColors = () => {
+  const base = resolveCssColor(props.color || 'var(--accent-cool)')
+  return {
+    line: base,
+    areaFrom: toRgba(base, 0.25),
+    areaTo: toRgba(base, 0.02),
+  }
+}
+
 const initChart = () => {
   if (!chartRef.value || !props.data.length) return
 
   if (chartInstance) {
     chartInstance.dispose()
   }
+
+  const colors = buildSeriesColors()
 
   chartInstance = echarts.init(chartRef.value)
   chartInstance.setOption({
@@ -40,12 +57,12 @@ const initChart = () => {
       symbol: 'none',
       lineStyle: {
         width: 2,
-        color: props.color || 'var(--accent-cool)',
+        color: colors.line,
       },
       areaStyle: {
         color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-          { offset: 0, color: (props.color || 'var(--accent-cool)') + '40' },
-          { offset: 1, color: (props.color || 'var(--accent-cool)') + '05' },
+          { offset: 0, color: colors.areaFrom },
+          { offset: 1, color: colors.areaTo },
         ]),
       },
     }],

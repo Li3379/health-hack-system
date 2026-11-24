@@ -44,7 +44,7 @@
                 <div class="goal-date">{{ goal.startDate }} ~ {{ goal.endDate }}</div>
                 <div class="goal-actions">
                   <el-button v-if="goal.status !== 'COMPLETED'" type="primary" size="small" @click="showProgressDialog(goal)">记录进度</el-button>
-                  <el-button type="danger" size="small" link @click="handleDelete(goal.id)">删除</el-button>
+                  <!-- 删除按钮暂时移除：后端 DELETE /api/goals/{id} 端点已回滚，留着只会点出 405。 -->
                 </div>
               </el-card>
             </el-col>
@@ -184,7 +184,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, onUnmounted, nextTick } from 'vue'
-import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
+import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { goalsApi, type HealthGoal } from '@/api/goals'
 import { useFormServerErrors, collectInvalidFieldMessages } from '@/composables/useFormServerErrors'
@@ -366,30 +366,10 @@ const handleAddProgress = async () => {
 }
 
 /**
- * 删除：确认与请求彻底分离。
- *
- * 取消路径是一个裸 `return` —— 用户按了「取消」不是失败，零提示（D-12 / ERR-08）。
- * 原先的手写取消判断（把拒绝值与字符串形式的取消哨兵逐字比较）对 `AbortError`
- * 与归一化后的 `ApiError('', 'cancel')` 都会误判成真失败，因此整段删掉。
- * 删除一个「已经不存在的行」返回 RESOURCE_NOT_FOUND，第三个参数
- * 让它仍然产生恰好一条提示。
+ * 删除功能已整体移除：后端 DELETE /api/goals/{id} 端点被回滚，前端保留调用只会得到 405。
+ * 将来若重新提供删除能力，需要后端端点与这里的确认/提示逻辑一起加回来。
  */
-const handleDelete = async (id: number) => {
-  try {
-    await ElMessageBox.confirm('确定要删除这个目标吗？', '提示', { type: 'warning' })
-  } catch {
-    // 取消确认框：刻意静默，不弹任何提示。
-    return
-  }
 
-  try {
-    await goalsApi.remove(id)
-    ElMessage.success('删除成功')
-    fetchGoals()
-  } catch (error) {
-    showError(error, 'goal.deleteFailed', { presentStates: true })
-  }
-}
 onMounted(async () => {
   await fetchGoals()
   await nextTick()

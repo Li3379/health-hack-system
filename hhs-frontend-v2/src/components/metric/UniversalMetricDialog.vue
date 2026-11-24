@@ -105,7 +105,13 @@
         >
           <template #title>
             <div class="inversion-banner-title">
-              <span>{{ isBpEqual ? '检测到收缩压与舒张压数值相同，请核对后修改' : '检测到收缩压低于舒张压，疑似输入颠倒' }}</span>
+              <span>
+                {{
+                  isBpEqual
+                    ? '检测到收缩压与舒张压数值相同，请核对后修改'
+                    : '检测到收缩压低于舒张压，疑似输入颠倒'
+                }}
+              </span>
               <el-button
                 v-if="!isBpEqual"
                 size="small"
@@ -362,7 +368,9 @@ const diastolicRef = toRef(form, 'diastolicValue')
 
 // 仅在新增模式下且选择血压时开启高低压协同，编辑单条历史记录按单项指标精准评估 (D-02)
 const isCollaborative = computed(() => {
-  return !isEditMode.value && (form.metricKey === 'bloodPressure' || form.metricKey === 'systolicBP')
+  return (
+    !isEditMode.value && (form.metricKey === 'bloodPressure' || form.metricKey === 'systolicBP')
+  )
 })
 
 const {
@@ -412,7 +420,9 @@ const metricOptions = computed(() => {
       key: m.canonicalKey,
       displayName: m.displayName
     }))
-    return isEditMode.value ? list : [{ key: 'bloodPressure', displayName: '血压 (高低压协同)' }, ...list]
+    return isEditMode.value
+      ? list
+      : [{ key: 'bloodPressure', displayName: '血压 (高低压协同)' }, ...list]
   }
   if (props.category === 'WELLNESS') {
     return metricMetaStore.wellnessMetrics.map(m => ({
@@ -430,7 +440,9 @@ const metricOptions = computed(() => {
     displayName: m.displayName
   }))
   const combined = [...healthList, ...wellnessList]
-  return isEditMode.value ? combined : [{ key: 'bloodPressure', displayName: '血压 (高低压协同)' }, ...combined]
+  return isEditMode.value
+    ? combined
+    : [{ key: 'bloodPressure', displayName: '血压 (高低压协同)' }, ...combined]
 })
 
 // 字段标签
@@ -613,7 +625,11 @@ const rules: FormRules = {
 
 // 规范化趋势
 const normalizeTrend = (trend?: string) => {
-  return trend ? trend.toUpperCase() : ''
+  if (!trend) return ''
+  const upper = trend.toUpperCase()
+  if (upper === 'NORMAL') return 'STABLE'
+  if (upper === 'UP' || upper === 'DOWN' || upper === 'STABLE') return upper
+  return ''
 }
 
 const toBackendTrend = (trend?: string) => {
@@ -621,8 +637,7 @@ const toBackendTrend = (trend?: string) => {
   const upper = trend.toUpperCase()
   if (upper === 'UP') return 'up'
   if (upper === 'DOWN') return 'down'
-  if (upper === 'STABLE') return 'stable'
-  if (upper === 'NORMAL') return 'normal'
+  if (upper === 'STABLE' || upper === 'NORMAL') return 'stable'
   return trend.toLowerCase()
 }
 
@@ -639,7 +654,9 @@ const initForm = (explicitData?: any) => {
     form.metricKey = canonicalKey
     form.value = targetData.value
     form.diastolicValue = undefined
-    form.recordDate = targetData.recordDate ? formatDate(targetData.recordDate) : formatDate(new Date())
+    form.recordDate = targetData.recordDate
+      ? formatDate(targetData.recordDate)
+      : formatDate(new Date())
     form.unit = targetData.unit || def?.unit || ''
     form.trend = normalizeTrend(targetData.trend)
     form.notes = targetData.notes || ''
@@ -666,7 +683,7 @@ const initForm = (explicitData?: any) => {
     form.value = undefined
     form.diastolicValue = undefined
     form.recordDate = formatDate(new Date())
-    form.unit = def?.unit || (canonicalKey === 'bloodPressure' ? 'mmHg' : (props.metric?.unit || ''))
+    form.unit = def?.unit || (canonicalKey === 'bloodPressure' ? 'mmHg' : props.metric?.unit || '')
     form.trend = ''
     form.notes = ''
   }
@@ -738,22 +755,24 @@ const handleSubmit = async () => {
   // 上一轮的残留投影不进入本次尝试；只清投影，不碰用户输入（ERR-05）。
   formErrors.reset()
 
-  await formRef.value.validate(async (valid: boolean, invalidFields?: Record<string, Array<{ message?: string }>>) => {
-    if (!valid) {
-      // 客户端校验失败与服务端 400 共用同一份汇总通道（GOV.UK 双呈现），零 toast。
-      formErrors.setErrors(collectInvalidFieldMessages(invalidFields))
-      await nextTick()
-      summaryRef.value?.focusSummary()
-      return
-    }
+  await formRef.value.validate(
+    async (valid: boolean, invalidFields?: Record<string, Array<{ message?: string }>>) => {
+      if (!valid) {
+        // 客户端校验失败与服务端 400 共用同一份汇总通道（GOV.UK 双呈现），零 toast。
+        formErrors.setErrors(collectInvalidFieldMessages(invalidFields))
+        await nextTick()
+        summaryRef.value?.focusSummary()
+        return
+      }
 
-    if (hasCritical.value) {
-      criticalDialogVisible.value = true
-      return
-    }
+      if (hasCritical.value) {
+        criticalDialogVisible.value = true
+        return
+      }
 
-    await executeSave()
-  })
+      await executeSave()
+    }
+  )
 }
 
 // 真正的数据入库执行 (自适应 API 路由与编辑流转 - REUSE-02)

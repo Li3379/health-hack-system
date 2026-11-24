@@ -33,7 +33,7 @@
         <el-col :span="6">
           <div class="stat-item">
             <div class="stat-value">{{ infoCount }}</div>
-            <div class="stat-label">提示预警</div>
+            <div class="stat-label">正常提示</div>
           </div>
         </el-col>
       </el-row>
@@ -43,16 +43,16 @@
         <el-form :inline="true" :model="filters">
           <el-form-item label="预警级别">
             <el-select v-model="filters.alertLevel" placeholder="全部" clearable>
-              <el-option label="严重" value="CRITICAL" />
-              <el-option label="警告" value="WARNING" />
-              <el-option label="提示" value="INFO" />
+              <el-option label="严重" value="HIGH" />
+              <el-option label="警告" value="MEDIUM" />
+              <el-option label="提示" value="LOW" />
             </el-select>
           </el-form-item>
           <el-form-item label="预警类型">
             <el-select v-model="filters.alertType" placeholder="全部" clearable>
-              <el-option label="阈值预警" value="THRESHOLD" />
-              <el-option label="趋势预警" value="TREND" />
-              <el-option label="系统预警" value="SYSTEM" />
+              <el-option label="严重预警" value="CRITICAL" />
+              <el-option label="警告预警" value="WARNING" />
+              <el-option label="正常提示" value="NORMAL" />
             </el-select>
           </el-form-item>
           <el-form-item label="状态">
@@ -158,14 +158,44 @@ const pagination = reactive({
   total: 0
 })
 
-const criticalCount = computed(() => alerts.value.filter(a => a.alertLevel === 'CRITICAL').length)
-const warningCount = computed(() => alerts.value.filter(a => a.alertLevel === 'WARNING').length)
-const infoCount = computed(() => alerts.value.filter(a => a.alertLevel === 'INFO').length)
+// 顶部三张卡必须是「该用户全量」口径，与「未读预警」(alertStore.unreadCount) 同源，
+// 否则一筛选就会跟着当前页缩水（筛「警告预警」时「严重预警」直接变 0）。
+// 统计接口失败时回退当前页统计，保证页面不空白。
+const globalStats = reactive<{ critical: number | null; warning: number | null; normal: number | null }>({
+  critical: null,
+  warning: null,
+  normal: null
+})
+
+const fetchStatistics = async () => {
+  try {
+    const data = (await alertApi.getStatistics())?.data
+    if (!data) {
+      console.warn('[Alerts] 统计接口无数据，回退当前页统计')
+      return
+    }
+    globalStats.critical = Number(data.critical ?? 0)
+    globalStats.warning = Number(data.warning ?? 0)
+    globalStats.normal = Number(data.normal ?? 0)
+  } catch (error) {
+    console.warn('[Alerts] 全量统计加载失败，回退当前页统计', error)
+  }
+}
+
+const criticalCount = computed(() =>
+  globalStats.critical ?? alerts.value.filter(a => a.alertType === 'CRITICAL').length
+)
+const warningCount = computed(() =>
+  globalStats.warning ?? alerts.value.filter(a => a.alertType === 'WARNING').length
+)
+const infoCount = computed(() =>
+  globalStats.normal ?? alerts.value.filter(a => a.alertType === 'NORMAL').length
+)
 
 const fetchAlerts = async () => {
   loading.value = true
   try {
-    const params: any = {
+    const params: { page: number; size: number; alertType?: string; alertLevel?: string; isRead?: boolean } = {
       page: pagination.page,
       size: pagination.size
     }
@@ -176,6 +206,8 @@ const fetchAlerts = async () => {
     const res = await alertApi.getAlerts(params)
     alerts.value = res.data.records
     pagination.total = res.data.total
+    // 列表每次刷新都同步一次全量统计，删/改后卡片数字才不会停在旧值
+    await fetchStatistics()
   } catch (error) {
     showError(error, 'alert.loadFailed', { presentStates: true })
   } finally {

@@ -424,9 +424,10 @@ onMounted(async () => {
       { y: 0, autoAlpha: 1, duration: DUR.slow, clearProps: 'transform,autoAlpha,visibility,opacity' },
       0.3
     )
+    // quick-actions 内是两个可点击按钮，不能用 autoAlpha（visibility:hidden 会导致点不中）
     .fromTo('.quick-actions',
-      { scale: 0.8, autoAlpha: 0 },
-      { scale: 1, autoAlpha: 1, duration: DUR.mid, ease: EASE.back, clearProps: 'transform,autoAlpha,visibility,opacity' },
+      { scale: 0.8, opacity: 0 },
+      { scale: 1, opacity: 1, duration: DUR.mid, ease: EASE.back, clearProps: 'transform,opacity' },
       0.4
     )
 

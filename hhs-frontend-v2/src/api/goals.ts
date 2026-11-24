@@ -58,10 +58,8 @@ export const goalsApi = {
   /** Add progress to a goal */
   addProgress(id: number, data: AddProgressRequest) {
     return request.post<GoalProgress>(`/api/goals/${id}/progress`, data)
-  },
-
-  /** Delete a goal */
-  remove(id: number) {
-    return request.delete<void>(`/api/goals/${id}`)
   }
+
+  // 删除接口已移除：后端 DELETE /api/goals/{id} 端点不存在，保留调用只会得到 405。
+  // 将来重新提供删除能力时，这里与视图层的确认框/提示逻辑需要一起加回来。
 }
