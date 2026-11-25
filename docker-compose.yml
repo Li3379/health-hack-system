@@ -47,6 +47,10 @@ services:
     environment:
       # Spring profile (dev/prod) - can be overridden in compose override
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+      # Pin the container clock instead of inheriting the image default (UTC): the JVM derives
+      # its default zone from TZ, and application-written timestamps (LocalDateTime.now()) must
+      # land on the same clock the UI and the "today" statistics assume.
+      TZ: Asia/Shanghai
       # Database configuration - override application.yml localhost
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/hhs?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
       SPRING_DATASOURCE_USERNAME: root
@@ -78,6 +82,11 @@ services:
       MAIL_PORT: ${MAIL_PORT:-465}
       MAIL_USERNAME: ${MAIL_USERNAME:-}
       MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      # Server-wide fallback webhook per channel (optional). Blank ⇒ every user must configure
+      # their own bot webhook; the channels then report "Skipped: Webhook not configured".
+      # Spring reads these via push.wecom.webhook-url / push.feishu.webhook-url.
+      PUSH_WECOM_WEBHOOK_URL: ${PUSH_WECOM_WEBHOOK_URL:-}
+      PUSH_FEISHU_WEBHOOK_URL: ${PUSH_FEISHU_WEBHOOK_URL:-}
     depends_on:
       mysql:
         condition: service_healthy
@@ -99,6 +108,12 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
       MYSQL_DATABASE: hhs
+      # The image defaults to UTC, so DEFAULT CURRENT_TIMESTAMP wrote UTC wall-clock into
+      # DATETIME columns while the app (and its JDBC serverTimezone=Asia/Shanghai) assumed
+      # local time — a silent 8-hour gap between rows written by SQL defaults and rows written
+      # by the application. Pinning the server zone keeps both clocks aligned. This only affects
+      # rows written from now on; historical DATETIME values stay as they were stored.
+      TZ: Asia/Shanghai
     volumes:
       - mysql_data:/var/lib/mysql
       - ./hhs-backend/src/main/resources/sql/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro

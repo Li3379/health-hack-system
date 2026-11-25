@@ -20,13 +20,27 @@ public class MetricCategoryService {
 
     private final HealthMetricMetaRegistry registry;
 
+    /**
+     * Routine blood-examination keys (hemoglobin / wbc / rbc / plt) live in their own registry so
+     * the core lifestyle dictionary stays clean, but they are still valid metric keys that OCR
+     * writes into {@code health_metric}. Acceptance must consult both registries — checking only
+     * the core one would reject every CBC row.
+     */
+    private final LabRoutineMetricRegistry labRegistry;
+
     public MetricCategoryService() {
         this(null);
     }
 
-    @Autowired
     public MetricCategoryService(@Nullable HealthMetricMetaRegistry registry) {
+        this(registry, null);
+    }
+
+    @Autowired
+    public MetricCategoryService(@Nullable HealthMetricMetaRegistry registry,
+                                 @Nullable LabRoutineMetricRegistry labRegistry) {
         this.registry = registry;
+        this.labRegistry = labRegistry != null ? labRegistry : new LabRoutineMetricRegistry();
     }
 
     /**
@@ -68,6 +82,11 @@ public class MetricCategoryService {
 
     /**
      * Determine the category for a given metric key.
+     *
+     * <p>Unknown keys still default to HEALTH for backward compatibility — callers that need to
+     * <em>reject</em> unknown keys must gate on {@link #isWritableMetric(String)} first. The
+     * default is kept because this method is also used to label rows read back from the database,
+     * where an unrecognised legacy key must render as something rather than throw.
      *
      * @param metricKey the metric key to categorize
      * @return the appropriate MetricCategory, defaults to HEALTH for unknown keys
@@ -137,7 +156,7 @@ public class MetricCategoryService {
     }
 
     /**
-     * Check if a metric key is recognized (either health or wellness).
+     * Check if a metric key is recognized (either health or wellness, core or routine-lab).
      *
      * @param metricKey the metric key to check
      * @return true if the metric key is recognized
@@ -149,7 +168,23 @@ public class MetricCategoryService {
         if (registry != null && registry.contains(metricKey)) {
             return true;
         }
+        // CBC keys are real metric keys written by OCR even though they live in their own registry.
+        if (labRegistry.contains(metricKey)) {
+            return true;
+        }
         return HEALTH_METRICS.contains(metricKey) || WELLNESS_METRICS.contains(metricKey);
+    }
+
+    /**
+     * True when this key may be written to {@code health_metric}.
+     *
+     * <p>Same set as {@link #isRecognizedMetric(String)}, but the intent at a write site is
+     * "is this a key the dictionaries know about", not "which category does it belong to".
+     * Kept separate so a future loosening of category lookup cannot accidentally widen the
+     * accepted write surface.
+     */
+    public boolean isWritableMetric(String metricKey) {
+        return isRecognizedMetric(MetricKeyNormalizer.toCanonicalKey(metricKey));
     }
 
     /**

@@ -11,8 +11,10 @@ import com.hhs.exception.BusinessException;
 import com.hhs.mapper.HealthMetricMapper;
 import com.hhs.mapper.RealtimeMetricMapper;
 import com.hhs.service.WellnessService;
+import com.hhs.service.HealthScoreService;
 import com.hhs.service.domain.MetricCategoryService;
 import com.hhs.service.domain.MetricDisplayFormatter;
+import com.hhs.service.domain.MetricKeyNormalizer;
 import com.hhs.vo.HealthMetricTrendVO;
 import com.hhs.vo.HealthMetricVO;
 import com.hhs.vo.WellnessMetricSummary;
@@ -42,6 +44,7 @@ public class WellnessServiceImpl implements WellnessService {
     private final RealtimeMetricMapper realtimeMetricMapper;
     private final MetricCategoryService metricCategoryService;
     private final MetricDisplayFormatter metricDisplayFormatter;
+    private final HealthScoreService healthScoreService;
 
     @Override
     @Transactional(timeout = 30, readOnly = true)
@@ -67,23 +70,39 @@ public class WellnessServiceImpl implements WellnessService {
     public HealthMetricVO createWellnessMetric(Long userId, WellnessMetricRequest request) {
         log.info("Creating wellness metric for user: {}, key: {}", userId, request.getMetricKey());
 
+        // Normalize the key first so legacy aliases (e.g. sleep_duration) land on the canonical
+        // row instead of forking a second series next to it.
+        String canonicalKey = MetricKeyNormalizer.toCanonicalKey(request.getMetricKey());
+        request.setMetricKey(canonicalKey);
+
         // Validate metric key is a known wellness metric
-        if (!metricCategoryService.isWellnessMetric(request.getMetricKey())) {
-            throw new BusinessException(ErrorCode.VALIDATION_INVALID_PARAMETER, "无效的保健指标类型: " + request.getMetricKey());
+        if (!metricCategoryService.isWellnessMetric(canonicalKey)) {
+            throw new BusinessException(ErrorCode.VALIDATION_INVALID_PARAMETER, "无效的保健指标类型: " + canonicalKey);
         }
 
         // Validate value range for the specific metric
-        validateWellnessMetricRange(request.getMetricKey(), request.getValue());
+        validateWellnessMetricRange(canonicalKey, request.getValue());
 
         // Get normalized unit
-        String unit = metricDisplayFormatter.getUnit(request.getMetricKey());
+        String unit = metricDisplayFormatter.getUnit(canonicalKey);
         if (request.getUnit() != null && !request.getUnit().isBlank()) {
             unit = request.getUnit();
         }
 
+        // Same user + same key + same date + same value is a repeat of one reading (a double
+        // submit used to append a row each time), so keep the existing row. This is deliberately
+        // not persistMetric(): that path also determines the category and publishes
+        // MetricRecordedEvent, which would put wellness entries into the alert/scoring chain.
+        HealthMetric existing = findSameDayEntry(userId, canonicalKey, request.getRecordDate(), request.getValue());
+        if (existing != null) {
+            log.info("Wellness metric re-recorded (kept same-day entry): id={}, userId={}, key={}, value={}",
+                    existing.getId(), userId, canonicalKey, request.getValue());
+            return toVO(existing);
+        }
+
         HealthMetric metric = new HealthMetric();
         metric.setUserId(userId);
-        metric.setMetricKey(request.getMetricKey());
+        metric.setMetricKey(canonicalKey);
         metric.setValue(request.getValue());
         metric.setUnit(unit);
         metric.setRecordDate(request.getRecordDate());
@@ -96,6 +115,12 @@ public class WellnessServiceImpl implements WellnessService {
         // Also insert into realtime_metric table
         RealtimeMetric realtimeMetric = toRealtimeMetric(metric);
         realtimeMetricMapper.insert(realtimeMetric);
+
+        // Wellness carries 10% of the health score (ScoreCalculator -> WellnessScorer), so the
+        // cached score is now wrong. Wellness deliberately does not publish MetricRecordedEvent
+        // (that would put lifestyle entries through alert evaluation), so the invalidation has to
+        // be called directly — otherwise the 5-minute cached score survives the write.
+        evictCachedScore(userId);
 
         log.info("Wellness metric created: id={}, userId={}, key={}, value={}",
                 metric.getId(), userId, metric.getMetricKey(), metric.getValue());
@@ -148,6 +173,8 @@ public class WellnessServiceImpl implements WellnessService {
         RealtimeMetric realtimeMetric = toRealtimeMetric(metric);
         realtimeMetricMapper.insert(realtimeMetric);
 
+        evictCachedScore(userId);
+
         log.info("Wellness metric updated: id={}, key={}", metricId, metric.getMetricKey());
 
         return toVO(metric);
@@ -176,6 +203,8 @@ public class WellnessServiceImpl implements WellnessService {
 
         // Delete from health_metric table
         healthMetricMapper.deleteById(metricId);
+
+        evictCachedScore(userId);
 
         log.info("Wellness metric deleted: id={}", metricId);
     }
@@ -273,6 +302,42 @@ public class WellnessServiceImpl implements WellnessService {
     // ========================================
     // Private helper methods
     // ========================================
+
+    /**
+     * Find an existing row for the same user/metric/date/value.
+     *
+     * <p>Only the value decides whether this is a re-record of the same reading; a different
+     * value on the same date is a legitimate second measurement and must be inserted.
+     */
+    private HealthMetric findSameDayEntry(Long userId, String canonicalKey,
+                                          LocalDate recordDate, BigDecimal value) {
+        if (userId == null || recordDate == null || value == null) {
+            return null;
+        }
+        List<HealthMetric> matches = healthMetricMapper.selectList(
+                new LambdaQueryWrapper<HealthMetric>()
+                        .eq(HealthMetric::getUserId, userId)
+                        .in(HealthMetric::getMetricKey, MetricKeyNormalizer.getAliases(canonicalKey))
+                        .eq(HealthMetric::getRecordDate, recordDate)
+                        .eq(HealthMetric::getValue, value)
+                        .orderByDesc(HealthMetric::getId)
+                        .last("LIMIT 1")
+        );
+        return matches.isEmpty() ? null : matches.get(0);
+    }
+
+    /**
+     * Drop the cached health score after a wellness write.
+     *
+     * <p>Kept as a private wrapper so the three call sites read alike and a null userId (should
+     * never happen — it comes from the JWT) degrades to a no-op instead of an NPE on the key.
+     */
+    private void evictCachedScore(Long userId) {
+        if (userId == null || healthScoreService == null) {
+            return;
+        }
+        healthScoreService.evictCachedScore(userId);
+    }
 
     private LambdaQueryWrapper<HealthMetric> buildWellnessQueryWrapper(Long userId, String metricKey,
                                                                         LocalDate startDate, LocalDate endDate) {

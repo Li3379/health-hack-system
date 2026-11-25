@@ -15,6 +15,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,7 +31,10 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -102,6 +106,70 @@ class PushConfigControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(200))
                 .andExpect(jsonPath("$.data").isArray());
+    }
+
+    // ============================================================
+    // PUSH-6：availability 只代表「渠道 bean 已注册」，不代表投递能力
+    // ============================================================
+
+    @Test
+    @DisplayName("最近一次投递失败时，邮件渠道带 deliveryStatus=FAILED（页面据此不再声称支持离线推送）")
+    void testGetAllConfigsExposesFailedDeliveryOutcome() throws Exception {
+        testConfig.setChannelType("EMAIL");
+        testConfig.setConfigValue("someone@example.com");
+        when(userPushConfigMapper.selectList(any())).thenReturn(List.of(testConfig));
+        when(pushChannelManager.hasChannel(ChannelType.EMAIL)).thenReturn(true);
+
+        com.hhs.entity.PushHistory failed = new com.hhs.entity.PushHistory();
+        failed.setId(9L);
+        failed.setUserId(1L);
+        failed.setChannelType("EMAIL");
+        failed.setStatus("FAILED");
+        failed.setPushedAt(LocalDateTime.now().minusMinutes(5));
+        when(pushHistoryService.getLatestPerChannelSince(eq(1L), any()))
+                .thenReturn(List.of(failed));
+
+        mockMvc.perform(get("/api/push/config"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[?(@.channelType=='EMAIL')].availability").value(
+                        org.hamcrest.Matchers.contains(true)))
+                .andExpect(jsonPath("$.data[?(@.channelType=='EMAIL')].deliveryStatus").value(
+                        org.hamcrest.Matchers.contains("FAILED")));
+    }
+
+    @Test
+    @DisplayName("最近一次投递成功时 deliveryStatus=SUCCESS（失败标记随之消失）")
+    void testGetAllConfigsExposesSuccessfulDeliveryOutcome() throws Exception {
+        testConfig.setChannelType("EMAIL");
+        when(userPushConfigMapper.selectList(any())).thenReturn(List.of(testConfig));
+        when(pushChannelManager.hasChannel(ChannelType.EMAIL)).thenReturn(true);
+
+        com.hhs.entity.PushHistory ok = new com.hhs.entity.PushHistory();
+        ok.setId(10L);
+        ok.setUserId(1L);
+        ok.setChannelType("EMAIL");
+        ok.setStatus("SUCCESS");
+        ok.setPushedAt(LocalDateTime.now());
+        when(pushHistoryService.getLatestPerChannelSince(eq(1L), any())).thenReturn(List.of(ok));
+
+        mockMvc.perform(get("/api/push/config"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[?(@.channelType=='EMAIL')].deliveryStatus").value(
+                        org.hamcrest.Matchers.contains("SUCCESS")));
+    }
+
+    @Test
+    @DisplayName("从未尝试过的渠道 deliveryStatus 为 null —— 不冒充「已验证」也不冒充「失败」")
+    void testGetAllConfigsWithoutHistoryLeavesDeliveryStatusNull() throws Exception {
+        testConfig.setChannelType("EMAIL");
+        when(userPushConfigMapper.selectList(any())).thenReturn(List.of(testConfig));
+        when(pushHistoryService.getLatestPerChannelSince(eq(1L), any()))
+                .thenReturn(List.of());
+
+        mockMvc.perform(get("/api/push/config"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[?(@.channelType=='EMAIL')].deliveryStatus").value(
+                        org.hamcrest.Matchers.contains((Object) null)));
     }
 
     @Test
@@ -208,6 +276,72 @@ class PushConfigControllerTest {
                 .andExpect(jsonPath("$.code").value(200));
 
         verify(userPushConfigMapper).updateById(any());
+    }
+
+    // ============================================================
+    // PUSH-11：EMAIL 的 configValue 会被直接当成收件人，写入时必须校验格式
+    // ============================================================
+
+    @Test
+    @DisplayName("非法邮箱地址被拒（清单里的 foo@qq），不入库")
+    @WithMockUser(username = "admin")
+    void testUpdateConfigRejectsMalformedEmail() throws Exception {
+        PushConfigRequest request = new PushConfigRequest();
+        request.setConfigValue("foo@qq");
+        request.setEnabled(true);
+
+        when(userPushConfigMapper.findByUserIdAndChannelType(1L, "EMAIL")).thenReturn(testConfig);
+
+        mockMvc.perform(put("/api/push/config/EMAIL")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(jsonPath("$.code").value(400));
+
+        // 关键：格式不对就不能落库，否则页面会显示「已配置」
+        verify(userPushConfigMapper, never()).updateById(any());
+        verify(userPushConfigMapper, never()).insert(any());
+    }
+
+    @Test
+    @DisplayName("掩码值（含 ****）不当作真实地址校验，否则编辑其它字段会被卡住")
+    @WithMockUser(username = "admin")
+    void testUpdateConfigSkipsMaskedValue() throws Exception {
+        PushConfigRequest request = new PushConfigRequest();
+        // 客户端读回配置后把掩码值原样提交，这是「不改地址」的合法操作
+        request.setConfigValue("alice@exam****.com");
+        request.setEnabled(true);
+
+        when(userPushConfigMapper.findByUserIdAndChannelType(1L, "EMAIL")).thenReturn(testConfig);
+        when(userPushConfigMapper.updateById(any())).thenReturn(1);
+
+        mockMvc.perform(put("/api/push/config/EMAIL")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(200));
+
+        verify(userPushConfigMapper).updateById(any());
+    }
+
+    @Test
+    @DisplayName("邮箱校验只作用于 EMAIL，不误伤 webhook 渠道")
+    @WithMockUser(username = "admin")
+    void testUpdateConfigDoesNotEmailValidateWebhooks() throws Exception {
+        PushConfigRequest request = new PushConfigRequest();
+        request.setConfigValue("https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=abc");
+        request.setEnabled(true);
+
+        when(userPushConfigMapper.findByUserIdAndChannelType(1L, "WECOM")).thenReturn(null);
+        when(userPushConfigMapper.insert(any())).thenReturn(1);
+
+        mockMvc.perform(put("/api/push/config/WECOM")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(200));
     }
 
     @Test
@@ -347,6 +481,30 @@ class PushConfigControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(200))
                 .andExpect(jsonPath("$.data.success").value(true));
+    }
+
+    @Test
+    @DisplayName("测试推送用的 alertType 必须落在真实值域内（PUSH-7）")
+    @WithMockUser(username = "admin")
+    void testTestChannelBuildsValueDomainCompliantAlert() throws Exception {
+        // 这个 alert 是手工 new 的，不走 Bean Validation —— 写 INFO 也不会被拦。
+        // 而 AlertVO.alertType 的 @Pattern 是 ^(CRITICAL|WARNING|NORMAL)$，
+        // 真实告警也只可能由 ThresholdRangeChecker 产出这三个值。
+        when(userPushConfigMapper.findByUserIdAndChannelType(1L, "EMAIL")).thenReturn(testConfig);
+        when(pushChannelManager.push(eq(1L), any(), eq(ChannelType.EMAIL)))
+                .thenReturn(PushResult.success(ChannelType.EMAIL));
+
+        mockMvc.perform(post("/api/push/config/EMAIL/test").with(csrf()))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<com.hhs.dto.AlertVO> captor =
+                ArgumentCaptor.forClass(com.hhs.dto.AlertVO.class);
+        verify(pushChannelManager).push(eq(1L), captor.capture(), eq(ChannelType.EMAIL));
+
+        String alertType = captor.getValue().getAlertType();
+        assertTrue(java.util.Set.of("CRITICAL", "WARNING", "NORMAL").contains(alertType),
+                "测试推送的 alertType 必须是值域内的值，实际: " + alertType);
+        assertEquals("NORMAL", alertType);
     }
 
     @Test

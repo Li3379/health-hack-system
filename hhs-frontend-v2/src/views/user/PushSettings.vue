@@ -35,7 +35,7 @@
                   <div>
                     <div class="channel-name">{{ config.channelLabel }}</div>
                     <div class="channel-desc">
-                      {{ getChannelDesc(config.channelType, config.availability) }}
+                      {{ getChannelDesc(config.channelType, config.availability, config.deliveryStatus) }}
                     </div>
                   </div>
                 </div>
@@ -106,13 +106,32 @@
                   <el-tag v-if="!config.availability" type="danger" size="small">
                     服务端未开通
                   </el-tag>
-                  <!-- 只在服务端确实开通时才声称支持离线投递，否则等于向用户承诺一件做不到的事 -->
+                  <!--
+                    最近一次投递失败：服务端虽然开通了渠道，但实际发不出去（最常见的原因是
+                    SMTP 凭据被拒）。availability 只说明「注册了渠道 bean」，不能据此声称
+                    支持离线推送 —— 那等于承诺一件系统做不到的事。
+                  -->
                   <el-tag
-                    v-else-if="config.offlineSupported"
+                    v-else-if="config.deliveryStatus === 'FAILED'"
+                    type="danger"
+                    size="small"
+                  >
+                    最近投递失败
+                  </el-tag>
+                  <!-- 只在投递成功过之后才声称支持离线投递；从未尝试过时不得替系统做承诺 -->
+                  <el-tag
+                    v-else-if="config.offlineSupported && config.deliveryStatus === 'SUCCESS'"
                     type="warning"
                     size="small"
                   >
                     支持离线推送
+                  </el-tag>
+                  <el-tag
+                    v-else-if="config.offlineSupported"
+                    type="info"
+                    size="small"
+                  >
+                    尚未验证投递
                   </el-tag>
                 </template>
               </div>
@@ -165,9 +184,26 @@
                     {{ getStatusLabel(item.status) }}
                   </el-tag>
                 </div>
-                <div class="history-message">{{ item.message || '无消息' }}</div>
-                <div v-if="item.status === 'FAILED'" class="history-hint">
+                <!--
+                  用户视角的信息层次：一行结论 + 一行该做什么，技术原文折叠在后面。
+                  此前这一块把同一件事说了三遍（后端原文含中文建议、前端又生成一段中文、
+                  两段里各自再贴一遍 535 原文），在时间线里堆成 368px 高的一坨。
+                  成功记录不需要任何解释 —— 只显示一行「成功」就够，不再套失败文案。
+                -->
+                <div
+                  v-if="item.status === 'FAILED' || item.status === 'SKIPPED'"
+                  class="history-summary"
+                  :class="`is-${getStatusType(item.status)}`"
+                >
                   {{ getFailureHint(item.message) }}
+                </div>
+                <div v-if="hasTechnicalDetail(item)" class="history-detail">
+                  <el-button link size="small" @click="toggleDetail(item.id)">
+                    {{ detailOpen.has(item.id) ? '收起详情' : '查看详情' }}
+                  </el-button>
+                  <div v-if="detailOpen.has(item.id)" class="history-raw">
+                    {{ rawDetail(item) }}
+                  </div>
                 </div>
               </div>
             </el-timeline-item>
@@ -185,6 +221,7 @@ import { staggerReveal, cleanupScrollTriggers } from '@/composables/useGsap'
 import { usePushStore } from '@/stores/push'
 import { useRealtimeStore } from '@/stores/realtime'
 import { formatDateTime } from '@/utils/format'
+import { getFailureHint } from '@/utils/pushFailure'
 import type { PushConfig } from '@/api/push'
 import ErrorState from '@/components/common/ErrorState.vue'
 import FormErrorSummary from '@/components/common/FormErrorSummary.vue'
@@ -316,16 +353,35 @@ function getChannelIcon(type: string) {
   return icons[type] || Bell
 }
 
-function getChannelDesc(type: string, availability = true) {
-  // 服务端未注册该渠道时，不能说「支持离线推送」——那是在承诺一件做不到的事。
+function getChannelDesc(type: string, availability = true, deliveryStatus: PushConfig['deliveryStatus'] = null) {
+  // 三种状态分开说，绝不合并成一句「支持离线推送」：
+  //  未注册   → 服务端没有这个渠道，投递无从谈起；
+  //  最近失败 → 渠道存在但凭据/地址有问题，此刻发不出去（availability 只代表渠道 bean 存在）；
+  //  从未试过 → 没证据。此时说「支持离线推送」就是 PUSH-6 那个过度承诺，改为请用户自证。
   // WebSocket 不依赖服务端外部通道，措辞不受 availability 影响。
-  const descs: Record<string, string> = {
-    WEBSOCKET: '实时在线推送。开关控制是否接收告警推送，连接状态在"实时监控"页面管理',
-    EMAIL: availability ? '邮件通知，支持离线推送' : '邮件通知，需服务端配置后方可投递',
-    WECOM: availability ? '企业微信机器人，支持离线推送' : '企业微信机器人，需服务端配置后方可投递',
-    FEISHU: availability ? '飞书机器人，支持离线推送' : '飞书机器人，需服务端配置后方可投递'
+  const channelName: Record<string, string> = {
+    EMAIL: '邮件通知',
+    WECOM: '企业微信机器人',
+    FEISHU: '飞书机器人'
   }
-  return descs[type] || ''
+  if (type === 'WEBSOCKET') {
+    return '实时在线推送。开关控制是否接收告警推送，连接状态在"实时监控"页面管理'
+  }
+  const name = channelName[type]
+  if (!name) return ''
+
+  if (!availability) {
+    return `${name}，需服务端配置后方可投递`
+  }
+  if (deliveryStatus === 'FAILED') {
+    const fix = type === 'EMAIL' ? '请检查邮箱授权码' : '请检查 Webhook 地址'
+    return `${name}：服务端已配置，但最近一次投递失败，${fix}`
+  }
+  if (deliveryStatus === 'SUCCESS') {
+    return `${name}，支持离线推送`
+  }
+  // deliveryStatus 为 null：从未投递过。不替系统做它没做过的承诺。
+  return `${name}，尚未验证投递，可发送一次测试推送确认`
 }
 
 function getConfigLabel(type: string) {
@@ -436,29 +492,43 @@ function getStatusLabel(status: string) {
 }
 
 /**
- * 把后端推送失败原文翻成用户能懂、且知道该找谁的中文提示。
+ * 失败原文 → 可操作中文提示。
  *
- * 后端 `push_history.message` 目前落的是英文原文（如 "Authentication failed"），
- * 直接展示会让用户不知道该改配置还是找管理员。只匹配已知的几类失败，
- * 认不出来的一律保留原文并标注「失败原因：」，绝不伪装成已知错误。
+ * 翻译只有一份，放在 `utils/pushFailure.ts`：同一次故障有两条呈现通道（历史时间线与本页），
+ * 而「测试推送」的 toast 走 store —— 曾经只有历史做翻译，toast 把后端英文原样上屏。
  */
-function getFailureHint(message?: string | null) {
-  const raw = (message || '').trim()
-  if (!raw) return '失败原因：未返回具体原因，请稍后重试'
-  const lower = raw.toLowerCase()
 
-  // 先判更具体的主机名错误：主机名里可能带 "auth"（如 smtp.auth.…），
-  // 反过来先判 auth 会把它错标成凭据问题。
-  if (lower.includes('unknown host')) {
-    return '邮件服务器地址错误，请联系管理员'
+/** 展开技术详情的条目 id 集合。默认折叠：普通用户只想看「怎么了 + 该做什么」。 */
+const detailOpen = reactive(new Set<number>())
+
+function toggleDetail(id: number) {
+  if (detailOpen.has(id)) {
+    detailOpen.delete(id)
+  } else {
+    detailOpen.add(id)
   }
-  if (lower.includes('connection refused') || lower.includes('timeout')) {
-    return '邮件服务器连接失败，请稍后重试'
-  }
-  if (lower.includes('authentication failed') || lower.includes('535') || lower.includes('auth')) {
-    return '邮箱凭据无效，请联系管理员'
-  }
-  return `失败原因：${raw}`
+}
+
+/**
+ * 一条记录是否还有值得展开的技术细节。
+ *
+ * 判定「折叠后是否有信息损失」：提示文案里已经不含的原文才值得展开。
+ * 若两者几乎相同（例如 SKIPPED 只有一句 "Channel not available"），
+ * 折叠按钮就是噪音，不显示。
+ */
+function hasTechnicalDetail(item: { id: number; status: string; message?: string | null }): boolean {
+  // 成功记录没有可排障的东西，不提供展开入口。
+  if (item.status === 'SUCCESS') return false
+  const raw = (item.message || '').trim()
+  if (!raw) return false
+  const hint = getFailureHint(item.message)
+  // 提示已经把原文完整带出来（或原文本身就是中文）时，没有再展开的必要。
+  return raw.length > hint.length && !/[\u4e00-\u9fff]/.test(raw.split('(')[0] || '')
+}
+
+/** 展开时展示的原始技术文本：保留给管理员排障，普通用户默认看不到。 */
+function rawDetail(item: { message?: string | null }): string {
+  return (item.message || '').trim()
 }
 </script>
 
@@ -579,15 +649,42 @@ function getFailureHint(message?: string | null) {
   color: #303133;
 }
 
-.history-message {
-  font-size: 12px;
-  color: #909399;
-}
-
-.history-hint {
+/* 一行结论：用户扫一眼就知道「怎么了、该做什么」。 */
+.history-summary {
   margin-top: 2px;
   font-size: 12px;
-  color: #f56c6c;
   line-height: 1.5;
+  color: var(--text-2, #606266);
+}
+
+.history-summary.is-danger {
+  color: var(--hhs-color-error-text, #f56c6c);
+}
+
+.history-summary.is-warning {
+  color: var(--accent-warm, #fb923c);
+}
+
+/* 技术原文默认折叠：给管理员排障用，不占普通用户的阅读空间。 */
+.history-detail {
+  margin-top: 2px;
+}
+
+.history-detail .el-button {
+  padding: 0;
+  font-size: 12px;
+  height: auto;
+}
+
+.history-raw {
+  margin-top: 4px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm, 6px);
+  background: var(--surface-2, #f5f7fa);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-3, #909399);
+  word-break: break-word;
 }
 </style>

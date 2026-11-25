@@ -320,4 +320,35 @@ class HealthScoreServiceTest {
         assertEquals(40, result.getProfileCompleteness());
         assertEquals(java.util.List.of("缺少 BMI 指标，体重维度按参考值估算"), result.getAssumptions());
     }
+
+    @Test
+    @DisplayName("测试1.15：evictCachedScore - 删除 health:score:v2:{userId} 键")
+    void testEvictCachedScore_DeletesScoreKey() {
+        when(redisTemplate.delete(anyString())).thenReturn(true);
+
+        healthScoreService.evictCachedScore(testUserId);
+
+        // 评分的真实缓存是按用户的普通 Redis 键，不是 Spring Cache 条目，
+        // 所以这里必须看到那个具体 key 被删，而不是某个 cacheName 的 evict。
+        verify(redisTemplate, times(1)).delete("health:score:v2:" + testUserId);
+    }
+
+    @Test
+    @DisplayName("测试1.16：evictCachedScore - Redis 不可用时静默降级，不抛给调用方")
+    void testEvictCachedScore_RedisFailureIsSwallowed() {
+        when(redisTemplate.delete(anyString()))
+                .thenThrow(new RedisSystemException("Connection failed", new RuntimeException()));
+
+        // 不能抛：调用方是录入流程，Redis 抖动不该让刚写进去的指标被回滚
+        assertDoesNotThrow(() -> healthScoreService.evictCachedScore(testUserId));
+        verify(scoreCalculator, never()).calculate(any());
+    }
+
+    @Test
+    @DisplayName("测试1.17：evictCachedScore - userId 为空时不触达 Redis")
+    void testEvictCachedScore_NullUserIsNoop() {
+        healthScoreService.evictCachedScore(null);
+
+        verify(redisTemplate, never()).delete(anyString());
+    }
 }

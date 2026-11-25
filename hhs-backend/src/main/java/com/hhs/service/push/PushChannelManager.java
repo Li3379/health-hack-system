@@ -65,9 +65,25 @@ public class PushChannelManager {
         }
 
         if (!channel.isAvailable(userId)) {
-            log.debug("Channel {} not available for user {}", channelType, userId);
-            PushResult result = PushResult.skipped(channelType, "Channel not available");
-            recordHistory(userId, alert.getId(), result);
+            // Two different situations hide behind "not available", and they deserve different
+            // treatment in the history:
+            //
+            //  - never configured (no email address, no webhook, WS switch off): record SKIPPED.
+            //    This is the fact the user needs — the alert happened, but this channel could
+            //    never have delivered it.
+            //  - configured but unreachable right now (WebSocket tab closed): do NOT record.
+            //    pushAll reaches every channel for every alert, so writing here would add one
+            //    SKIPPED row per alert per offline user and bury the history under noise.
+            //
+            // Return the result either way so callers still see "skipped" rather than a success.
+            boolean configured = channel.isConfigured(userId);
+            log.debug("Channel {} not available for user {} (configured={})", channelType, userId, configured);
+            PushResult result = configured
+                    ? PushResult.skipped(channelType, "Channel temporarily unreachable")
+                    : PushResult.skipped(channelType, "Channel not configured");
+            if (!configured) {
+                recordHistory(userId, alert.getId(), result);
+            }
             return result;
         }
 
@@ -121,18 +137,25 @@ public class PushChannelManager {
     }
 
     /**
-     * Push alert through all available channels
+     * Push alert through every registered channel.
+     *
+     * <p>This used to pre-filter with {@code isAvailable()} and hand only the survivors to
+     * {@link #pushMulti}. A channel the user never configured therefore never reached
+     * {@link #push}, so it wrote no history row at all — "no email configured" and "no alert was
+     * ever produced" looked identical in the UI, and the user concluded the system had raised
+     * nothing. A single-channel {@code push()} has always recorded SKIPPED in that situation
+     * (see its {@code !channel.isAvailable} branch), so the two entry points disagreed about the
+     * same fact.
+     *
+     * <p>Every registered channel now goes through {@link #push}, which records the two cases
+     * differently: <em>not configured</em> writes a SKIPPED row (the absence is real information),
+     * while <em>configured but unreachable right now</em> stays silent — otherwise every alert
+     * would add one SKIPPED WEBSOCKET row per offline user and bury the history.
      */
     public List<PushResult> pushAll(Long userId, AlertVO alert) {
-        List<ChannelType> availableChannels = new ArrayList<>();
-
-        for (Map.Entry<ChannelType, PushChannel> entry : channels.entrySet()) {
-            if (entry.getValue().isAvailable(userId)) {
-                availableChannels.add(entry.getKey());
-            }
-        }
-
-        return pushMulti(userId, alert, availableChannels);
+        // Every registered channel participates; push() decides what deserves a history row.
+        List<ChannelType> registered = new ArrayList<>(channels.keySet());
+        return pushMulti(userId, alert, registered);
     }
 
     /**

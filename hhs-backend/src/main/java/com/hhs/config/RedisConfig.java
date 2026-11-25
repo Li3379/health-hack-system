@@ -56,7 +56,11 @@ public class RedisConfig {
 
     /**
      * CacheManager bean for Spring Cache abstraction
-     * Required by @Cacheable, @CacheEvict annotations and CacheInvalidationListener
+     * Required by the @Cacheable / @CacheEvict annotations on UserServiceImpl.
+     *
+     * <p>Not used by the health score cache: that one is a plain Redis key
+     * ({@code health:score:v2:{userId}}) owned by {@code HealthScoreServiceImpl}, so
+     * {@code CacheInvalidationListener} evicts it through that service instead.</p>
      */
     @Bean
     public CacheManager cacheManager(RedisConnectionFactory redisConnectionFactory) {

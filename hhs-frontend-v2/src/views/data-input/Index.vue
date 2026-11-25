@@ -11,12 +11,20 @@
         <div class="overview-content">
           <el-icon class="overview-icon"><component :is="stat.icon" /></el-icon>
           <div class="overview-info">
-            <span class="overview-value" :data-target="stat.value">{{ stat.value }}</span>
+            <span class="overview-value" :data-target="stat.numericValue">{{ stat.display }}</span>
             <span class="overview-label">{{ stat.label }}</span>
           </div>
         </div>
       </el-card>
     </div>
+
+    <!-- 统计取不到时不能把三个 0 当成真实值：卡片显示破折号，这里给出可执行的下一步。 -->
+    <p v-if="statsFailed" class="overview-failed" role="status" aria-live="polite">
+      今日统计暂时无法加载，卡片显示的是占位符而非 0。
+      <el-button text type="primary" size="small" :loading="statsLoading" @click="loadTodayStats">
+        重新加载统计
+      </el-button>
+    </p>
 
     <!-- 主功能区：左快捷录入，右上 AI，右下 OCR -->
     <div class="work-grid">
@@ -50,6 +58,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import type { Component } from 'vue'
 import { DataLine, Sunny, MagicStick } from '@element-plus/icons-vue'
 import {
   staggerReveal, countUp, cleanupScrollTriggers,
@@ -72,6 +81,9 @@ interface TodayStats {
 const todayHealthCount = ref(0)
 const todayWellnessCount = ref(0)
 const aiRecognizeCount = ref(0)
+/** 首载尚未落定前也算「不可知」——0 不是真实值，只是计数器的初值。 */
+const statsLoading = ref(true)
+const statsFailed = ref(false)
 
 const recentRecordsRef = ref()
 const ocrHistoryRef = ref()
@@ -79,22 +91,57 @@ const aiHistoryRef = ref()
 
 const activeHistory = ref<'records' | 'ocr' | 'ai'>('records')
 
-const overviewStats = computed(() => [
-  { key: 'health', label: '健康指标', value: todayHealthCount.value, icon: DataLine },
-  { key: 'wellness', label: '保健指标', value: todayWellnessCount.value, icon: Sunny },
-  { key: 'ai', label: 'AI 识别', value: aiRecognizeCount.value, icon: MagicStick },
-])
+/**
+ * 一个计数卡片。
+ *
+ * `display` 是三态里唯一对外的东西：拿到数就是数字，拿不到就是破折号 —— 绝不让 0
+ * 冒充「今天确实录了 0 条」。`numericValue` 只给入场 countUp 用（非数字时为 null）。
+ */
+interface OverviewStat {
+  key: string
+  label: string
+  display: string
+  numericValue: number | null
+  icon: Component
+}
+
+// 三个数字都来自 /api/stats/today，只统计当日（健康/保健按 recordDate，AI 按 createTime）。
+// 标签写明「今日」，与仪表盘那张全时段累计的「健康指标（累计）」区分开。
+const overviewStats = computed<OverviewStat[]>(() => {
+  const known = !statsLoading.value && !statsFailed.value
+  const toStat = (key: string, label: string, count: number, icon: Component): OverviewStat => ({
+    key,
+    label,
+    icon,
+    display: known ? String(count) : '—',
+    numericValue: known ? count : null,
+  })
+  return [
+    toStat('health', '今日健康指标', todayHealthCount.value, DataLine),
+    toStat('wellness', '今日保健指标', todayWellnessCount.value, Sunny),
+    toStat('ai', '今日 AI 识别', aiRecognizeCount.value, MagicStick),
+  ]
+})
 
 const loadTodayStats = async () => {
+  statsLoading.value = true
   try {
     const res = await request.get<TodayStats>('/api/stats/today')
     if (res.code === 200 && res.data) {
       todayHealthCount.value = res.data.healthMetricsCount
       todayWellnessCount.value = res.data.wellnessMetricsCount
       aiRecognizeCount.value = res.data.aiRecognizeCount
+      statsFailed.value = false
+    } else {
+      // 信封 200 但没有 data 同样是「拿不到数」，不能落回 0。
+      statsFailed.value = true
     }
   } catch {
-    // 统计是装饰性数据，失败时保留 0，不打扰用户主流程
+    // 统计不再是「装饰性数据」：失败时卡片显示破折号并由页面内提示承担呈现，
+    // 不弹 toast（一次失败只呈现一次，重试入口就在提示里）。
+    statsFailed.value = true
+  } finally {
+    statsLoading.value = false
   }
 }
 
@@ -131,7 +178,10 @@ onMounted(async () => {
 
   setTimeout(() => {
     document.querySelectorAll('.overview-value').forEach((el) => {
-      const num = parseInt(el.getAttribute('data-target') ?? '0', 10)
+      const raw = el.getAttribute('data-target')
+      // 破折号占位没有 data-target（Vue 会移除 null 属性）：跳过，绝不从占位符滚到 0。
+      if (raw === null) return
+      const num = parseInt(raw, 10)
       if (num > 0) countUp(el as HTMLElement, num, { duration: DUR.dramatic })
     })
   }, 500)
@@ -190,6 +240,22 @@ onUnmounted(() => { cleanupScrollTriggers() })
   font-variant-numeric: tabular-nums;
 }
 .overview-label { font: 400 13px/1.4 var(--font-ui); color: var(--text-3); margin-top: 2px; }
+
+/* 统计失败提示：说明 + 重试入口。用错误文本 token，但保持为一条状态说明而不是卡片。 */
+.overview-failed {
+  margin: -6px 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font: 400 13px/1.5 var(--font-ui);
+  color: var(--hhs-color-error-text);
+}
+.overview-failed :deep(.el-button) {
+  font: 400 13px/1.5 var(--font-ui) !important;
+  padding: 0;
+  height: auto;
+}
 
 /* ── 工作区：左高 + 右侧两行 ── */
 .work-grid {

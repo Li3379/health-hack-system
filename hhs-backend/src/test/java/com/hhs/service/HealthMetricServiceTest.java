@@ -1,6 +1,8 @@
 package com.hhs.service;
 
+import com.baomidou.mybatisplus.core.MybatisConfiguration;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.hhs.common.enums.MetricCategory;
 import com.hhs.domain.event.MetricRecordedEvent;
@@ -19,6 +21,8 @@ import com.hhs.service.domain.ThresholdRangeChecker;
 import com.hhs.service.impl.HealthMetricServiceImpl;
 import com.hhs.vo.HealthMetricTrendVO;
 import com.hhs.vo.HealthMetricVO;
+import org.apache.ibatis.builder.MapperBuilderAssistant;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -79,6 +83,15 @@ class HealthMetricServiceTest {
     @InjectMocks
     private HealthMetricServiceImpl healthMetricService;
 
+    /**
+     * Lambda 条件构造器需要一个已初始化的 TableInfo 才能把 {@code HealthMetric::getCreateTime}
+     * 解析成列名；没有它 `getSqlSegment()` 会抛 "can not find lambda cache"。
+     */
+    @BeforeAll
+    static void initMyBatisPlus() {
+        TableInfoHelper.initTableInfo(new MapperBuilderAssistant(new MybatisConfiguration(), ""), HealthMetric.class);
+    }
+
     private HealthMetricRequest testRequest;
     private HealthMetric testMetric;
     private Long testUserId = 1L;
@@ -91,6 +104,10 @@ class HealthMetricServiceTest {
         lenient().when(metricDisplayFormatter.getUnit(anyString())).thenReturn("bpm");
         lenient().when(metricCategoryService.determineCategory(anyString()))
                 .thenReturn(MetricCategory.HEALTH);
+        // 这些用例检的是默认值 / 趋势 / 同值覆盖，不检 key 是否在白名单里；白名单本身
+        // 另有 testAdd_UnknownKeyIsRejected 专门覆盖。不 stub 的话 mock 默认 false，
+        // 所有写入路径都会先撞上 400。
+        lenient().when(metricCategoryService.isWritableMetric(anyString())).thenReturn(true);
         lenient().when(metricRegistry.getDefinition(anyString())).thenReturn(Optional.empty());
 
         testRequest = new HealthMetricRequest();
@@ -362,7 +379,7 @@ class HealthMetricServiceTest {
 
         // When: Update metric
         testRequest.setValue(new BigDecimal("80.0"));
-        HealthMetric result = healthMetricService.update(1L, testRequest);
+        HealthMetric result = healthMetricService.update(testUserId, 1L, testRequest);
 
         // Then: Verify update
         assertNotNull(result);
@@ -378,14 +395,77 @@ class HealthMetricServiceTest {
 
         // When & Then: Should throw exception
         assertThrows(BusinessException.class, () -> {
-            healthMetricService.update(999L, testRequest);
+            healthMetricService.update(testUserId, 999L, testRequest);
         });
 
         verify(healthMetricMapper, never()).updateById(any());
     }
 
     @Test
-    @DisplayName("测试1.16：删除健康指标（简化CRUD，直接删除）")
+    @DisplayName("测试1.15a：不在词典里的指标 key 直接 400，不默认落成 HEALTH")
+    void testAdd_UnknownKeyIsRejected() {
+        // IN-12：MetricKeyNormalizer 对未知 key 是 lenient passthrough，旧实现会把它
+        // 当 HEALTH 落库 —— 一条保健读数就此只出现在健康指标里，保健页永远看不到。
+        lenient().when(metricCategoryService.isWritableMetric(anyString())).thenReturn(false);
+
+        HealthMetricRequest request = new HealthMetricRequest();
+        request.setUserId(testUserId);
+        request.setMetricKey("sleep");
+        request.setValue(new BigDecimal("7.5"));
+        request.setRecordDate(LocalDate.now());
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> healthMetricService.add(testUserId, request));
+
+        assertTrue(exception.getMessage().contains("无效的指标类型"));
+        assertTrue(exception.getMessage().contains("sleep"));
+        verify(healthMetricMapper, never()).insert(any(HealthMetric.class));
+        verify(realtimeMetricMapper, never()).insert(any());
+        verify(eventPublisher, never()).publishEvent(any(MetricRecordedEvent.class));
+    }
+
+    @Test
+    @DisplayName("测试1.15c：更新时改成未知 key 同样被拒（不把记录改分类）")
+    void testUpdate_UnknownKeyIsRejected() {
+        when(healthMetricMapper.selectById(1L)).thenReturn(testMetric);
+        lenient().when(metricCategoryService.isWritableMetric(anyString())).thenReturn(false);
+
+        HealthMetricRequest request = new HealthMetricRequest();
+        request.setUserId(testUserId);
+        request.setMetricKey("sleepTime");
+        request.setValue(new BigDecimal("7.5"));
+        request.setRecordDate(LocalDate.now());
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> healthMetricService.update(testUserId, 1L, request));
+
+        assertTrue(exception.getMessage().contains("无效的指标类型"));
+        verify(healthMetricMapper, never()).updateById(any(HealthMetric.class));
+    }
+
+    @Test
+    @DisplayName("测试1.15b：更新他人指标被拒绝（IDOR 护栏）")
+    void testUpdate_ForeignMetricIsForbidden() {
+        // Given: 这一行属于别人
+        HealthMetric foreign = new HealthMetric();
+        foreign.setId(30L);
+        foreign.setUserId(999L);
+        foreign.setMetricKey("heartRate");
+        foreign.setRecordDate(LocalDate.now());
+        when(healthMetricMapper.selectById(30L)).thenReturn(foreign);
+
+        // When & Then: 403，并且一行都没被写
+        BusinessException exception = assertThrows(BusinessException.class, () -> {
+            healthMetricService.update(testUserId, 30L, testRequest);
+        });
+
+        assertTrue(exception.getMessage().contains("无权"));
+        verify(healthMetricMapper, never()).updateById(any());
+        verify(realtimeMetricMapper, never()).deleteByHealthMetric(any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("测试1.16：删除健康指标（带归属校验）")
     void testDeleteById() {
         // Given: Mock metric exists
         when(healthMetricMapper.selectById(1L)).thenReturn(testMetric);
@@ -393,7 +473,7 @@ class HealthMetricServiceTest {
         when(healthMetricMapper.deleteById(1L)).thenReturn(1);
 
         // When: Delete by ID
-        healthMetricService.delete(1L);
+        healthMetricService.delete(testUserId, 1L);
 
         // Then: Verify deletion
         verify(healthMetricMapper, times(1)).selectById(1L);
@@ -402,13 +482,34 @@ class HealthMetricServiceTest {
     }
 
     @Test
-    @DisplayName("测试1.17：删除健康指标（简化CRUD，指标不存在）")
+    @DisplayName("测试1.16b：删除他人指标被拒绝（IDOR 护栏）")
+    void testDelete_ForeignMetricIsForbidden() {
+        // Given: 这一行属于别人 —— 旧实现只按 id 查，归属从来不看
+        HealthMetric foreign = new HealthMetric();
+        foreign.setId(31L);
+        foreign.setUserId(999L);
+        foreign.setMetricKey("heartRate");
+        foreign.setRecordDate(LocalDate.now());
+        when(healthMetricMapper.selectById(31L)).thenReturn(foreign);
+
+        // When & Then: 403，且没有任何删除发生（级联的 realtime 也不许删）
+        BusinessException exception = assertThrows(BusinessException.class, () -> {
+            healthMetricService.delete(testUserId, 31L);
+        });
+
+        assertTrue(exception.getMessage().contains("无权"));
+        verify(healthMetricMapper, never()).deleteById((Serializable) any());
+        verify(realtimeMetricMapper, never()).deleteByHealthMetric(any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("测试1.17：删除健康指标（指标不存在，幂等）")
     void testDeleteById_NotFound() {
         // Given: Mock metric doesn't exist
         when(healthMetricMapper.selectById(999L)).thenReturn(null);
 
         // When: Delete non-existent metric (should not throw)
-        healthMetricService.delete(999L);
+        healthMetricService.delete(testUserId, 999L);
 
         // Then: Verify graceful handling
         verify(healthMetricMapper, times(1)).selectById(999L);
@@ -601,5 +702,79 @@ class HealthMetricServiceTest {
         assertEquals("WARNING_LOW", vo.status());
         assertEquals("偏低", vo.statusText());
         assertEquals("MEDIUM", vo.alertLevel());
+    }
+
+    @Test
+    @DisplayName("测试1.25：最近录入 - 单次查询不按 category 过滤")
+    void testListRecent_DoesNotFilterCategory() {
+        when(healthMetricMapper.selectList(any(LambdaQueryWrapper.class)))
+                .thenReturn(List.of());
+
+        healthMetricService.listRecent(testUserId, 10);
+
+        @SuppressWarnings("unchecked")
+        org.mockito.ArgumentCaptor<LambdaQueryWrapper<HealthMetric>> captor =
+                org.mockito.ArgumentCaptor.forClass(LambdaQueryWrapper.class);
+        verify(healthMetricMapper).selectList(captor.capture());
+        String sql = captor.getValue().getSqlSegment();
+
+        // 关键点：不能再出现 category 条件，否则保健指标或健康指标会被整段排除
+        assertFalse(sql.contains("category"),
+                "recent list must span both categories: " + sql);
+    }
+
+    @Test
+    @DisplayName("测试1.26：最近录入 - 按 create_time 倒序，limit 夹到 1..50")
+    void testListRecent_OrderingAndLimitClamp() {
+        when(healthMetricMapper.selectList(any(LambdaQueryWrapper.class)))
+                .thenReturn(List.of());
+
+        healthMetricService.listRecent(testUserId, 999);
+
+        @SuppressWarnings("unchecked")
+        org.mockito.ArgumentCaptor<LambdaQueryWrapper<HealthMetric>> captor =
+                org.mockito.ArgumentCaptor.forClass(LambdaQueryWrapper.class);
+        verify(healthMetricMapper).selectList(captor.capture());
+        String sql = captor.getValue().getSqlSegment();
+
+        assertTrue(sql.contains("create_time"),
+                "ordering must use create_time: " + sql);
+        assertTrue(sql.replaceAll("\\s+", " ").contains("LIMIT 50"),
+                "limit must be clamped to 50: " + sql);
+    }
+
+    @Test
+    @DisplayName("测试1.27：最近录入 - 健康与保健记录按后端返回顺序原样输出")
+    void testListRecent_ReturnsInterleavedCategories() {
+        HealthMetric health = new HealthMetric();
+        health.setId(30L);
+        health.setUserId(testUserId);
+        health.setMetricKey("heartRate");
+        health.setValue(new BigDecimal("72"));
+        health.setUnit("次/分");
+        health.setRecordDate(LocalDate.now());
+        health.setCategory(MetricCategory.HEALTH);
+        health.setCreateTime(LocalDateTime.now());
+
+        HealthMetric wellness = new HealthMetric();
+        wellness.setId(31L);
+        wellness.setUserId(testUserId);
+        wellness.setMetricKey("sleepDuration");
+        wellness.setValue(new BigDecimal("7.5"));
+        wellness.setUnit("小时");
+        wellness.setRecordDate(LocalDate.now());
+        wellness.setCategory(MetricCategory.WELLNESS);
+        wellness.setCreateTime(LocalDateTime.now().minusMinutes(5));
+
+        when(healthMetricMapper.selectList(any(LambdaQueryWrapper.class)))
+                .thenReturn(List.of(health, wellness));
+
+        List<HealthMetricVO> recent = healthMetricService.listRecent(testUserId, 10);
+
+        assertEquals(2, recent.size());
+        assertEquals(30L, recent.get(0).id());
+        assertEquals(31L, recent.get(1).id());
+        assertEquals(MetricCategory.HEALTH, recent.get(0).category());
+        assertEquals(MetricCategory.WELLNESS, recent.get(1).category());
     }
 }

@@ -143,6 +143,17 @@ interface ConfirmMetricsRequest {
   metrics: ParsedMetric[]
 }
 
+/**
+ * 确认录入响应。
+ *
+ * 后端只回报 savedIds 时，「成功录入 N 个」会把选中了 3 个、只存了 2 个的结果说成成功；
+ * 现在一并返回 failedMetrics，前端才能说出哪几条没存上，并保留面板让用户只补录缺的。
+ */
+interface ConfirmSaveResult {
+  savedIds: number[]
+  failedMetrics: string[]
+}
+
 // ============================================
 // 组件逻辑
 // ============================================
@@ -226,12 +237,29 @@ const handleConfirm = async () => {
       metrics: selectedMetrics
     }
 
-    const res = await request.post<number[]>('/api/ai/confirm-metrics', requestBody)
+    const res = await request.post<ConfirmSaveResult>('/api/ai/confirm-metrics', requestBody)
 
     if (res.code === 200 && res.data) {
-      ElMessage.success(`成功录入 ${res.data.length} 个指标`)
-      parseResult.value = null
-      inputText.value = ''
+      const savedCount = res.data.savedIds?.length ?? 0
+      const failed = res.data.failedMetrics ?? []
+
+      // 全部成功：照旧提示并清空面板。与 OcrInput 同构，写成「先处理成功再 return」，
+      // 避免在确认路径上出现 else 兜底分支。
+      if (failed.length === 0) {
+        ElMessage.success(`成功录入 ${savedCount} 个指标`)
+        parseResult.value = null
+        inputText.value = ''
+        emit('refresh')
+        return
+      }
+
+      // 部分失败：不能报「成功录入」，也不能清空面板 —— 后端的记录此时仍是未确认，
+      // 用户按重新勾选的失败项补录即可（已写入的会被同日同值覆盖，不会重复）。
+      ElMessage.warning(`成功录入 ${savedCount} 个指标，${failed.length} 个未保存：${failed.join('、')}`)
+      const failedSet = new Set(failed)
+      parseResult.value.metrics.forEach(m => {
+        m.selected = failedSet.has(m.metricName) || failedSet.has(m.metricKey)
+      })
       emit('refresh')
     }
   } catch (error) {

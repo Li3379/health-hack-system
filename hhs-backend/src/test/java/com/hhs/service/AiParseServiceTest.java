@@ -11,6 +11,7 @@ import com.hhs.mapper.AiParseHistoryMapper;
 import com.hhs.service.domain.HealthMetricMetaRegistry;
 import com.hhs.service.impl.AiParseServiceImpl;
 import com.hhs.vo.AiParseHistoryVO;
+import com.hhs.vo.ConfirmSaveResult;
 import com.hhs.vo.HealthMetricVO;
 import com.hhs.vo.MetricParseResultVO;
 import dev.langchain4j.data.message.AiMessage;
@@ -415,12 +416,15 @@ class AiParseServiceTest {
         );
 
         // When: 确认录入
-        List<Long> savedIds = aiParseService.confirmMetrics(testUserId, 100L, metrics);
+        ConfirmSaveResult result = aiParseService.confirmMetrics(testUserId, 100L, metrics);
+        List<Long> savedIds = result.savedIds();
 
         // Then: 验证保存成功
         assertEquals(2, savedIds.size());
         assertTrue(savedIds.contains(1L));
         assertTrue(savedIds.contains(2L));
+        assertTrue(result.failedMetrics().isEmpty());
+        // 全部成功才允许置 confirmed
         verify(aiParseHistoryMapper, times(1)).updateById(any());
     }
 
@@ -446,11 +450,13 @@ class AiParseServiceTest {
         );
 
         // When: 确认录入
-        List<Long> savedIds = aiParseService.confirmMetrics(testUserId, 100L, metrics);
+        ConfirmSaveResult result = aiParseService.confirmMetrics(testUserId, 100L, metrics);
+        List<Long> savedIds = result.savedIds();
 
-        // Then: 只保存选中的指标
+        // Then: 只保存选中的指标；未选中不算失败（用户主动没勾）
         assertEquals(1, savedIds.size());
         assertEquals(1L, savedIds.get(0));
+        assertTrue(result.failedMetrics().isEmpty());
         verify(healthMetricService, times(1)).add(eq(testUserId), any(HealthMetricRequest.class));
     }
 
@@ -520,6 +526,56 @@ class AiParseServiceTest {
     }
 
     @Test
+    @DisplayName("测试2.6：确认录入 - 部分失败时保持未确认，返回失败清单以便补录")
+    void testConfirmMetrics_PartialFailureKeepsRecordUnconfirmed() {
+        // Given: 两条选中指标，其中一条保存抛异常
+        AiParseHistory history = new AiParseHistory();
+        history.setId(100L);
+        history.setUserId(testUserId);
+        history.setConfirmed(false);
+        when(aiParseHistoryMapper.selectById(100L)).thenReturn(history);
+
+        HealthMetricVO healthMetricVO = new HealthMetricVO(
+            1L, testUserId, null, "glucose", "血糖", new BigDecimal("5.6"),
+            "mmol/L", LocalDate.now(), null, null, LocalDateTime.now()
+        );
+        when(healthMetricService.add(eq(testUserId), any(HealthMetricRequest.class)))
+                .thenReturn(healthMetricVO)
+                .thenThrow(new RuntimeException("DB down"));
+
+        List<MetricParseResultVO.ParsedMetric> metrics = Arrays.asList(
+            createParsedMetric("glucose", "血糖", "5.6", "mmol/L", "HEALTH", true),
+            createParsedMetric("heartRate", "心率", "72", "次/分", "HEALTH", true)
+        );
+
+        // When
+        ConfirmSaveResult result = aiParseService.confirmMetrics(testUserId, 100L, metrics);
+
+        // Then: 一条落库、一条报失败
+        assertEquals(1, result.savedIds().size());
+        assertEquals(1, result.failedMetrics().size());
+        assertEquals("心率", result.failedMetrics().get(0));
+        assertTrue(result.hasFailures());
+        assertFalse(result.isComplete());
+
+        // 关键回归：部分失败绝不能把记录置为已确认，否则重试会被「已确认」拦掉
+        verify(aiParseHistoryMapper, never()).updateById(any());
+
+        // 再提交一次：记录仍是未确认，不会被「此记录已确认」拒绝（这里让两条都成功）
+        HealthMetricVO second = new HealthMetricVO(
+            2L, testUserId, null, "heartRate", "心率", new BigDecimal("72"),
+            "次/分", LocalDate.now(), null, null, LocalDateTime.now()
+        );
+        when(healthMetricService.add(eq(testUserId), any(HealthMetricRequest.class)))
+                .thenReturn(healthMetricVO, second);
+
+        ConfirmSaveResult retry = assertDoesNotThrow(
+                () -> aiParseService.confirmMetrics(testUserId, 100L, metrics));
+        assertEquals(2, retry.savedIds().size());
+        assertTrue(retry.isComplete());
+    }
+
+    @Test
     @DisplayName("测试3.1：获取解析历史 - 成功场景")
     void testGetParseHistory_Success() {
         // Given: 准备历史记录
@@ -561,6 +617,36 @@ class AiParseServiceTest {
         // Then: 验证保存
         assertNotNull(result.getCreateTime());
         verify(aiParseHistoryMapper, times(1)).insert(history);
+    }
+
+    @Test
+    @DisplayName("测试3.3：解析历史显式写入 createTime，不依赖数据库 DEFAULT")
+    void testParseMetrics_SetsCreateTimeExplicitly() {
+        // 数据库默认值走 MySQL 会话时钟（容器 UTC），统计侧走 JVM 时钟；
+        // 两者不同源时「今天」的边界会差 8 小时，所以写入必须显式带时间。
+        String aiResponse = """
+            {"metrics": [], "summary": "解析完成", "warnings": []}
+            """;
+        AiMessage aiMessage = mock(AiMessage.class);
+        when(aiMessage.text()).thenReturn(aiResponse);
+        Response<AiMessage> mockResponse = mock(Response.class);
+        when(mockResponse.content()).thenReturn(aiMessage);
+        when(chatModel.generate(anyList())).thenReturn(mockResponse);
+
+        MetricParseRequest request = new MetricParseRequest();
+        request.setInput(testInput);
+
+        LocalDateTime before = LocalDateTime.now().minusSeconds(1);
+        aiParseService.parseMetrics(testUserId, request);
+        LocalDateTime after = LocalDateTime.now().plusSeconds(1);
+
+        ArgumentCaptor<AiParseHistory> captor = ArgumentCaptor.forClass(AiParseHistory.class);
+        verify(aiParseHistoryMapper, times(1)).insert(captor.capture());
+        LocalDateTime createTime = captor.getValue().getCreateTime();
+
+        assertNotNull(createTime, "createTime must be set by the application, not left to the DB default");
+        assertTrue(createTime.isAfter(before) && createTime.isBefore(after),
+                "createTime should be the JVM clock at insert time, got " + createTime);
     }
 
     @Test

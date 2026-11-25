@@ -41,6 +41,16 @@ public class HealthMetricController {
         return Result.success(result);
     }
 
+    @GetMapping("/recent")
+    @Operation(summary = "Get recently recorded metrics across health and wellness")
+    public Result<java.util.List<com.hhs.vo.HealthMetricVO>> recent(
+        @RequestParam(defaultValue = "10") Integer limit
+    ) {
+        Long userId = com.hhs.security.SecurityUtils.getCurrentUserId();
+        log.debug("Fetching recent metrics for user: {}, limit: {}", userId, limit);
+        return Result.success(healthMetricService.listRecent(userId, limit));
+    }
+
     @PostMapping
     @Operation(summary = "Create health metric")
     public Result<HealthMetric> create(@RequestBody @Valid com.hhs.dto.HealthMetricRequest request) {
@@ -58,17 +68,21 @@ public class HealthMetricController {
         @RequestBody @Valid com.hhs.dto.HealthMetricRequest request
     ) {
         Long userId = com.hhs.security.SecurityUtils.getCurrentUserId();
-        log.info("Updating metric id: {}", id);
+        log.info("Updating metric id: {} for user: {}", id, userId);
         request.setUserId(userId);
-        HealthMetric metric = healthMetricService.update(id, request);
+        // userId 显式传给 service 做归属校验：只把它塞进请求体时，service 完全不读，
+        // 任何登录用户都能改他人指标的数值 / 类型 / 记录日期。
+        HealthMetric metric = healthMetricService.update(userId, id, request);
         return Result.success(metric);
     }
 
     @DeleteMapping("/{id}")
     @Operation(summary = "Delete health metric")
     public Result<Void> delete(@PathVariable Long id) {
-        log.info("Deleting metric id: {}", id);
-        healthMetricService.delete(id);
+        Long userId = com.hhs.security.SecurityUtils.getCurrentUserId();
+        log.info("Deleting metric id: {} for user: {}", id, userId);
+        // 走带归属校验的重载；无校验的 delete(Long id) 已从接口移除。
+        healthMetricService.delete(userId, id);
         return Result.success(null);
     }
 }

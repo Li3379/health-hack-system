@@ -61,14 +61,17 @@ public class FeishuPushChannel implements PushChannel {
             HttpEntity<Map<String, Object>> request = new HttpEntity<>(message, headers);
             String response = pushRestTemplate.postForObject(webhookUrl, request, String.class);
 
-            // Validate response - Feishu returns {"StatusCode":0} on success
-            if (response != null && response.contains("\"StatusCode\":0")) {
+            // Parse the response instead of sniffing a substring. Feishu's bot webhook answers
+            // {"StatusCode":0,"StatusMessage":"success"}; a pretty-printed body (or the newer
+            // {"code":0} shape) used to be misread as a failure even though the card was posted.
+            // The evaluator falls back to `code` when `StatusCode` is absent.
+            String failure = WebhookResponseEvaluator.failureReason(response, "StatusCode", "StatusMessage");
+            if (failure == null) {
                 log.info("Feishu push successful for user {}", userId);
                 return PushResult.success(getChannelType());
-            } else {
-                log.warn("Feishu push returned non-success response for user {}: {}", userId, response);
-                return PushResult.failed(getChannelType(), "Feishu API returned error: " + response);
             }
+            log.warn("Feishu push returned non-success response for user {}: {}", userId, failure);
+            return PushResult.failed(getChannelType(), "Feishu API returned error: " + failure);
         } catch (Exception e) {
             log.error("Feishu push failed for user {}: {}", userId, e.getMessage());
             return PushResult.failed(getChannelType(), e.getMessage());
@@ -132,16 +135,13 @@ public class FeishuPushChannel implements PushChannel {
     }
 
     /**
-     * Escape special characters for Feishu lark_md format
+     * Escape special characters for Feishu lark_md format.
+     *
+     * <p>Delegates to {@link PushTextEscaper}: this method used to inline the same three
+     * replacements in the wrong order, so {@code >} became {@code &amp;gt;}.
      */
     private String escapeText(String input) {
-        if (input == null) {
-            return "";
-        }
-        return input
-                .replace("<", "&lt;")
-                .replace(">", "&gt;")
-                .replace("&", "&amp;");
+        return PushTextEscaper.escapeMarkup(input);
     }
 
     private String getCardColor(String alertLevel) {

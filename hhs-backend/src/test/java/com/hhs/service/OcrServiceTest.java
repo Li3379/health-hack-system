@@ -12,6 +12,7 @@ import com.hhs.mapper.*;
 import com.hhs.service.domain.HealthMetricMetaRegistry;
 import com.hhs.service.domain.LabRoutineMetricRegistry;
 import com.hhs.service.impl.OcrServiceImpl;
+import com.hhs.vo.ConfirmSaveResult;
 import com.hhs.vo.HealthMetricVO;
 import com.hhs.vo.OcrHealthResultVO;
 import org.junit.jupiter.api.BeforeEach;
@@ -236,11 +237,13 @@ class OcrServiceTest {
         request.setMetrics(Arrays.asList(createMetricItem("glucose", "血糖", "5.6", "mmol/L", "HEALTH", true)));
 
         // When: 确认录入
-        List<Long> savedIds = ocrService.confirmMetrics(testUserId, request);
+        ConfirmSaveResult result = ocrService.confirmMetrics(testUserId, request);
+        List<Long> savedIds = result.savedIds();
 
         // Then: 验证保存成功
         assertNotNull(savedIds);
         assertEquals(1, savedIds.size());
+        assertTrue(result.failedMetrics().isEmpty());
         verify(ocrHealthRecordMapper, times(1)).updateById(any());
     }
 
@@ -265,7 +268,8 @@ class OcrServiceTest {
         request.setMetrics(Arrays.asList(createMetricItem("steps", "步数", "8000", "步", "WELLNESS", true)));
 
         // When: 确认录入
-        List<Long> savedIds = ocrService.confirmMetrics(testUserId, request);
+        ConfirmSaveResult result = ocrService.confirmMetrics(testUserId, request);
+        List<Long> savedIds = result.savedIds();
 
         // Then: 验证保健指标保存
         assertEquals(1, savedIds.size());
@@ -297,10 +301,12 @@ class OcrServiceTest {
         ));
 
         // When: 确认录入
-        List<Long> savedIds = ocrService.confirmMetrics(testUserId, request);
+        ConfirmSaveResult result = ocrService.confirmMetrics(testUserId, request);
+        List<Long> savedIds = result.savedIds();
 
-        // Then: 只保存选中的指标
+        // Then: 只保存选中的指标（未选中不算失败）
         assertEquals(1, savedIds.size());
+        assertTrue(result.failedMetrics().isEmpty());
         verify(healthMetricService, times(1)).add(eq(testUserId), any(HealthMetricRequest.class));
     }
 
@@ -318,6 +324,43 @@ class OcrServiceTest {
         });
 
         assertTrue(exception.getMessage().contains("不能为空"));
+    }
+
+    @Test
+    @DisplayName("测试2.4b：确认录入 - 部分失败时保持未确认，返回失败清单")
+    void testConfirmMetrics_PartialFailureKeepsRecordUnconfirmed() {
+        // Given: OCR 记录未确认，两条选中指标其中一条保存失败
+        OcrHealthRecord record = new OcrHealthRecord();
+        record.setId(100L);
+        record.setUserId(testUserId);
+        record.setConfirmed(false);
+        when(ocrHealthRecordMapper.selectById(100L)).thenReturn(record);
+
+        HealthMetricVO healthMetricVO = new HealthMetricVO(
+            1L, testUserId, null, "glucose", "血糖", new BigDecimal("5.6"),
+            "mmol/L", LocalDate.now(), null, null, LocalDateTime.now()
+        );
+        when(healthMetricService.add(eq(testUserId), any(HealthMetricRequest.class)))
+            .thenReturn(healthMetricVO)
+            .thenThrow(new RuntimeException("DB down"));
+
+        OcrConfirmRequest request = new OcrConfirmRequest();
+        request.setOcrRecordId(100L);
+        request.setMetrics(Arrays.asList(
+            createMetricItem("glucose", "血糖", "5.6", "mmol/L", "HEALTH", true),
+            createMetricItem("heartRate", "心率", "72", "次/分", "HEALTH", true)
+        ));
+
+        // When
+        ConfirmSaveResult result = ocrService.confirmMetrics(testUserId, request);
+
+        // Then
+        assertEquals(1, result.savedIds().size());
+        assertEquals(1, result.failedMetrics().size());
+        assertEquals("心率", result.failedMetrics().get(0));
+
+        // 部分成功不得把 OCR 记录标为已确认，否则失败项再也无法补录
+        verify(ocrHealthRecordMapper, never()).updateById(any());
     }
 
     @Test

@@ -2,8 +2,10 @@ package com.hhs.controller;
 
 import com.hhs.common.Result;
 import com.hhs.dto.PushConfigRequest;
+import com.hhs.entity.PushHistory;
 import com.hhs.entity.UserPushConfig;
 import com.hhs.mapper.UserPushConfigMapper;
+import com.hhs.security.EmailAddressValidator;
 import com.hhs.security.SecurityUtils;
 import com.hhs.security.WebhookUrlValidator;
 import com.hhs.service.PushHistoryService;
@@ -37,6 +39,16 @@ public class PushConfigController {
     private final PushHistoryService pushHistoryService;
 
     /**
+     * How far back to look for the most recent delivery attempt.
+     *
+     * <p>Wide on purpose: a channel that last failed yesterday is still suspect today, and the
+     * point of surfacing it is to stop the page from claiming delivery works. A stale failure
+     * that has since been fixed disappears as soon as one attempt succeeds (only the newest row
+     * per channel is read).
+     */
+    private static final java.time.Duration DELIVERY_LOOKBACK = java.time.Duration.ofDays(7);
+
+    /**
      * Get all push configurations for current user
      */
     @GetMapping("/config")
@@ -55,19 +67,50 @@ public class PushConfigController {
                         c -> c,
                         (a, b) -> a));
 
+        // 每个渠道最近一次投递结果。用历史而不是现场探测：SMTP 探测是一次真实 AUTH，
+        // 服务商会对反复失败的 AUTH 限频 —— 每次读配置页都探一次，反而会制造它所报告的故障。
+        Map<String, PushHistory> latestOutcomes = loadLatestOutcomes(userId);
+
         // Build response with all channel types
         List<PushConfigVO> result = new ArrayList<>();
         for (ChannelType channelType : ChannelType.values()) {
             UserPushConfig config = configMap.get(channelType.name());
             boolean serverAvailable = pushChannelManager.hasChannel(channelType);
-            if (config != null) {
-                result.add(PushConfigVO.fromEntity(config, serverAvailable));
-            } else {
-                result.add(PushConfigVO.defaultForChannel(channelType, serverAvailable));
-            }
+            PushConfigVO vo = config != null
+                    ? PushConfigVO.fromEntity(config, serverAvailable)
+                    : PushConfigVO.defaultForChannel(channelType, serverAvailable);
+            result.add(withDeliveryOutcome(vo, latestOutcomes.get(channelType.name())));
         }
 
         return Result.success(result);
+    }
+
+    /**
+     * Newest delivery attempt per channel within the lookback window.
+     *
+     * <p>Failure to read history must not break the settings page — an empty map degrades to
+     * "outcome unknown", which the UI renders as no claim rather than a false reassurance.
+     */
+    private Map<String, PushHistory> loadLatestOutcomes(Long userId) {
+        var history = pushHistoryService.getLatestPerChannelSince(userId,
+                LocalDateTime.now().minus(DELIVERY_LOOKBACK));
+        if (history == null || history.isEmpty()) {
+            return Map.of();
+        }
+        return history.stream()
+                .filter(h -> h.getChannelType() != null)
+                .collect(java.util.stream.Collectors.toMap(
+                        PushHistory::getChannelType,
+                        h -> h,
+                        // 已按 pushed_at DESC 排序，保留第一条即最新
+                        (first, ignored) -> first));
+    }
+
+    private PushConfigVO withDeliveryOutcome(PushConfigVO vo, PushHistory latest) {
+        if (latest == null) {
+            return vo;
+        }
+        return vo.withDeliveryOutcome(latest.getStatus(), latest.getPushedAt());
     }
 
     /**
@@ -91,6 +134,9 @@ public class PushConfigController {
         PushConfigVO vo = config != null
                 ? PushConfigVO.fromEntity(config, serverAvailable)
                 : PushConfigVO.defaultForChannel(type, serverAvailable);
+        // 单渠道读取与列表读取必须给出同一套 availability/投递结果，否则刷新单条会
+        // 「看起来好了」，刷新整页又变回失败。
+        withDeliveryOutcome(vo, loadLatestOutcomes(userId).get(type.name()));
 
         return Result.success(vo);
     }
@@ -134,6 +180,16 @@ public class PushConfigController {
             validateWebhookUrl(request.getConfigValue());
         }
 
+        // EMAIL 的 configValue 会被 EmailPushChannel 直接当成收件人（To: 头）。不在这里校验的话，
+        // 写错（如 foo@qq）照样保存成功、页面显示「已配置」，直到真实告警或点测试推送才由 SMTP
+        // 报一个英文错误 —— 定位要跨过整个推送链路。
+        // 掩码值（含 ****）是客户端读回来的占位符，不代表真实地址，跳过校验（同下面的保存逻辑）。
+        if (type == ChannelType.EMAIL && request.getConfigValue() != null
+                && !request.getConfigValue().isBlank()
+                && !request.getConfigValue().contains(PushConfigVO.MASK_MARKER)) {
+            validateEmailAddress(request.getConfigValue());
+        }
+
         // Find existing or create new
         UserPushConfig config = userPushConfigMapper.findByUserIdAndChannelType(userId, type.name());
 
@@ -169,7 +225,11 @@ public class PushConfigController {
             log.info("Updated push config for user {} channel {}", userId, type);
         }
 
-        return Result.success(PushConfigVO.fromEntity(config, pushChannelManager.hasChannel(type)));
+        PushConfigVO saved = PushConfigVO.fromEntity(config, pushChannelManager.hasChannel(type));
+        // 保存后立即返回的 VO 也要带同一份投递结果：否则前端把响应写回本地状态时，
+        // 会把刚读到的失败标记抹掉，页面重新变回「支持离线推送」。
+        withDeliveryOutcome(saved, loadLatestOutcomes(userId).get(type.name()));
+        return Result.success(saved);
     }
 
     /**
@@ -227,7 +287,11 @@ public class PushConfigController {
         testAlert.setTitle("推送测试");
         testAlert.setMessage("这是一条测试消息，用于验证推送通道是否正常工作。");
         testAlert.setAlertLevel("LOW");
-        testAlert.setAlertType("INFO");
+        // AlertVO 的值域是 ^(CRITICAL|WARNING|NORMAL)$（见 AlertVO:23），而这里手工 new、
+        // 不走 Bean Validation，写错值不会被拦下。用 INFO 会让测试消息落在值域外：真实告警
+        // 的 alertType 只可能由 ThresholdRangeChecker 产出 CRITICAL/WARNING/NORMAL，
+        // 任何将来按 alertType 分支的逻辑（模板选择、统计）都会在测试消息上走 default。
+        testAlert.setAlertType("NORMAL");
         testAlert.setMetricKey("test");
 
         // Try to push
@@ -304,5 +368,18 @@ public class PushConfigController {
      */
     private void validateWebhookUrl(String configValue) {
         WebhookUrlValidator.validate(configValue);
+    }
+
+    /**
+     * Validate a recipient address at write time.
+     *
+     * <p>{@link EmailAddressValidator} raises a {@code BusinessException} with the Chinese detail
+     * that {@code GlobalExceptionHandler} projects into the response envelope — same channel as
+     * {@link #validateWebhookUrl}.
+     *
+     * @param configValue the user-supplied address
+     */
+    private void validateEmailAddress(String configValue) {
+        EmailAddressValidator.validate(configValue);
     }
 }

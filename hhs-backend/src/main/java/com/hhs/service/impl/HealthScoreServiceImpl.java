@@ -182,4 +182,20 @@ public class HealthScoreServiceImpl implements HealthScoreService {
             log.warn("Redis operation failed, skipping cache clear: {}", e.getMessage());
         }
     }
+
+    /**
+     * Public cache drop for write paths outside this service (metric recording).
+     *
+     * <p>Same Redis key as {@link #clearCache(Long)}; failures stay swallowed so a Redis blip
+     * cannot fail the caller's write. The worst case is the pre-existing behaviour: a stale
+     * score until the 5-minute TTL expires.
+     */
+    @Override
+    public void evictCachedScore(Long userId) {
+        if (userId == null) {
+            return;
+        }
+        clearCache(userId);
+        log.debug("Evicted cached health score for user: {}", userId);
+    }
 }

@@ -810,6 +810,11 @@ const executeSave = async () => {
       ElMessage.success('修改成功')
     } else {
       // 新增模式
+      // 血压是两条独立请求（收缩压 / 舒张压）。这里曾经用 Promise.all，任一 reject 就整体
+      // 进 catch：另一条其实已经落库，界面却弹失败、也不发 success（QuickInput 因此不刷新），
+      // 用户看到的是「失败」+ 未刷新，DB 里却已有数据。改用 allSettled 让「部分成功」可见：
+      // 两条都失败才算失败，只剩一条时明确告诉用户哪一条没存上，并照常刷新列表。
+      let partialNote = ''
       if (isBloodPressure.value && form.diastolicValue !== undefined) {
         const systolicData: any = {
           metricKey: 'systolicBP',
@@ -828,10 +833,23 @@ const executeSave = async () => {
           systolicData.trend = backendTrend
           diastolicData.trend = backendTrend
         }
-        await Promise.all([
-          healthApi.createMetric(systolicData),
-          healthApi.createMetric(diastolicData)
-        ])
+        const pressureSaves = [
+          { name: '收缩压', request: healthApi.createMetric(systolicData) },
+          { name: '舒张压', request: healthApi.createMetric(diastolicData) }
+        ]
+        const results = await Promise.allSettled(pressureSaves.map(s => s.request))
+        const saved = pressureSaves.filter((_, i) => results[i].status === 'fulfilled').map(s => s.name)
+        const missed = pressureSaves
+          .map((s, i) => (results[i].status === 'rejected' ? { name: s.name, reason: (results[i] as PromiseRejectedResult).reason } : null))
+          .filter((entry): entry is { name: string; reason: unknown } => entry !== null)
+
+        if (saved.length === 0) {
+          // 两条都没落库才是真的失败：沿用既有错误通道（forbidden / network 等分支照旧）
+          throw missed[0].reason
+        }
+        if (missed.length > 0) {
+          partialNote = `${saved.join(' / ')} 已保存；${missed.map(m => m.name).join(' / ')} 未能保存，请补录`
+        }
       } else if (isWellness) {
         const data: any = {
           metricKey: canonicalKey,
@@ -852,7 +870,13 @@ const executeSave = async () => {
         if (backendTrend) data.trend = backendTrend
         await healthApi.createMetric(data)
       }
-      ElMessage.success('录入成功')
+      // 部分成功的血压录入不是「成功」也不是「失败」：用 warning 说清哪一半没存上，
+      // 而不是用 success 掩盖一条丢失的读数。
+      if (partialNote) {
+        ElMessage.warning(partialNote)
+      } else {
+        ElMessage.success('录入成功')
+      }
     }
 
     emit('success')
