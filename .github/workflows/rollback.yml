@@ -117,10 +117,15 @@ jobs:
             echo "=== Checking out docker-compose files for version ==="
             git checkout "$COMMIT_SHA" -- docker-compose.yml docker-compose.prod.yml 2>/dev/null || echo "Using current docker-compose files"
 
-            # Recreate containers with rolled-back images
-            echo "=== Recreating containers ==="
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml down
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --force-recreate || ROLLBACK_FAILED=true
+            # Recreate containers with rolled-back images.
+            #
+            # Only the two application containers: `compose down` would also stop mysql and
+            # redis, and during a rollback the last thing wanted is the data tier going down
+            # for a few minutes on a 2-core / 1.8 GiB host. The images are already retagged
+            # to :latest above, so compose resolves them without contacting the registry.
+            echo "=== Recreating application containers ==="
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d \
+              --force-recreate --no-deps backend frontend || ROLLBACK_FAILED=true
 
             # Cleanup
             docker image prune -f
