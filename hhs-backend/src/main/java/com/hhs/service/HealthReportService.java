@@ -45,15 +45,4 @@ public interface HealthReportService {
      * @return Health report or null if not found
      */
     HealthReportVO getReportById(Long userId, String reportId);
-
-    /**
-     * Generate a comprehensive health report for a user
-     * (Legacy method, calls getOrGenerateReport internally)
-     *
-     * @param userId User ID
-     * @return Generated health report
-     * @deprecated Use {@link #getOrGenerateReport(Long)} instead
-     */
-    @Deprecated
-    HealthReportVO generateReport(Long userId);
 }
