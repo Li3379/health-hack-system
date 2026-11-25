@@ -2,6 +2,7 @@ package com.hhs.service;
 
 import com.hhs.common.PageResult;
 import com.hhs.dto.OcrConfirmRequest;
+import com.hhs.vo.ConfirmSaveResult;
 import com.hhs.vo.OcrHealthResultVO;
 import com.hhs.vo.OcrHistoryVO;
 import org.springframework.web.multipart.MultipartFile;
@@ -65,9 +66,9 @@ public interface OcrService {
      *
      * @param userId User ID
      * @param request Confirmation request with selected metrics
-     * @return List of saved metric IDs
+     * @return Saved metric ids plus the names of the metrics that could not be written
      */
-    List<Long> confirmMetrics(Long userId, OcrConfirmRequest request);
+    ConfirmSaveResult confirmMetrics(Long userId, OcrConfirmRequest request);
 
     /**
      * Get OCR history for a user
