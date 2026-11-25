@@ -47,7 +47,9 @@ jobs:
         uses: appleboy/ssh-action@v1
         env:
           OWNER: ${{ steps.meta.outputs.owner_lc }}
-          IMAGE_TAG: latest
+          # Same reasoning as docker-publish.yml: pin the commit tag, because :latest can
+          # resolve to a cached older manifest on the server.
+          IMAGE_TAG: sha-${{ github.sha }}
         with:
           host: ${{ secrets.ECS_HOST }}
           username: ${{ secrets.ECS_USER }}
@@ -116,17 +118,26 @@ jobs:
             echo "=== Logging in to GHCR ==="
             echo ${{ secrets.GHCR_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-            # Force pull latest images with retry
-            echo "=== Pulling latest images ==="
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml pull || \
-              (echo "Pull failed, retrying after 5s..." && sleep 5 && docker compose -f docker-compose.yml -f docker-compose.prod.yml pull)
+            # Pull ONLY the two application images by their pinned tags — see
+            # docker-publish.yml for why a bare `compose pull` is avoided (it re-checks
+            # redis/mysql against a mirror that was dropping the same blob, and treats the
+            # backend as buildable because compose merges `build:` with `image:`).
+            echo "=== Pulling application images (tag: $IMAGE_TAG) ==="
+            for svc in backend frontend; do
+              img="ghcr.io/$OWNER/hhs-$svc:$IMAGE_TAG"
+              echo "--- docker pull $img ---"
+              if ! timeout 600 docker pull "$img"; then
+                echo "ERROR: failed to pull $img"
+                echo "Deploy aborted before touching the running containers."
+                exit 1
+              fi
+            done
 
-            # Stop old containers and start new ones
-            # Note: up -d returns non-zero when a dependency health check fails,
-            # but we still want diagnostics. Don't let set -e abort here.
-            echo "=== Recreating containers ==="
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml down
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --force-recreate || DEPLOY_FAILED=true
+            # Recreate only the two application containers — `down` would also stop mysql
+            # and redis, restarting the data tier on every code deploy.
+            echo "=== Recreating application containers ==="
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d \
+              --force-recreate --no-deps backend frontend || DEPLOY_FAILED=true
 
             # Cleanup old images
             docker image prune -f

@@ -191,7 +191,11 @@ jobs:
         uses: appleboy/ssh-action@v1
         env:
           OWNER: ${{ steps.meta.outputs.owner_lc }}
-          IMAGE_TAG: latest
+          # Pin the exact commit tag rather than "latest". The two tags were observed
+          # pointing at different digests: build-push-action rewrote :latest but the
+          # server's cached manifest still resolved the old one, so a deploy could
+          # silently ship the previous build. sha-<commit> is immutable per build.
+          IMAGE_TAG: sha-${{ github.sha }}
         with:
           host: ${{ secrets.ECS_HOST }}
           username: ${{ secrets.ECS_USER }}
@@ -264,17 +268,41 @@ jobs:
             echo "=== Logging in to GHCR ==="
             echo ${{ secrets.GHCR_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-            # Force pull latest images with retry
-            echo "=== Pulling latest images ==="
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml pull || \
-              (echo "Pull failed, retrying after 5s..." && sleep 5 && docker compose -f docker-compose.yml -f docker-compose.prod.yml pull)
+            # Pull ONLY the two application images by their pinned tags.
+            #
+            # `docker compose pull` without arguments also re-checks redis/mysql against
+            # Docker Hub. Those layers are already present locally, yet the pull still
+            # contacts the mirror — and the configured accelerator was observed dropping
+            # the same blob every ten minutes, which held a deploy for 40 minutes before
+            # the ssh action's 30m command_timeout killed it. Naming the services and
+            # giving docker pull its own deadline keeps a slow mirror from blocking the
+            # whole deploy.
+            #
+            # Note: compose merges `build:` (base file) with `image:` (prod file) for the
+            # backend, so `compose pull` treats it as buildable and skips it with a
+            # warning. Pulling by explicit image reference sidesteps that entirely.
+            echo "=== Pulling application images (tag: $IMAGE_TAG) ==="
+            for svc in backend frontend; do
+              img="ghcr.io/$OWNER/hhs-$svc:$IMAGE_TAG"
+              echo "--- docker pull $img ---"
+              if ! timeout 600 docker pull "$img"; then
+                echo "ERROR: failed to pull $img"
+                echo "Deploy aborted before touching the running containers."
+                exit 1
+              fi
+            done
 
-            # Stop old containers and start new ones
-            # Note: up -d returns non-zero when a dependency health check fails,
-            # but we still want diagnostics. Don't let set -e abort here.
-            echo "=== Recreating containers ==="
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml down
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --force-recreate || DEPLOY_FAILED=true
+            # Recreate only the two application containers.
+            #
+            # This used to run `compose down` first, which also stopped mysql and redis —
+            # a full data-tier restart on every code deploy. On this 2-core / 1.8 GiB host
+            # that meant the backend frequently came up before MySQL finished its own
+            # recovery, and the healthcheck window was spent waiting rather than serving.
+            # `up --force-recreate` for the named services replaces the containers without
+            # touching the database.
+            echo "=== Recreating application containers ==="
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d \
+              --force-recreate --no-deps backend frontend || DEPLOY_FAILED=true
 
             # Cleanup old images
             docker image prune -f
