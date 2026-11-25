@@ -19,6 +19,7 @@ import com.hhs.service.domain.HealthMetricMetaRegistry;
 import com.hhs.service.domain.MetricDefinition;
 import com.hhs.service.domain.MetricKeyNormalizer;
 import com.hhs.vo.AiParseHistoryVO;
+import com.hhs.vo.ConfirmSaveResult;
 import com.hhs.vo.HealthMetricVO;
 import com.hhs.vo.MetricParseResultVO;
 import dev.langchain4j.data.message.SystemMessage;
@@ -35,6 +36,7 @@ import org.springframework.util.StringUtils;
 import java.math.BigDecimal;
 import java.math.MathContext;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
@@ -204,6 +206,12 @@ public class AiParseServiceImpl implements AiParseService {
         history.setInputText(input);
         history.setInputType(inputType);
         history.setConfirmed(false);
+        // 显式写入，不依赖 schema.sql 的 DEFAULT CURRENT_TIMESTAMP：MySQL 容器跑在 UTC，
+        // 默认值比应用侧（JVM 区）的时间早 8 小时；而 StatsServiceImpl.getTodayStats 用
+        // LocalDate.now() 框出「今天」。写入与读取落在两个时钟上时，北京时间 00:00–08:00
+        // 的解析会被算进「昨天」，列表里的时刻也对不上最近录入。显式 setCreateTime 让两者
+        // 用同一个时钟，无论 JVM 配的是哪个时区都不再错位。
+        history.setCreateTime(LocalDateTime.now());
 
         try {
             history.setParseResult(objectMapper.writeValueAsString(result));
@@ -531,8 +539,8 @@ public class AiParseServiceImpl implements AiParseService {
 
     @Override
     @Transactional
-    public List<Long> confirmMetrics(Long userId, Long parseHistoryId,
-                                     List<MetricParseResultVO.ParsedMetric> metrics) {
+    public ConfirmSaveResult confirmMetrics(Long userId, Long parseHistoryId,
+                                            List<MetricParseResultVO.ParsedMetric> metrics) {
         log.info("确认录入指标: userId={}, parseHistoryId={}, metrics={}", userId, parseHistoryId, metrics.size());
 
         // 验证输入
@@ -593,15 +601,20 @@ public class AiParseServiceImpl implements AiParseService {
                     "所有指标保存失败: " + String.join(", ", failedMetrics));
         }
 
-        // 标记为已确认
-        markAsConfirmed(parseHistoryId, savedIds);
-
-        if (!failedMetrics.isEmpty()) {
-            log.warn("部分指标保存失败: {}", failedMetrics);
+        // 只有全部选中项都落库才把记录标记为已确认。
+        //
+        // 部分失败时仍然标记确认会造成不可恢复的数据丢失：已确认的记录在下次提交时会被
+        // 上面的「此记录已确认」分支直接拒绝，失败的那几条既进不了统计，也永远补不回来。
+        // 保留未确认状态 + 返回失败清单，调用方就能只重提缺的那几项。
+        if (failedMetrics.isEmpty()) {
+            markAsConfirmed(parseHistoryId, savedIds);
+        } else {
+            log.warn("部分指标保存失败，解析记录保持未确认以便补录: parseHistoryId={}, failed={}",
+                    parseHistoryId, failedMetrics);
         }
 
-        log.info("成功保存 {} 个指标", savedIds.size());
-        return savedIds;
+        log.info("成功保存 {} 个指标，失败 {} 个", savedIds.size(), failedMetrics.size());
+        return new ConfirmSaveResult(savedIds, failedMetrics);
     }
 
     /**

@@ -83,7 +83,7 @@ public class AIParseController {
         @ApiResponse(responseCode = "403", description = "无权操作此记录"),
         @ApiResponse(responseCode = "404", description = "解析记录不存在")
     })
-    public Result<List<Long>> confirmMetrics(@RequestBody @Valid ConfirmMetricsRequest request) {
+    public Result<com.hhs.vo.ConfirmSaveResult> confirmMetrics(@RequestBody @Valid ConfirmMetricsRequest request) {
         Long userId = SecurityUtils.getCurrentUserId();
 
         // 转换为VO对象
@@ -91,13 +91,15 @@ public class AIParseController {
                 .map(this::mapToParsedMetric)
                 .collect(Collectors.toList());
 
-        List<Long> metricIds = aiParseService.confirmMetrics(
+        // 返回 {savedIds, failedMetrics} 而不是纯 ID 列表：部分失败时调用方才能提示
+        // 「N 成功 / M 失败」并只重提缺的那几项（记录此时仍为未确认，可再次提交）。
+        com.hhs.vo.ConfirmSaveResult result = aiParseService.confirmMetrics(
                 userId,
                 request.getParseHistoryId(),
                 metrics
         );
 
-        return Result.success(metricIds);
+        return Result.success(result);
     }
 
     /**

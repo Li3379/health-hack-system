@@ -4,6 +4,7 @@ import com.hhs.common.PageResult;
 import com.hhs.dto.MetricParseRequest;
 import com.hhs.entity.AiParseHistory;
 import com.hhs.vo.AiParseHistoryVO;
+import com.hhs.vo.ConfirmSaveResult;
 import com.hhs.vo.MetricParseResultVO;
 
 import java.util.List;
@@ -25,12 +26,16 @@ public interface AiParseService {
     /**
      * 确认并保存解析结果
      *
+     * <p>返回保存的 ID 与失败的指标名，而不是只返回 ID：只返回 ID 时，部分失败与全部成功在
+     * 调用方看来完全一样（都会提示「成功录入 N 个」），而记录已被置为已确认，失败的指标既
+     * 不会出现在统计里，也无法再补录。
+     *
      * @param userId        用户ID
      * @param parseHistoryId 解析历史ID
      * @param metrics       确认的指标列表
-     * @return 保存的指标ID列表
+     * @return 保存的指标 ID 与未能保存的指标名
      */
-    List<Long> confirmMetrics(Long userId, Long parseHistoryId, List<MetricParseResultVO.ParsedMetric> metrics);
+    ConfirmSaveResult confirmMetrics(Long userId, Long parseHistoryId, List<MetricParseResultVO.ParsedMetric> metrics);
 
     /**
      * 获取解析历史（简化版）
