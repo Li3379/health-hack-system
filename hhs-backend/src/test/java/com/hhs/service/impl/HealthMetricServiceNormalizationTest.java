@@ -100,6 +100,8 @@ class HealthMetricServiceNormalizationTest {
                         .orElse(""));
         lenient().when(metricCategoryService.determineCategory(anyString()))
                 .thenReturn(MetricCategory.HEALTH);
+        // 本类检的是 key 规范化与别名展开；写入白名单另有专用用例。
+        lenient().when(metricCategoryService.isWritableMetric(anyString())).thenReturn(true);
 
         service = new HealthMetricServiceImpl(
                 healthMetricMapper,

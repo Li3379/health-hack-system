@@ -24,7 +24,6 @@ import com.hhs.vo.HealthMetricTrendVO;
 import com.hhs.vo.HealthMetricVO;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -56,6 +55,9 @@ public class HealthMetricServiceImpl implements HealthMetricService {
     private final ThresholdRangeChecker rangeChecker;
 
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+
+    /** Upper bound for {@link #listRecent}: above this the "recent records" list stops being recent. */
+    private static final int MAX_RECENT_LIMIT = 50;
 
     /**
      * Alternative spellings of units that mean the same thing. Keys and values are lower-cased
@@ -102,6 +104,15 @@ public class HealthMetricServiceImpl implements HealthMetricService {
     /**
      * Add a new health metric record for a user
      *
+     * <p>There is no {@code @CacheEvict} here on purpose. This used to carry
+     * {@code @CacheEvict(value={"metrics:latest","metrics:latest:all"}, allEntries=true)}, but no
+     * {@code @Cacheable} in the code base ever wrote those names and nothing calls
+     * {@code cacheManager.getCache("metrics:latest")} — the eviction could not remove anything.
+     * The annotation was worse than dead: it implied the read path was cached and steered
+     * diagnosis away from the cache that actually goes stale after a write
+     * ({@code HealthScoreServiceImpl}'s plain Redis key {@code health:score:v2:{userId}}, which is
+     * invalidated explicitly by {@code CacheInvalidationListener} / {@code WellnessServiceImpl}).
+     *
      * @param userId User ID
      * @param request Health metric request containing metric type, value, unit, record date
      * @return HealthMetricVO containing the created metric
@@ -109,7 +120,6 @@ public class HealthMetricServiceImpl implements HealthMetricService {
      */
     @Override
     @Transactional(timeout = 30)
-    @CacheEvict(value = {"metrics:latest", "metrics:latest:all"}, allEntries = true)
     public HealthMetricVO add(Long userId, HealthMetricRequest request) {
         HealthMetric persisted = persistMetric(userId, request);
         return toVO(persisted);
@@ -134,6 +144,16 @@ public class HealthMetricServiceImpl implements HealthMetricService {
         String requestedKey = request.getMetricKey();
         String canonicalKey = MetricKeyNormalizer.toCanonicalKey(requestedKey);
         request.setMetricKey(canonicalKey);
+
+        // Reject keys no dictionary knows about. MetricKeyNormalizer passes unknown keys through
+        // unchanged, so without this gate a typo like "sleep" or "sleepTime" was accepted and then
+        // classified HEALTH by determineCategory's backward-compatible default: the reading would
+        // land in the health series and never appear in the wellness list or wellness summary
+        // (both filter category=WELLNESS). 400 is the honest answer for "I don't know this metric".
+        if (!metricCategoryService.isWritableMetric(canonicalKey)) {
+            throw new BusinessException(ErrorCode.VALIDATION_INVALID_PARAMETER,
+                    "无效的指标类型: " + canonicalKey);
+        }
 
         String normalizedUnit = normalizeUnit(canonicalKey, request.getUnit());
         MetricCategory category = metricCategoryService.determineCategory(canonicalKey);
@@ -339,7 +359,16 @@ public class HealthMetricServiceImpl implements HealthMetricService {
     }
 
     /**
-     * Delete a health metric record
+     * Delete a health metric record — the only delete entry point.
+     *
+     * <p>Ownership is verified before the cascade delete, and idempotent for missing rows so a
+     * retried DELETE does not surface as an error. An unchecked {@code delete(Long id)} overload
+     * used to exist and was what {@code DELETE /api/metrics/{id}} called: any logged-in user could
+     * delete another user's row by guessing the auto-increment id. It has been removed from the
+     * interface so there is no un-guarded variant left to call by accident.
+     *
+     * <p>No {@code @CacheEvict} either — see {@link #add(Long, HealthMetricRequest)}: the
+     * {@code metrics:latest} cache names it used to evict were never written by anything.
      *
      * @param userId User ID (for authorization)
      * @param id Metric ID to delete
@@ -348,7 +377,6 @@ public class HealthMetricServiceImpl implements HealthMetricService {
      */
     @Override
     @Transactional
-    @CacheEvict(value = {"metrics:latest", "metrics:latest:all"}, allEntries = true)
     public boolean delete(Long userId, Long id) {
         // Idempotent: return true if record doesn't exist
         HealthMetric metric = healthMetricMapper.selectById(id);
@@ -356,7 +384,7 @@ public class HealthMetricServiceImpl implements HealthMetricService {
             log.info("Metric already deleted or not found: id={}", id);
             return true;
         }
-        if (!metric.getUserId().equals(userId)) {
+        if (userId == null || !metric.getUserId().equals(userId)) {
             throw new BusinessException(ErrorCode.AUTH_FORBIDDEN, "无权删除他人记录");
         }
 
@@ -528,6 +556,33 @@ public class HealthMetricServiceImpl implements HealthMetricService {
     }
 
     /**
+     * List the most recently created metrics across both categories.
+     *
+     * <p>Neither {@code /api/metrics} nor {@code /api/wellness} can answer this: both pin
+     * {@code category}, both cap the page and they order by different columns
+     * ({@code create_time} vs {@code record_date}), so merging two ten-row pages client-side
+     * could drop a freshly recorded health row behind ten wellness rows. This single query
+     * orders every category by {@code create_time}, which is the column the UI displays.
+     */
+    @Override
+    @Transactional(timeout = 30, readOnly = true)
+    public List<HealthMetricVO> listRecent(Long userId, Integer limit) {
+        int safeLimit = limit == null ? 10 : Math.max(1, Math.min(limit, MAX_RECENT_LIMIT));
+
+        LambdaQueryWrapper<HealthMetric> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(HealthMetric::getUserId, userId);
+        // id 作为稳定次序的兜底：同秒写入的多条记录（一次血压录两条）不会每次刷新换位置
+        wrapper.orderByDesc(HealthMetric::getCreateTime).orderByDesc(HealthMetric::getId);
+        wrapper.last("LIMIT " + safeLimit);
+
+        List<HealthMetric> entities = healthMetricMapper.selectList(wrapper);
+        Map<String, UserThreshold> thresholds = loadThresholdsFor(entities);
+        return entities.stream()
+                .map(entity -> toVO(entity, thresholds))
+                .collect(Collectors.toList());
+    }
+
+    /**
      * Resolve the thresholds for a batch of metrics with a single batched lookup.
      */
     private Map<String, UserThreshold> loadThresholdsFor(List<HealthMetric> metrics) {
@@ -560,21 +615,39 @@ public class HealthMetricServiceImpl implements HealthMetricService {
     /**
      * Update an existing health metric using direct Mapper injection
      *
+     * <p>Ownership is checked against {@code userId} (from the JWT) before anything is read or
+     * written. The previous signature took the caller's id only inside the request body — which
+     * the service never read — so any logged-in user could rewrite another user's value, metric
+     * key or record date through {@code PUT /api/metrics/{id}}.
+     *
+     * @param userId Caller's user ID (from JWT)
      * @param id Metric ID
      * @param request Health metric request
      * @return Updated health metric entity
      */
     @Override
     @Transactional(timeout = 30)
-    public HealthMetric update(Long id, HealthMetricRequest request) {
-        log.info("Updating metric id: {}", id);
+    public HealthMetric update(Long userId, Long id, HealthMetricRequest request) {
+        log.info("Updating metric id: {} for user: {}", id, userId);
         HealthMetric metric = healthMetricMapper.selectById(id);
         if (metric == null) {
             throw new BusinessException(ErrorCode.HEALTH_METRIC_NOT_FOUND);
         }
+        // 403 instead of 404: the record exists, the caller simply is not its owner. Same wording
+        // as the other ownership guards in this codebase (WellnessServiceImpl, delete below).
+        if (userId == null || !metric.getUserId().equals(userId)) {
+            throw new BusinessException(ErrorCode.AUTH_FORBIDDEN, "无权修改他人记录");
+        }
 
         String canonicalKey = MetricKeyNormalizer.toCanonicalKey(request.getMetricKey());
         request.setMetricKey(canonicalKey);
+
+        // Same gate as persistMetric: an editing request must not be able to move a row onto a key
+        // no dictionary knows, which would silently reclassify it as HEALTH.
+        if (!metricCategoryService.isWritableMetric(canonicalKey)) {
+            throw new BusinessException(ErrorCode.VALIDATION_INVALID_PARAMETER,
+                    "无效的指标类型: " + canonicalKey);
+        }
 
         // Auto-correct unit based on metric key
         String normalizedUnit = normalizeUnit(canonicalKey, request.getUnit());
@@ -610,32 +683,6 @@ public class HealthMetricServiceImpl implements HealthMetricService {
 
         log.info("Metric updated: id={}, userId={}, type={}, category={}", id, metric.getUserId(), metric.getMetricKey(), category);
         return metric;
-    }
-
-    /**
-     * Delete a health metric by ID using direct Mapper injection
-     *
-     * @param id Metric ID to delete
-     */
-    @Override
-    @Transactional(timeout = 30)
-    public void delete(Long id) {
-        log.info("Deleting metric id: {}", id);
-        HealthMetric metric = healthMetricMapper.selectById(id);
-        if (metric == null) {
-            log.warn("Metric not found for deletion: id={}", id);
-            return;
-        }
-
-        // Cascade delete: also remove from realtime_metric table
-        LocalDateTime startTime = metric.getRecordDate().atStartOfDay();
-        LocalDateTime endTime = startTime.plusDays(1);
-        realtimeMetricMapper.deleteByHealthMetric(
-                metric.getUserId(), metric.getMetricKey(), startTime, endTime
-        );
-
-        healthMetricMapper.deleteById(id);
-        log.info("Metric deleted: id={}, userId={}", id, metric.getUserId());
     }
 
     /**

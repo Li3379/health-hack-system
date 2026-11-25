@@ -10,6 +10,7 @@ import com.hhs.entity.RealtimeMetric;
 import com.hhs.exception.BusinessException;
 import com.hhs.mapper.HealthMetricMapper;
 import com.hhs.mapper.RealtimeMetricMapper;
+import com.hhs.service.HealthScoreService;
 import com.hhs.service.domain.MetricCategoryService;
 import com.hhs.service.domain.MetricDisplayFormatter;
 import com.hhs.service.impl.WellnessServiceImpl;
@@ -58,6 +59,9 @@ class WellnessServiceTest {
     @Mock
     private MetricDisplayFormatter metricDisplayFormatter;
 
+    @Mock
+    private HealthScoreService healthScoreService;
+
     @InjectMocks
     private WellnessServiceImpl wellnessService;
 
@@ -105,6 +109,62 @@ class WellnessServiceTest {
         assertEquals("sleepDuration", result.metricKey());
         assertEquals(new BigDecimal("7.5"), result.value());
         verify(healthMetricMapper, times(1)).insert(any(HealthMetric.class));
+    }
+
+    @Test
+    @DisplayName("测试1.4：创建保健指标 - 同日同值重复提交只保留一条")
+    void testCreateWellnessMetric_SameDaySameValueIsNotDuplicated() {
+        // Given
+        when(metricCategoryService.isWellnessMetric("sleepDuration")).thenReturn(true);
+        when(metricDisplayFormatter.getUnit("sleepDuration")).thenReturn("小时");
+        when(healthMetricMapper.selectList(any(LambdaQueryWrapper.class)))
+                .thenReturn(Collections.singletonList(testMetric));
+
+        // When
+        HealthMetricVO result = wellnessService.createWellnessMetric(testUserId, testRequest);
+
+        // Then
+        assertNotNull(result);
+        assertEquals(1L, result.id());
+        verify(healthMetricMapper, never()).insert(any(HealthMetric.class));
+        verify(realtimeMetricMapper, never()).insert(any(RealtimeMetric.class));
+    }
+
+    @Test
+    @DisplayName("测试1.5：创建保健指标 - 同日不同值仍作为第二次测量插入")
+    void testCreateWellnessMetric_DifferentValueSameDayIsInserted() {
+        // Given
+        when(metricCategoryService.isWellnessMetric("sleepDuration")).thenReturn(true);
+        when(metricDisplayFormatter.getUnit("sleepDuration")).thenReturn("小时");
+        when(healthMetricMapper.selectList(any(LambdaQueryWrapper.class))).thenReturn(Collections.emptyList());
+        when(healthMetricMapper.insert(any(HealthMetric.class))).thenReturn(1);
+        when(realtimeMetricMapper.insert(any(RealtimeMetric.class))).thenReturn(1);
+
+        // When
+        wellnessService.createWellnessMetric(testUserId, testRequest);
+
+        // Then
+        verify(healthMetricMapper, times(1)).insert(any(HealthMetric.class));
+    }
+
+    @Test
+    @DisplayName("测试1.6：创建保健指标 - 别名归一化为规范键")
+    void testCreateWellnessMetric_AliasKeyIsCanonicalized() {
+        // Given
+        when(metricCategoryService.isWellnessMetric("sleepDuration")).thenReturn(true);
+        when(metricDisplayFormatter.getUnit("sleepDuration")).thenReturn("小时");
+        when(healthMetricMapper.selectList(any(LambdaQueryWrapper.class))).thenReturn(Collections.emptyList());
+        when(healthMetricMapper.insert(any(HealthMetric.class))).thenReturn(1);
+        when(realtimeMetricMapper.insert(any(RealtimeMetric.class))).thenReturn(1);
+
+        testRequest.setMetricKey("sleep_duration");
+
+        // When
+        HealthMetricVO result = wellnessService.createWellnessMetric(testUserId, testRequest);
+
+        // Then
+        assertNotNull(result);
+        assertEquals("sleepDuration", result.metricKey());
     }
 
     @Test
@@ -381,5 +441,58 @@ class WellnessServiceTest {
         assertThrows(BusinessException.class, () -> {
             wellnessService.createWellnessMetric(testUserId, testRequest);
         });
+    }
+
+    @Test
+    @DisplayName("测试9.1：创建保健指标后立即失效评分缓存")
+    void testCreateWellnessMetric_EvictsScoreCache() {
+        // Given
+        when(metricCategoryService.isWellnessMetric("sleepDuration")).thenReturn(true);
+        when(metricDisplayFormatter.getUnit("sleepDuration")).thenReturn("小时");
+        when(healthMetricMapper.selectList(any(LambdaQueryWrapper.class))).thenReturn(Collections.emptyList());
+        when(healthMetricMapper.insert(any(HealthMetric.class))).thenReturn(1);
+        when(realtimeMetricMapper.insert(any(RealtimeMetric.class))).thenReturn(1);
+
+        // When
+        wellnessService.createWellnessMetric(testUserId, testRequest);
+
+        // Then: 保健占评分 10%，不失效就会让 /health/score 继续返回旧值
+        verify(healthScoreService, times(1)).evictCachedScore(testUserId);
+    }
+
+    @Test
+    @DisplayName("测试9.2：重复同一读数（未写入）不触发多余的缓存失效")
+    void testCreateWellnessMetric_DuplicateDoesNotEvict() {
+        // Given
+        when(metricCategoryService.isWellnessMetric("sleepDuration")).thenReturn(true);
+        when(metricDisplayFormatter.getUnit("sleepDuration")).thenReturn("小时");
+        when(healthMetricMapper.selectList(any(LambdaQueryWrapper.class)))
+                .thenReturn(Collections.singletonList(testMetric));
+
+        // When
+        wellnessService.createWellnessMetric(testUserId, testRequest);
+
+        // Then: 数据没变，缓存也没理由失效
+        verify(healthScoreService, never()).evictCachedScore(any());
+    }
+
+    @Test
+    @DisplayName("测试9.3：更新与删除保健指标都会失效评分缓存")
+    void testUpdateAndDelete_EvictScoreCache() {
+        // Given
+        when(healthMetricMapper.selectById(1L)).thenReturn(testMetric);
+        when(metricCategoryService.isWellnessMetric("sleepDuration")).thenReturn(true);
+        when(metricDisplayFormatter.getUnit("sleepDuration")).thenReturn("小时");
+        when(healthMetricMapper.updateById(any(HealthMetric.class))).thenReturn(1);
+        when(realtimeMetricMapper.deleteByHealthMetric(any(), any(), any(), any())).thenReturn(1);
+        when(realtimeMetricMapper.insert(any(RealtimeMetric.class))).thenReturn(1);
+        when(healthMetricMapper.deleteById(1L)).thenReturn(1);
+
+        // When
+        wellnessService.updateWellnessMetric(testUserId, 1L, testRequest);
+        wellnessService.deleteWellnessMetric(testUserId, 1L);
+
+        // Then
+        verify(healthScoreService, times(2)).evictCachedScore(testUserId);
     }
 }
