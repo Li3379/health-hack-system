@@ -31,6 +31,14 @@ vi.mock('@/api/health', () => ({
   }
 }))
 
+// 仪表盘的「体检报告」卡片会请求 /api/screening/reports 取 total；
+// 不 mock 的话测试会真的去连 localhost，靠 ECONNREFUSED 兜到 null —— 断言就成了对网络失败的断言。
+vi.mock('@/api/screening', () => ({
+  screeningApi: {
+    listReports: vi.fn()
+  }
+}))
+
 vi.mock('@/api/stats', () => ({
   statsApi: {
     getTrends: vi.fn()
@@ -108,12 +116,14 @@ import { scoreApi } from '@/api/score'
 import { healthApi } from '@/api/health'
 import { statsApi } from '@/api/stats'
 import { preventionApi } from '@/api/prevention'
+import { screeningApi } from '@/api/screening'
 import * as gsapTools from '@/composables/useGsap'
 
 const getScore = scoreApi.getScore as unknown as Mock
 const getMetrics = healthApi.getMetrics as unknown as Mock
 const getTrends = statsApi.getTrends as unknown as Mock
 const getCompleteness = preventionApi.getCompleteness as unknown as Mock
+const listReports = screeningApi.listReports as unknown as Mock
 
 const DISMISS_KEY = 'hhs_profile_reminder_dismissed_at'
 
@@ -228,6 +238,7 @@ describe('DashboardProfileBanner.spec.ts — 仪表盘档案引导表面', () =>
     getMetrics.mockResolvedValue(ok({ records: [], total: 0 }))
     getTrends.mockResolvedValue(ok([]))
     getCompleteness.mockResolvedValue(ok(makeCompleteness({ score: 40 })))
+    listReports.mockResolvedValue(ok({ records: [], total: 0 }))
   })
 
   afterEach(() => {

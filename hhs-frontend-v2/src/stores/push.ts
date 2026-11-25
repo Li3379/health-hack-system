@@ -10,8 +10,9 @@ import {
 } from '@/api/push'
 import { ElMessage } from 'element-plus'
 import { showError } from '@/utils/showError'
-import { ApiError } from '@/utils/appError'
+import { ApiError, normalizeApiError } from '@/utils/appError'
 import { ERROR_MESSAGES } from '@/utils/errorMessages'
+import { getFailureHint } from '@/utils/pushFailure'
 
 export const usePushStore = defineStore('push', () => {
   const configs = ref<PushConfig[]>([])
@@ -104,15 +105,55 @@ export const usePushStore = defineStore('push', () => {
         return true
       }
       // 通道自身汇报失败（HTTP 200 + data.success=false）是可到达的分支，
-      // 仍走 store 的唯一错误出口，保证提示来源单一；后端中文优先（D-05）。
-      showError(new ApiError(res.message || '', 'business'), 'server.unavailable')
+      // 仍走 store 的唯一错误出口，保证提示来源单一。
+      //
+      // 文案：后端 message 是 `推送失败: Authentication failed (…)` 这类原文，直接交给
+      // showError 会被 `resolveMessage` 的后端优先规则原样上屏 —— 同一句故障在推送历史里
+      // 有中文解释，在「测试推送」的 toast 里却是英文。翻译复用 utils/pushFailure
+      // （与历史时间线同一份实现），确保两条通道说法一致且都可操作。
+      showError(new ApiError(getFailureHint(res.message), 'business'), 'server.unavailable')
       return false
     } catch (error) {
-      showError(error, 'server.unavailable')
+      // 真实路径在这里：后端用 `Result.failure(400, ...)` 回信封，拦截器对 code !== 200
+      // 直接 reject（request.ts:45-52），所以上面的 else 分支在实网下几乎走不到。
+      // 而 reject 出来的 ApiError.message 就是同一句英文原文 —— 不在这里翻译的话，
+      // 用户看到的仍是 `推送失败: Authentication failed`，PUSH-3 等于没修。
+      showError(withFailureHint(error), 'server.unavailable')
       return false
     } finally {
       testing.value = null
     }
+  }
+
+  /**
+   * 给失败换一条可操作的中文文案，同时保留 ApiError 的分类与附带状态。
+   *
+   * <p>直接 `new ApiError(hint, 'business')` 会丢掉两样东西：`auth` 分类（401 由拦截器
+   * 触发 logout，store 不该改写它）与 `retryRequest`（网络/传输层 5xx 的「重试」按钮依赖它）。
+   * 因此只改写 message，其余原样带过去。
+   */
+  function withFailureHint(error: unknown): ApiError {
+    const err = normalizeApiError(error)
+    // 认证失败与会话过期是两件事：前者是 SMTP 凭据被拒（要改配置），后者要重新登录。
+    // 只翻译需要翻译的那一类，其余保持原有分类与呈现通道。
+    if (err.kind !== 'business' && err.kind !== 'server' && err.kind !== 'unknown') {
+      return err
+    }
+    const hint = getFailureHint(err.message)
+    if (hint === err.message) {
+      return err
+    }
+    const rewritten = new ApiError(
+      hint,
+      err.kind,
+      err.status,
+      err.code,
+      err.fieldErrors,
+      err.formField,
+      err.retryable
+    )
+    rewritten.retryRequest = err.retryRequest
+    return rewritten
   }
 
   /**

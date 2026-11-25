@@ -203,6 +203,7 @@ import {
 } from '@element-plus/icons-vue'
 import { scoreApi } from '@/api/score'
 import { healthApi } from '@/api/health'
+import { screeningApi } from '@/api/screening'
 import { statsApi } from '@/api/stats'
 import { formatRelativeTime, getScoreLevelLabel } from '@/utils/format'
 import HealthScoreCircle from '@/components/HealthScoreCircle.vue'
@@ -243,7 +244,14 @@ const goProfileWithFocus = (focusKey: string | null) => {
 
 const healthScore = ref(0)
 const metricCount = ref(0)
-const reportCount = ref(0)
+/**
+ * 体检报告数。
+ *
+ * `null` 表示「还不知道」，渲染成破折号 —— 这个卡片曾经把 `reportCount` 初始化成 0 后再也没有
+ * 任何赋值或请求，于是无论用户上传过多少份报告都永远显示 0，夹在其它真实数字中间强化了
+ * 「数据没进来」的错觉。现在取 `/api/screening/reports` 的 total；失败/在途时显示占位符而不是 0。
+ */
+const reportCount = ref<number | null>(null)
 const scoreLoading = ref(false)
 const alertLoading = ref(false)
 const scoreData = ref<HealthScoreVO | null>(null)
@@ -333,8 +341,11 @@ const habitsPercent = computed(() => {
 const statCards = computed(() => [
   { icon: TrendCharts, iconBg: 'var(--accent-cool-soft)', value: healthScore.value, label: '健康评分', trend: scoreTrendText.value, trendClass: scoreTrendClass.value, trendIcon: scoreTrendIcon.value, action: goToScore },
   { icon: Bell, iconBg: 'var(--accent-warm-soft)', value: alertStore.unreadCount, label: '未读预警', action: goToAlerts },
-  { icon: DataLine, iconBg: 'var(--accent-cool-soft)', value: metricCount.value, label: '健康指标', action: goToMetrics },
-  { icon: Document, iconBg: 'var(--accent-warm-soft)', value: reportCount.value, label: '体检报告', action: goToScreening }
+  // 这里是全时段累计条数（/api/metrics 的 total 只含 HEALTH，不按日期过滤）。
+  // 智能录入页的「今日健康指标」取 /api/stats/today 的当日 recordDate 计数，口径不同，
+  // 所以标签必须写明「累计」，否则两个页面同名不同数。
+  { icon: DataLine, iconBg: 'var(--accent-cool-soft)', value: metricCount.value, label: '健康指标（累计）', action: goToMetrics },
+  { icon: Document, iconBg: 'var(--accent-warm-soft)', value: reportCount.value ?? '—', label: '体检报告', action: goToScreening }
 ])
 
 const entries = [
@@ -359,6 +370,20 @@ const fetchMetricCount = async () => {
     const res = await healthApi.getMetrics({ page: 1, size: 1 })
     metricCount.value = res.data.total
   } catch { void 0 }
+}
+
+/**
+ * 体检报告数取自报告列表的 total（`/api/screening/reports`，全时段）。
+ *
+ * 失败时保持 `null` —— 卡片显示破折号，而不是一个「你一份报告都没有」的 0。
+ */
+const fetchReportCount = async () => {
+  try {
+    const res = await screeningApi.listReports({ page: 1, size: 1 })
+    reportCount.value = res.data?.total ?? null
+  } catch {
+    reportCount.value = null
+  }
 }
 
 const fetchAlerts = async () => {
@@ -403,6 +428,7 @@ onMounted(async () => {
 
   await fetchHealthScore()
   fetchMetricCount()
+  fetchReportCount()
   fetchAlerts()
   fetchTrends()
   alertStore.fetchUnreadCount()
