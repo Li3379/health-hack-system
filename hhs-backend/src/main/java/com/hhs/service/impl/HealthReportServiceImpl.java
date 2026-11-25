@@ -154,13 +154,6 @@ public class HealthReportServiceImpl implements HealthReportService {
         return convertToVO(report);
     }
 
-    @Override
-    @Deprecated
-    @Transactional(timeout = 120)
-    public HealthReportVO generateReport(Long userId) {
-        return getOrGenerateReport(userId);
-    }
-
     /**
      * Generate new report via AI and save to MySQL + Redis
      */
