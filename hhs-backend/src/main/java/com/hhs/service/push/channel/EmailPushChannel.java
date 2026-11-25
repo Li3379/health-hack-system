@@ -12,12 +12,18 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
+import org.springframework.mail.MailAuthenticationException;
+import org.springframework.mail.MailSendException;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Component;
 
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 /**
  * Email push channel implementation.
@@ -35,6 +41,18 @@ public class EmailPushChannel implements PushChannel {
 
     @Value("${spring.mail.username:}")
     private String fromEmail;
+
+    /**
+     * Ceiling for a failure message: {@code push_history.message} is {@code VARCHAR(500)}, and a
+     * 535 reply plus a socket description reaches most of it.
+     */
+    private static final int MAX_FAILURE_MESSAGE_CHARS = 480;
+
+    /** Server text is capped below the overall ceiling so an appended hint still fits. */
+    private static final int MAX_RAW_CHARS = 300;
+
+    /** Bounded walk so a self-referencing or very deep cause chain cannot spin. */
+    private static final int MAX_CAUSE_DEPTH = 5;
 
     @Override
     public PushResult push(Long userId, AlertVO alert) {
@@ -58,9 +76,116 @@ public class EmailPushChannel implements PushChannel {
             sendEmail(email, alert, user);
             return PushResult.success(getChannelType());
         } catch (Exception e) {
-            log.error("Failed to send email to {}: {}", email, e.getMessage());
-            return PushResult.failed(getChannelType(), e.getMessage());
+            String detail = describeFailure(e);
+            log.error("Failed to send email to {}: {}", email, detail);
+            return PushResult.failed(getChannelType(), detail);
         }
+    }
+
+    /**
+     * Build a failure message that keeps the SMTP server's own wording.
+     *
+     * <p>Spring wraps a failed SMTP AUTH in {@code MailAuthenticationException(Throwable)}, whose
+     * message is the hardcoded literal {@code "Authentication failed"} — the server's actual reply
+     * ({@code 535 Login fail. Account is abnormal, ...}) lives only on the cause. Logging just
+     * {@code getMessage()} therefore discarded the one piece of text saying <em>why</em> the login
+     * failed, leaving "Authentication failed" in {@code push_history} and in the "test push"
+     * response, indistinguishable between a wrong authorization code, a disabled SMTP service and
+     * a server-side frequency block.
+     *
+     * <p>This does not fix a misconfigured mailbox — that is an ops problem — and it deliberately
+     * does not retry: QQ answers repeated failed AUTH with a frequency limit, so a retry loop makes
+     * the error worse. It only makes the existing failure legible.
+     *
+     * <p>Distinct cause messages are appended once, and the whole string is capped because
+     * {@code push_history.message} is {@code VARCHAR(500)}.
+     */
+    private String describeFailure(Throwable error) {
+        StringBuilder described = new StringBuilder(
+                error.getMessage() != null ? error.getMessage() : error.getClass().getSimpleName());
+
+        // MailSendException(jakarta.util.Map) 传入的 cause 是 null，子异常挂在 messageExceptions
+        // 里、由 getMessage() 以 "Failed messages: ..." 内嵌。只沿 getCause() 走会把
+        // 「消息被拒收」这一类错误的信息丢光，所以两个来源都要看。
+        List<Throwable> nested = new ArrayList<>();
+        if (error instanceof MailSendException sendException) {
+            Exception[] failed = sendException.getMessageExceptions();
+            if (failed != null) {
+                nested.addAll(Arrays.asList(failed));
+            }
+        }
+
+        List<Throwable> chain = new ArrayList<>(nested);
+        Throwable cause = error.getCause();
+        int guard = 0;
+        while (cause != null && guard++ < MAX_CAUSE_DEPTH) {
+            chain.add(cause);
+            cause = cause.getCause();
+        }
+
+        for (Throwable link : chain) {
+            String message = link.getMessage();
+            if (message == null || message.isBlank() || described.toString().contains(message)) {
+                continue;
+            }
+            described.append(" (").append(message).append(')');
+            // 原文封顶低于整体上限，给后面的处置后缀留位置
+            if (described.length() >= MAX_RAW_CHARS) {
+                break;
+            }
+        }
+
+        String raw = described.length() <= MAX_RAW_CHARS
+                ? described.toString()
+                : described.substring(0, MAX_RAW_CHARS - 3) + "...";
+
+        // 分类后缀：服务器原文已经带在上面，这里只补「该动什么」。
+        String hint = actionableHint(error, nested);
+        if (hint.isEmpty()) {
+            return raw;
+        }
+
+        String combined = raw + " → " + hint;
+        // 后缀也要进封顶：认证提示本身就有几十字，raw 已接近上限时会一起超列宽。
+        return combined.length() <= MAX_FAILURE_MESSAGE_CHARS
+                ? combined
+                : combined.substring(0, MAX_FAILURE_MESSAGE_CHARS - 3) + "...";
+    }
+
+    /**
+     * Which knob to turn, decided from the exception type rather than the message text.
+     *
+     * <p>Spring gives no mapping from mail exceptions to anything a user can act on; without this
+     * the response is the English {@code Authentication failed} and both the user and the operator
+     * are left guessing. Classification is by type so it cannot be fooled by a hostname that
+     * happens to contain "auth" (the trap {@code PushSettings.getFailureHint} documents).
+     *
+     * <p>Only {@link MailAuthenticationException} gets an actionable sentence, because only that
+     * one has a known, correct remedy: QQ (and most providers) reject the account password and
+     * require an app-specific authorization code. Other failures keep the server text alone —
+     * inventing advice for them would be speculation.
+     */
+    private String actionableHint(Throwable error, List<Throwable> nested) {
+        boolean authFailed = error instanceof MailAuthenticationException
+                || nested.stream().anyMatch(n -> n instanceof jakarta.mail.AuthenticationFailedException)
+                || hasAuthFailureInCauseChain(error.getCause());
+        if (!authFailed) {
+            return "";
+        }
+        return "SMTP 认证失败：请检查 MAIL_USERNAME 是否为完整邮箱地址、"
+                + "MAIL_PASSWORD 是否为邮箱服务商生成的授权码（QQ 邮箱需在设置中开启 SMTP 服务，"
+                + "并使用授权码而非登录密码），修改后重启后端";
+    }
+
+    private boolean hasAuthFailureInCauseChain(Throwable cause) {
+        int guard = 0;
+        while (cause != null && guard++ < MAX_CAUSE_DEPTH) {
+            if (cause instanceof jakarta.mail.AuthenticationFailedException) {
+                return true;
+            }
+            cause = cause.getCause();
+        }
+        return false;
     }
 
     private void sendEmail(String to, AlertVO alert, User user) throws MessagingException {

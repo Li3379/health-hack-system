@@ -51,7 +51,20 @@ public class WebSocketPushChannel implements PushChannel {
             return false;
         }
 
-        // Then check if user has enabled WebSocket push in settings
+        return isConfigured(userId);
+    }
+
+    /**
+     * Configured-ness ignores the live connection.
+     *
+     * <p>A closed tab is not a configuration problem: the user still enabled WebSocket push.
+     * {@code pushAll} uses this to decide whether "not delivered" deserves a history row —
+     * recording one SKIPPED row per alert for every offline user would drown the history, while
+     * a user who explicitly disabled (or never configured) the channel should see why nothing
+     * arrived.
+     */
+    @Override
+    public boolean isConfigured(Long userId) {
         UserPushConfig config = userPushConfigMapper.findByUserIdAndChannelType(userId, "WEBSOCKET");
         // If no config exists, default to enabled (for backward compatibility)
         // If config exists, respect the enabled setting
