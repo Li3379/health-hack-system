@@ -50,6 +50,10 @@ public interface HealthMetricService {
     /**
      * Delete a health metric record
      *
+     * <p>This is the only delete entry point: the unchecked {@code delete(Long id)} overload used
+     * to sit on this interface and {@code DELETE /api/metrics/{id}} used it, so any logged-in user
+     * could delete another user's metric by guessing the auto-increment id.
+     *
      * @param userId User ID (for authorization)
      * @param id Metric ID to delete
      * @return true if deletion successful, true if record not found (idempotent)
@@ -75,6 +79,21 @@ public interface HealthMetricService {
     Page<HealthMetricVO> list(Integer page, Integer size, Long userId, String metricKey, String startDate, String endDate);
 
     /**
+     * List the most recently created metrics for a user across <em>both</em> categories.
+     *
+     * <p>The "recent records" surfaces used to call {@code /api/metrics} and {@code /api/wellness}
+     * separately and merge in the browser. Both endpoints filter to one category, cap the page at
+     * N rows and order by different columns (create_time vs record_date), so ten wellness rows
+     * could push a brand-new health row out of the merged list entirely. One query with one
+     * ordering removes that truncation.
+     *
+     * @param userId User ID (required, from JWT)
+     * @param limit Maximum number of rows to return; clamped to 1..50
+     * @return Recently created metrics, newest first, health and wellness interleaved
+     */
+    List<HealthMetricVO> listRecent(Long userId, Integer limit);
+
+    /**
      * Create a new health metric
      *
      * @param request Health metric request
@@ -85,16 +104,16 @@ public interface HealthMetricService {
     /**
      * Update an existing health metric
      *
+     * <p>{@code userId} is the caller from the JWT and is checked against the row's owner. It is
+     * an explicit parameter rather than {@code request.getUserId()} because an authorization
+     * decision must not depend on a field the caller fills in — the old signature silently
+     * ignored it and any logged-in user could rewrite anyone's metric.
+     *
+     * @param userId Caller's user ID (from JWT)
      * @param id Metric ID
      * @param request Health metric request
      * @return Updated health metric entity
+     * @throws com.hhs.exception.BusinessException if the metric is missing or belongs to someone else
      */
-    HealthMetric update(Long id, HealthMetricRequest request);
-
-    /**
-     * Delete a health metric by ID
-     *
-     * @param id Metric ID to delete
-     */
-    void delete(Long id);
+    HealthMetric update(Long userId, Long id, HealthMetricRequest request);
 }
