@@ -51,13 +51,4 @@ public interface HealthReportMapper extends BaseMapper<HealthReport> {
      */
     @Delete("DELETE FROM health_report WHERE user_id = #{userId}")
     int deleteByUserId(@Param("userId") Long userId);
-
-    /**
-     * Count reports for a user
-     *
-     * @param userId User ID
-     * @return Number of reports
-     */
-    @Select("SELECT COUNT(*) FROM health_report WHERE user_id = #{userId}")
-    int countByUserId(@Param("userId") Long userId);
 }
