@@ -552,4 +552,81 @@ describe('UniversalMetricDialog.vue - 10-Dimensional Specification Suite', () =>
 
     wrapper.unmount()
   })
+
+  // 13. 血压双写：一条成功一条失败 → 不能声称失败，也不能静默丢掉另一条
+  describe('Dim 13: 血压双写的部分成功', () => {
+    async function mountBloodPressure(value = 120, diastolicValue = 80) {
+      const wrapper = mount(UniversalMetricDialog, {
+        props: {
+          modelValue: true,
+          category: 'HEALTH',
+          defaultMetricKey: 'bloodPressure'
+        },
+        global: { stubs: globalStubs }
+      })
+      await flushPromises()
+      const vm = wrapper.vm as any
+      vm.form.value = value
+      vm.form.diastolicValue = diastolicValue
+      await flushPromises()
+      return { wrapper, vm }
+    }
+
+    it('收缩压成功、舒张压失败：发出 success（列表照常刷新）且用 warning 说明缺哪一条', async () => {
+      const createMetric = healthApi.createMetric as unknown as Mock
+      createMetric.mockReset()
+      createMetric
+        .mockResolvedValueOnce({ code: 200, message: 'success' })
+        .mockRejectedValueOnce({ response: { status: 500, data: { code: 500 } } })
+
+      const { wrapper, vm } = await mountBloodPressure()
+      await vm.handleSubmit()
+      await flushPromises()
+
+      // 关键回归：旧实现任一 reject 就整体进 catch，这里会发不出 success
+      expect(wrapper.emitted('success')).toHaveLength(1)
+      // 成功用 warning 而不是 success —— 有一条读数确实没存上
+      expect(ElMessageMock.success).toHaveBeenCalledTimes(0)
+      expect(ElMessageMock.warning).toHaveBeenCalledTimes(1)
+      const warningText = String((ElMessageMock.warning.mock.calls[0] as unknown[])[0])
+      expect(warningText).toContain('收缩压')
+      expect(warningText).toContain('舒张压')
+      expect(warningText).toContain('未能保存')
+
+      wrapper.unmount()
+    })
+
+    it('两条都失败：不 emit success，走既有错误通道', async () => {
+      const createMetric = healthApi.createMetric as unknown as Mock
+      createMetric.mockReset()
+      createMetric.mockRejectedValue({ response: { status: 500, data: { code: 500 } } })
+
+      const { wrapper, vm } = await mountBloodPressure()
+      await vm.handleSubmit()
+      await flushPromises()
+
+      expect(wrapper.emitted('success')).toBeUndefined()
+      expect(errorToastCount()).toBe(1)
+      expect(ElMessageMock.warning).toHaveBeenCalledTimes(0)
+
+      wrapper.unmount()
+    })
+
+    it('两条都成功：解锁 success toast，不发 warning', async () => {
+      const createMetric = healthApi.createMetric as unknown as Mock
+      createMetric.mockReset()
+      createMetric.mockResolvedValue({ code: 200, message: 'success' })
+
+      const { wrapper, vm } = await mountBloodPressure()
+      await vm.handleSubmit()
+      await flushPromises()
+
+      expect(createMetric).toHaveBeenCalledTimes(2)
+      expect(wrapper.emitted('success')).toHaveLength(1)
+      expect(ElMessageMock.success).toHaveBeenCalledTimes(1)
+      expect(ElMessageMock.warning).toHaveBeenCalledTimes(0)
+
+      wrapper.unmount()
+    })
+  })
 })

@@ -175,6 +175,17 @@ interface OcrConfirmRequest {
   metrics: RecognizedMetric[]
 }
 
+/**
+ * 确认录入响应。
+ *
+ * 与 AI 侧同形：只回报 savedIds 时，「成功录入 N 个」会把部分失败说成成功；后端现在一并
+ * 返回 failedMetrics，页面才能点名哪几条没存上（此时 OCR 记录仍为未确认，可补录）。
+ */
+interface ConfirmSaveResult {
+  savedIds: number[]
+  failedMetrics: string[]
+}
+
 // ============================================
 // 组件逻辑
 // ============================================
@@ -289,12 +300,28 @@ const handleConfirm = async () => {
       metrics: selectedMetrics
     }
 
-    const res = await request.post<number[]>('/api/ocr/confirm', requestBody)
+    const res = await request.post<ConfirmSaveResult>('/api/ocr/confirm', requestBody)
 
     if (res.code === 200 && res.data) {
-      ElMessage.success(`成功录入 ${res.data.length} 个指标`)
-      recognizeResult.value = null
-      clearPreview()
+      const savedCount = res.data.savedIds?.length ?? 0
+      const failed = res.data.failedMetrics ?? []
+
+      // 全部成功：照旧提示并清空面板。写成「先处理成功再 return」，是为了让下面的
+      // 部分失败分支不必再包一层 else —— 本文件的结构门禁禁止确认路径出现 else 兜底。
+      if (failed.length === 0) {
+        ElMessage.success(`成功录入 ${savedCount} 个指标`)
+        recognizeResult.value = null
+        clearPreview()
+        emit('refresh')
+        return
+      }
+
+      // 部分失败：面板保留（记录在后端仍是未确认），只把失败项重新勾上供用户补录。
+      ElMessage.warning(`成功录入 ${savedCount} 个指标，${failed.length} 个未保存：${failed.join('、')}`)
+      const failedSet = new Set(failed)
+      recognizeResult.value.metrics.forEach(m => {
+        m.selected = failedSet.has(m.name) || failedSet.has(m.metricKey)
+      })
       emit('refresh')
     }
     // 非 200 的 else 已删除：拦截器在信封 code !== 200 时直接 reject，

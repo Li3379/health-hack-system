@@ -11,7 +11,8 @@ import {
   formatFileSize,
   formatNumber,
   getAlertLevelColor,
-  getAlertLevelLabel
+  getAlertLevelLabel,
+  getAlertTypeLabel
 } from '@/utils/format'
 import { useMetricMetaStore } from '@/stores/metricMeta'
 
@@ -201,6 +202,18 @@ describe('format utils', () => {
       expect(getAlertLevelColor('MEDIUM')).toBe('warning')
       expect(getAlertLevelColor('LOW')).toBe('info')
       expect(getAlertLevelColor('UNKNOWN')).toBe('info')
+    })
+
+    it('getAlertTypeLabel 只映射后端真实值域 CRITICAL/WARNING/NORMAL（PUSH-7）', () => {
+      expect(getAlertTypeLabel('CRITICAL')).toBe('严重')
+      expect(getAlertTypeLabel('WARNING')).toBe('警告')
+      expect(getAlertTypeLabel('NORMAL')).toBe('提示')
+
+      // AlertVO.alertType 的 @Pattern 是 ^(CRITICAL|WARNING|NORMAL)$。
+      // INFO 曾在这里有一个映射，但后端从不产出它 —— 留着只会让值域外的数据
+      // 看起来「有标签」。未知值按原样返回，不伪造中文。
+      expect(getAlertTypeLabel('INFO')).toBe('INFO')
+      expect(getAlertTypeLabel('TREND')).toBe('TREND')
     })
   })
 
