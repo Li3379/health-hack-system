@@ -18,6 +18,7 @@ import com.hhs.service.domain.HealthMetricMetaRegistry;
 import com.hhs.service.domain.LabRoutineMetricRegistry;
 import com.hhs.service.domain.MetricDefinition;
 import com.hhs.service.domain.MetricKeyNormalizer;
+import com.hhs.vo.ConfirmSaveResult;
 import com.hhs.vo.HealthMetricVO;
 import com.hhs.vo.OcrHealthResultVO;
 import com.hhs.vo.OcrHistoryVO;
@@ -307,7 +308,7 @@ public class OcrServiceImpl implements OcrService {
 
     @Override
     @Transactional
-    public List<Long> confirmMetrics(Long userId, OcrConfirmRequest request) {
+    public ConfirmSaveResult confirmMetrics(Long userId, OcrConfirmRequest request) {
         log.info("Confirming OCR metrics: userId={}, ocrRecordId={}", userId, request.getOcrRecordId());
 
         if (request.getMetrics() == null || request.getMetrics().isEmpty()) {
@@ -359,7 +360,10 @@ public class OcrServiceImpl implements OcrService {
         }
 
         // Update record as confirmed
-        if (record != null && !savedIds.isEmpty()) {
+        // 只有在全部选中项都落库时才确认。部分失败也置 confirmed，会让已写入的那几条看起来
+        // 是「全部完成」，而失败项再也无法补录（已确认记录会被拒绝重复提交）——所以部分失败
+        // 时保持未确认，并把失败项一并返回给调用方呈现。
+        if (record != null && !savedIds.isEmpty() && failedMetrics.isEmpty()) {
             record.setConfirmed(true);
             try {
                 record.setMetricIds(objectMapper.writeValueAsString(savedIds));
@@ -367,6 +371,9 @@ public class OcrServiceImpl implements OcrService {
                 log.error("Failed to serialize metric IDs", e);
             }
             ocrHealthRecordMapper.updateById(record);
+        } else if (record != null && !failedMetrics.isEmpty()) {
+            log.warn("部分指标保存失败，OCR 记录保持未确认以便补录: ocrRecordId={}, failed={}",
+                    record.getId(), failedMetrics);
         }
 
         if (!failedMetrics.isEmpty() && savedIds.isEmpty()) {
@@ -374,8 +381,8 @@ public class OcrServiceImpl implements OcrService {
                     "所有指标保存失败: " + String.join(", ", failedMetrics));
         }
 
-        log.info("Successfully saved {} metrics", savedIds.size());
-        return savedIds;
+        log.info("Successfully saved {} metrics, failed {}", savedIds.size(), failedMetrics.size());
+        return new ConfirmSaveResult(savedIds, failedMetrics);
     }
 
     // =====================================================

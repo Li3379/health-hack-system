@@ -154,6 +154,38 @@ class MetricMetadataRegistryTest {
     }
 
     @Test
+    @DisplayName("Write gate accepts only dictionary keys, aliases included")
+    void testWritableMetricGate() {
+        // 别名归一化后仍是已知 key —— 否则前端照抄旧别名会被拒
+        assertTrue(categoryService.isWritableMetric("heartRate"));
+        assertTrue(categoryService.isWritableMetric("heart_rate"));
+        assertTrue(categoryService.isWritableMetric("sleep_duration"));
+        assertTrue(categoryService.isWritableMetric("systolicBP"));
+        assertTrue(categoryService.isWritableMetric("systolic_bp"));
+        // 库里存在以这个长别名直接落库的旧行（id=29），归一化后仍必须放行
+        assertTrue(categoryService.isWritableMetric("systolicBloodPressure"));
+
+        // CBC 指标住在独立注册表里，但确实会经 OCR 写进 health_metric，必须放行
+        assertTrue(categoryService.isWritableMetric("hemoglobin"));
+        assertTrue(categoryService.isWritableMetric("wbc"));
+
+        // IN-12：写错的 wellness key 曾静默落成 HEALTH，现在必须直接拒
+        assertFalse(categoryService.isWritableMetric("sleep"));
+        assertFalse(categoryService.isWritableMetric("sleepTime"));
+        assertFalse(categoryService.isWritableMetric("non_existent_key"));
+        assertFalse(categoryService.isWritableMetric(""));
+        assertFalse(categoryService.isWritableMetric(null));
+    }
+
+    @Test
+    @DisplayName("Unknown keys still default to HEALTH when only a label is needed")
+    void testDetermineCategoryKeepsBackwardCompatibleDefault() {
+        // 读回旧数据时要能给出一个分类，不能抛 —— 拒收由 isWritableMetric 在写入口负责
+        assertEquals(MetricCategory.HEALTH, categoryService.determineCategory("sleep"));
+        assertEquals(MetricCategory.HEALTH, categoryService.determineCategory("non_existent_key"));
+    }
+
+    @Test
     @DisplayName("Standalone registry reports alertable=false with null recommendations until applyRecommendations runs")
     void testStandaloneRegistryNotAlertable() {
         // The registry is dependency-free: without the startup merge nothing is alertable

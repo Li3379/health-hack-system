@@ -181,8 +181,9 @@ export const getAlertTypeLabel = (type: string): string => {
   const map: Record<string, string> = {
     CRITICAL: '严重',
     WARNING: '警告',
-    INFO: '提示',
-    TREND: '趋势'
+    // 后端 AlertVO 的值域是 ^(CRITICAL|WARNING|NORMAL)$；INFO 从来不是一个合法值，
+    // 原先的 INFO 键只会让值域外的数据看起来「有标签」。
+    NORMAL: '提示'
   }
   return map[type] || type
 }

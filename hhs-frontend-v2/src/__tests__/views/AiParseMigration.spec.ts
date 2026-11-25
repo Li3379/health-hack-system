@@ -304,6 +304,101 @@ describe('data-input/AIInput.vue — 私有助手退役后两条路径都只有�
 
     wrapper.unmount()
   })
+
+  it('确认录入部分失败：warning 点名失败项、保留面板、只重新勾选失败项', async () => {
+    // 后端现在返回 {savedIds, failedMetrics}；旧实现只看到数组长度，会把它说成「成功录入 1 个」。
+    requestPostMock.mockResolvedValueOnce(
+      ok({ savedIds: [11], failedMetrics: ['心率'] })
+    )
+
+    const wrapper = mountAIInput()
+    await flushPromises()
+
+    const vm = wrapper.vm as unknown as AIInputVm
+    vm.parseResult = {
+      metrics: [
+        {
+          metricKey: 'glucose',
+          metricName: '血糖',
+          value: 5.6,
+          unit: 'mmol/L',
+          confidence: 0.95,
+          category: 'HEALTH',
+          recordDate: '2026-11-10',
+          selected: true
+        },
+        {
+          metricKey: 'heartRate',
+          metricName: '心率',
+          value: 72,
+          unit: '次/分',
+          confidence: 0.9,
+          category: 'HEALTH',
+          recordDate: '2026-11-10',
+          selected: true
+        }
+      ],
+      summary: '',
+      warnings: [],
+      parseHistoryId: 1,
+      remainingCount: 9
+    }
+
+    await vm.handleConfirm()
+    await flushPromises()
+
+    // 不能说「全部成功」
+    expect(ElMessageMock.success).toHaveBeenCalledTimes(0)
+    expect(ElMessageMock.warning).toHaveBeenCalledTimes(1)
+    const text = String((ElMessageMock.warning.mock.calls[0] as unknown[])[0])
+    expect(text).toContain('成功录入 1 个指标')
+    expect(text).toContain('1 个未保存：心率')
+
+    // 面板保留，失败的重新勾上、成功的取消勾选（避免重复提交已落库的条目）
+    const kept = (vm.parseResult as unknown as { metrics: Array<{ metricName: string; selected: boolean }> })?.metrics
+    expect(kept).toBeDefined()
+    expect(kept.find(m => m.metricName === '心率')?.selected).toBe(true)
+    expect(kept.find(m => m.metricName === '血糖')?.selected).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  it('确认录入全部成功：success 提示清空面板', async () => {
+    requestPostMock.mockResolvedValueOnce(ok({ savedIds: [11, 12], failedMetrics: [] }))
+
+    const wrapper = mountAIInput()
+    await flushPromises()
+
+    const vm = wrapper.vm as unknown as AIInputVm
+    vm.parseResult = {
+      metrics: [
+        {
+          metricKey: 'glucose',
+          metricName: '血糖',
+          value: 5.6,
+          unit: 'mmol/L',
+          confidence: 0.95,
+          category: 'HEALTH',
+          recordDate: '2026-11-10',
+          selected: true
+        }
+      ],
+      summary: '',
+      warnings: [],
+      parseHistoryId: 1,
+      remainingCount: 9
+    }
+
+    await vm.handleConfirm()
+    await flushPromises()
+
+    expect(ElMessageMock.success).toHaveBeenCalledTimes(1)
+    expect(String((ElMessageMock.success.mock.calls[0] as unknown[])[0])).toBe('成功录入 2 个指标')
+    expect(ElMessageMock.warning).toHaveBeenCalledTimes(0)
+    expect(vm.parseResult).toBeNull()
+
+    wrapper.unmount()
+  })
 })
 
 describe('data-input/AIInput.vue — 源码级退役契约', () => {

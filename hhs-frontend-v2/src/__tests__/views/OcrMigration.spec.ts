@@ -351,6 +351,55 @@ describe('data-input/OcrInput.vue — 识别/确认失败恰好一条提示，�
 
     wrapper.unmount()
   })
+
+  it('确认录入部分失败：warning 点名失败项，面板保留且只勾选失败项', async () => {
+    requestPostMock.mockResolvedValueOnce(ok({ savedIds: [21], failedMetrics: ['心率'] }))
+
+    const wrapper = mountOcrInput()
+    await flushPromises()
+
+    const vm = wrapper.vm as unknown as OcrInputVm
+    vm.recognizeResult = {
+      status: 'success',
+      metrics: [
+        {
+          metricKey: 'blood_glucose',
+          name: '血糖',
+          value: 5.6,
+          unit: 'mmol/L',
+          confidence: 0.95,
+          category: 'HEALTH',
+          recordDate: '2026-11-10',
+          selected: true
+        },
+        {
+          metricKey: 'heartRate',
+          name: '心率',
+          value: 72,
+          unit: '次/分',
+          confidence: 0.9,
+          category: 'HEALTH',
+          recordDate: '2026-11-10',
+          selected: true
+        }
+      ]
+    } as unknown as OcrInputVm['recognizeResult']
+
+    await vm.handleConfirm()
+    await flushPromises()
+
+    expect(ElMessageMock.success).toHaveBeenCalledTimes(0)
+    expect(ElMessageMock.warning).toHaveBeenCalledTimes(1)
+    const text = String((ElMessageMock.warning.mock.calls[0] as unknown[])[0])
+    expect(text).toContain('成功录入 1 个指标')
+    expect(text).toContain('1 个未保存：心率')
+
+    const kept = (vm.recognizeResult as unknown as { metrics: Array<{ name: string; selected: boolean }> }).metrics
+    expect(kept.find(m => m.name === '心率')?.selected).toBe(true)
+    expect(kept.find(m => m.name === '血糖')?.selected).toBe(false)
+
+    wrapper.unmount()
+  })
 })
 
 describe('data-input/OcrHistory.vue — B1 不得回归：状态类失败仍恰好一条提示', () => {

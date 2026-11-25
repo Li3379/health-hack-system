@@ -197,13 +197,14 @@ public class OcrController {
         @ApiResponse(responseCode = "401", description = "未授权"),
         @ApiResponse(responseCode = "403", description = "无权操作此记录")
     })
-    public Result<List<Long>> confirmMetrics(@RequestBody @Valid OcrConfirmRequest request) {
+    public Result<com.hhs.vo.ConfirmSaveResult> confirmMetrics(@RequestBody @Valid OcrConfirmRequest request) {
         Long userId = SecurityUtils.getCurrentUserId();
         log.info("确认OCR指标: userId={}, ocrRecordId={}, metricsCount={}",
                 userId, request.getOcrRecordId(), request.getMetrics().size());
 
-        List<Long> savedIds = ocrService.confirmMetrics(userId, request);
-        return Result.success(savedIds);
+        // 与 AI 侧同形：失败项一并返回，页面才能说明哪几条没存上（记录保持未确认，可补录）。
+        com.hhs.vo.ConfirmSaveResult result = ocrService.confirmMetrics(userId, request);
+        return Result.success(result);
     }
 
     /**

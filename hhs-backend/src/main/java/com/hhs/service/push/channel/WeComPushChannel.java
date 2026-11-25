@@ -60,14 +60,16 @@ public class WeComPushChannel implements PushChannel {
             HttpEntity<Map<String, Object>> request = new HttpEntity<>(message, headers);
             String response = pushRestTemplate.postForObject(webhookUrl, request, String.class);
 
-            // Validate response
-            if (response != null && response.contains("\"errcode\":0")) {
+            // Parse the response instead of sniffing a substring: WeCom returns
+            // {"errcode":0,"errmsg":"ok"}, and a pretty-printed or space-separated body used to
+            // be misread as a failure even though the message was delivered.
+            String failure = WebhookResponseEvaluator.failureReason(response, "errcode", "errmsg");
+            if (failure == null) {
                 log.info("WeCom push successful for user {}", userId);
                 return PushResult.success(getChannelType());
-            } else {
-                log.warn("WeCom push returned non-success response for user {}: {}", userId, response);
-                return PushResult.failed(getChannelType(), "WeCom API returned error: " + response);
             }
+            log.warn("WeCom push returned non-success response for user {}: {}", userId, failure);
+            return PushResult.failed(getChannelType(), "WeCom API returned error: " + failure);
         } catch (Exception e) {
             log.error("WeCom push failed for user {}: {}", userId, e.getMessage());
             return PushResult.failed(getChannelType(), e.getMessage());
@@ -121,16 +123,13 @@ public class WeComPushChannel implements PushChannel {
     }
 
     /**
-     * Escape special characters for WeCom markdown
+     * Escape special characters for WeCom markdown.
+     *
+     * <p>Delegates to {@link PushTextEscaper}: this method used to inline the same three
+     * replacements in the wrong order, so {@code >} became {@code &amp;gt;}.
      */
     private String escapeMarkdown(String input) {
-        if (input == null) {
-            return "";
-        }
-        return input
-                .replace("<", "&lt;")
-                .replace(">", "&gt;")
-                .replace("&", "&amp;");
+        return PushTextEscaper.escapeMarkup(input);
     }
 
     private String getColorMarkdown(String alertLevel) {

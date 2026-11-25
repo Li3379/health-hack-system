@@ -28,7 +28,10 @@ public class AlertTemplate {
     private String metricKey;
 
     /**
-     * Severity level: CRITICAL, WARNING, INFO
+     * Severity level: CRITICAL, WARNING, NORMAL
+     *
+     * <p>Mirrors {@code ThresholdRangeChecker.getSeverityLevel}, which is the only producer of
+     * this value and never returns INFO. The seeded rows are CRITICAL/WARNING only.
      */
     private String severityLevel;
 

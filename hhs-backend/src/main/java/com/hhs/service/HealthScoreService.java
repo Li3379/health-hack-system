@@ -34,4 +34,16 @@ public interface HealthScoreService {
      * @return Cached score or null
      */
     HealthScoreVO getCachedScore(Long userId);
+
+    /**
+     * Drop the cached score for a user so the next read recalculates.
+     *
+     * <p>The score cache is a plain Redis key, not a Spring Cache entry, so {@code @CacheEvict}
+     * cannot reach it and the only invalidation path used to be
+     * {@link #forceRecalculate(Long)}. Callers that change a user's source data (recording a
+     * metric, editing a wellness entry) must call this after the write.
+     *
+     * @param userId User ID
+     */
+    void evictCachedScore(Long userId);
 }

@@ -220,11 +220,14 @@ CREATE TABLE IF NOT EXISTS `push_history` (
     `status` VARCHAR(20) NOT NULL COMMENT 'Push status: SUCCESS/FAILED/SKIPPED',
     `message` VARCHAR(500) DEFAULT NULL COMMENT 'Result message or error description',
     `pushed_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Push timestamp',
+    `retry_count` INT NOT NULL DEFAULT 0 COMMENT 'Delivery retries attempted by the compensation job',
+    `next_retry_at` DATETIME DEFAULT NULL COMMENT 'When the compensation job may retry; NULL = not scheduled',
     KEY `idx_user_id` (`user_id`),
     KEY `idx_alert_id` (`alert_id`),
     KEY `idx_channel_type` (`channel_type`),
     KEY `idx_pushed_at` (`pushed_at`),
     KEY `idx_user_channel_time` (`user_id`, `channel_type`, `pushed_at`),
+    KEY `idx_retry_due` (`status`, `next_retry_at`),
     CONSTRAINT `fk_push_history_user` FOREIGN KEY (`user_id`) REFERENCES `sys_user` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Push history table';
 
@@ -233,7 +236,7 @@ CREATE TABLE IF NOT EXISTS `alert_template` (
     `id` BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT 'Template ID',
     `template_key` VARCHAR(100) NOT NULL COMMENT 'Template unique key (e.g., heartRate.high.mild)',
     `metric_key` VARCHAR(50) NOT NULL COMMENT 'Metric type',
-    `severity_level` VARCHAR(20) NOT NULL COMMENT 'Severity level: CRITICAL/WARNING/INFO',
+    `severity_level` VARCHAR(20) NOT NULL COMMENT 'Severity level: CRITICAL/WARNING/NORMAL',
     `condition_expr` VARCHAR(200) DEFAULT NULL COMMENT 'Trigger condition expression',
     `title_template` VARCHAR(200) NOT NULL COMMENT 'Title template (supports {value} placeholder)',
     `message_template` TEXT NOT NULL COMMENT 'Message template (supports {value}, {threshold} placeholders)',

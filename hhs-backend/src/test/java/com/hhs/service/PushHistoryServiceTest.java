@@ -84,6 +84,54 @@ class PushHistoryServiceTest {
         PushHistory history = captor.getValue();
         assertEquals("FAILED", history.getStatus());
         assertEquals("Webhook timeout", history.getMessage());
+        // PUSH-10：真实告警的失败要进入补偿队列
+        assertEquals(0, history.getRetryCount());
+        assertNotNull(history.getNextRetryAt(), "失败的真实告警应被排入重试");
+    }
+
+    @Test
+    @DisplayName("测试推送（alertId 为空）失败不排重试")
+    void testFailedTestPushIsNotRetried() {
+        // 手动「测试推送」是诊断动作，重试它只会在用户不知情时反复打服务商
+        pushHistoryService.recordPush(1L, null, PushResult.failed(ChannelType.EMAIL, "auth failed"));
+
+        ArgumentCaptor<PushHistory> captor = ArgumentCaptor.forClass(PushHistory.class);
+        verify(pushHistoryMapper).insert(captor.capture());
+        assertEquals("FAILED", captor.getValue().getStatus());
+        assertNull(captor.getValue().getNextRetryAt(), "测试推送不该排期");
+    }
+
+    @Test
+    @DisplayName("SKIPPED 不排重试（没配置/被限流，重试无意义）")
+    void testSkippedPushIsNotRetried() {
+        pushHistoryService.recordPush(1L, 100L,
+                PushResult.skipped(ChannelType.EMAIL, "Channel not configured"));
+
+        ArgumentCaptor<PushHistory> captor = ArgumentCaptor.forClass(PushHistory.class);
+        verify(pushHistoryMapper).insert(captor.capture());
+        assertEquals("SKIPPED", captor.getValue().getStatus());
+        assertNull(captor.getValue().getNextRetryAt());
+    }
+
+    @Test
+    @DisplayName("scheduleRetry 走显式 UPDATE（nextRetryAt=null 必须真的清空列）")
+    void testScheduleRetryUsesExplicitUpdate() {
+        pushHistoryService.scheduleRetry(9L, 3, null);
+
+        // updateById 会跳过 null 字段，「停止调度」就永远写不进去 —— 所以必须用显式 SQL
+        verify(pushHistoryMapper).updateRetrySchedule(9L, 3, null);
+        verify(pushHistoryMapper, never()).updateById(any(PushHistory.class));
+    }
+
+    @Test
+    @DisplayName("findDueForRetry 把上限与批量交给 mapper")
+    void testFindDueForRetryDelegates() {
+        when(pushHistoryMapper.findDueForRetry(any(LocalDateTime.class), eq(3), eq(50)))
+                .thenReturn(List.of());
+
+        assertTrue(pushHistoryService.findDueForRetry(3, 50).isEmpty());
+
+        verify(pushHistoryMapper).findDueForRetry(any(LocalDateTime.class), eq(3), eq(50));
     }
 
     @Test
@@ -150,11 +198,28 @@ class PushHistoryServiceTest {
     }
 
     @Test
+    @DisplayName("Should delegate latest-per-channel lookup to the mapper (PUSH-6)")
+    void testGetLatestPerChannelSinceDelegates() {
+        Long userId = 1L;
+        LocalDateTime since = LocalDateTime.now().minusDays(7);
+        PushHistory failed = new PushHistory();
+        failed.setChannelType("EMAIL");
+        failed.setStatus("FAILED");
+        when(pushHistoryMapper.findLatestPerChannelSince(userId, since)).thenReturn(List.of(failed));
+
+        List<PushHistory> result = pushHistoryService.getLatestPerChannelSince(userId, since);
+
+        assertEquals(1, result.size());
+        assertEquals("FAILED", result.get(0).getStatus());
+        verify(pushHistoryMapper).findLatestPerChannelSince(userId, since);
+    }
+
+    @Test
     @DisplayName("Should detect rate limit exceeded")
     void testRateLimitExceeded() {
-        // Given
+        // Given: 20 条**已送达的真实告警** —— 额度按 countDeliveredAlertsSince 计
         Long userId = 1L;
-        when(pushHistoryMapper.countByUserAndChannelSince(eq(userId), eq("EMAIL"), any()))
+        when(pushHistoryMapper.countDeliveredAlertsSince(eq(userId), eq("EMAIL"), any()))
                 .thenReturn(20); // At limit
 
         // When
@@ -165,11 +230,26 @@ class PushHistoryServiceTest {
     }
 
     @Test
+    @DisplayName("Rate limit counts delivered real alerts only — never the attempt counter")
+    void testRateLimitUsesDeliveredAlertsQuery() {
+        // PUSH-5：旧的 countByUserAndChannelSince 数的是所有行（含 FAILED 与测试推送），
+        // 于是「凭据坏了反复测试」会把真实告警锁死。这里钉住用的是新查询。
+        Long userId = 1L;
+        when(pushHistoryMapper.countDeliveredAlertsSince(eq(userId), eq("EMAIL"), any()))
+                .thenReturn(0);
+
+        assertFalse(pushHistoryService.isRateLimitExceeded(userId, ChannelType.EMAIL));
+
+        verify(pushHistoryMapper).countDeliveredAlertsSince(eq(userId), eq("EMAIL"), any());
+        verify(pushHistoryMapper, never()).countByUserAndChannelSince(any(), any(), any());
+    }
+
+    @Test
     @DisplayName("Should not exceed rate limit when under threshold")
     void testRateLimitNotExceeded() {
         // Given
         Long userId = 1L;
-        when(pushHistoryMapper.countByUserAndChannelSince(eq(userId), eq("EMAIL"), any()))
+        when(pushHistoryMapper.countDeliveredAlertsSince(eq(userId), eq("EMAIL"), any()))
                 .thenReturn(10); // Under limit of 20
 
         // When
@@ -186,12 +266,12 @@ class PushHistoryServiceTest {
         Long userId = 1L;
 
         // WebSocket has limit of 100
-        when(pushHistoryMapper.countByUserAndChannelSince(eq(userId), eq("WEBSOCKET"), any()))
+        when(pushHistoryMapper.countDeliveredAlertsSince(eq(userId), eq("WEBSOCKET"), any()))
                 .thenReturn(50);
         assertFalse(pushHistoryService.isRateLimitExceeded(userId, ChannelType.WEBSOCKET));
 
         // Email has limit of 20
-        when(pushHistoryMapper.countByUserAndChannelSince(eq(userId), eq("EMAIL"), any()))
+        when(pushHistoryMapper.countDeliveredAlertsSince(eq(userId), eq("EMAIL"), any()))
                 .thenReturn(50);
         assertTrue(pushHistoryService.isRateLimitExceeded(userId, ChannelType.EMAIL));
     }
