@@ -48,19 +48,6 @@ public class MonthlyStatsVO {
     private BigDecimal wellnessMetricsChangePercent;
 
     /**
-     * 本月设备同步次数
-     */
-
-    /**
-     * 上月设备同步次数
-     */
-
-    /**
-     * 设备同步次数变化百分比
-     */
-    private BigDecimal deviceSyncChangePercent;
-
-    /**
      * 本月AI识别次数
      */
     private int currentAiRecognizeCount;

@@ -48,19 +48,6 @@ public class WeeklyStatsVO {
     private BigDecimal wellnessMetricsChangePercent;
 
     /**
-     * 本周设备同步次数
-     */
-
-    /**
-     * 上周设备同步次数
-     */
-
-    /**
-     * 设备同步次数变化百分比
-     */
-    private BigDecimal deviceSyncChangePercent;
-
-    /**
      * 本周AI识别次数
      */
     private int currentAiRecognizeCount;
